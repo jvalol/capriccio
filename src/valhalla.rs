@@ -554,6 +554,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         facing,
         stays,
         doing: Errand::Wait,
+        carries: None,
     };
     // **A stop that is at something looks at it, worked out and not
     // written.** Every facing below that had a thing to be about was
@@ -567,7 +568,14 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         facing: crate::people::facing(at, thing),
         stays,
         doing,
+        carries: None,
     };
+    // the same, leaving with something in hand. Spec 0073.
+    let carrying =
+        |at: Vec3, thing: Vec3, stays: f32, doing: Errand, carries: crate::people::Load| Stop {
+            carries: Some(carries),
+            ..looking_at(at, thing, stays, doing)
+        };
     let fire = ring(reaches);
     // the long fire down the hall, named here because `fire` is taken by
     // the ring out in the lane
@@ -669,11 +677,15 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         // named: from the house to the outside firepit and back for more
         // wood, with something to see at both ends of it.
         vec![
-            looking_at(
+            // **And the wood goes with them.** Spec 0073: this is the
+            // other errand whose name already says what is in the hand at
+            // the end of it, and the leg out of here ends at the fire.
+            carrying(
                 at_the_wood,
                 vec3(at_the_wood.x, door.y, (wood.min.z + wood.max.z) * 0.5),
                 4.0,
                 Errand::Lift,
+                crate::people::Load::Log,
             ),
             // **Clear of the ring and not clear of its middle.** Standing
             // `CLEAR_OF` from the middle of a fire 2.2 across puts a body
@@ -2261,6 +2273,36 @@ mod tests {
 
             assert!(found, "a light hangs in the air at {:?}", one.at);
         }
+    }
+
+    /// Spec 0073: and the wood gets from the pile to the fire.
+    ///
+    /// **The two ends of it, because carrying is a thing between two
+    /// places.** Somewhere near the pile with it and somewhere near the
+    /// ring with it, which is the errand Jake named: from the house to the
+    /// outside firepit.
+    #[test]
+    fn the_wood_gets_from_the_pile_to_the_fire() {
+        let round = &rounds(REACHES)[1];
+        let heap = pile(REACHES);
+        let heap = (heap.min + heap.max) * 0.5;
+        let ring = ring(REACHES);
+        let mut at_the_pile = false;
+        let mut at_the_fire = false;
+
+        for step in 0..4_000 {
+            let doing = crate::people::doing(round, step as f32 * 0.05);
+
+            if doing.holding != Some(crate::people::Load::Log) {
+                continue;
+            }
+
+            at_the_pile |= doing.at.distance(vec3(heap.x, doing.at.y, heap.z)) < 3.0;
+            at_the_fire |= doing.at.distance(vec3(ring.x, doing.at.y, ring.z)) < 3.0;
+        }
+
+        assert!(at_the_pile, "the wood is never picked up at the pile");
+        assert!(at_the_fire, "the wood never reaches the fire");
     }
 
     /// Spec 0072: somebody goes in through the door and comes out again.

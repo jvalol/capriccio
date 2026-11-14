@@ -130,7 +130,10 @@ write.
 
 - **Carrying, bending and sitting.** The hands hold nothing and nobody gets
   off their feet. What they do at a stop is the errand's own motion, over an
-  idle, which is 2026-11-14 below.
+  idle, which is 2026-11-14 below. **Carrying is done by spec 0073**, which
+  found that the rig was never what stopped it: a hand is drawn at the end of
+  every forearm and the watchman's horn has hung off one since spec 0055.
+  Bending and sitting stand.
 - **Going indoors.** Every round is outside. The hall's door is passable and a
   round through it is the obvious next thing, and it wants the figure to not
   be drawn while it is in there or it is a body inside a lit room seen through

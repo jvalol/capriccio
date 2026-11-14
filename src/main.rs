@@ -842,6 +842,9 @@ struct Arcade {
     cloak: Option<MeshId>,
     helm: Option<MeshId>,
     horn: Option<MeshId>,
+    /// What somebody on a round carries, per spec 0073.
+    pail: Option<MeshId>,
+    log: Option<MeshId>,
     /// The verge down either side of the ramp, per `bridge::KERB_UP`.
     kerbs: [Option<MeshId>; 2],
     dome: Option<MeshId>,
@@ -1385,6 +1388,8 @@ impl Arcade {
             cloak: None,
             helm: None,
             horn: None,
+            pail: None,
+            log: None,
             kerbs: [None; 2],
             dome: None,
             moon: None,
@@ -4331,6 +4336,8 @@ impl Arcade {
         // three floors at right angles to each other and people on all of
         // them, so the body is built in its own terms and then turned.
         let (carved_head, cloak, helm, horn) = (self.carved_head, self.cloak, self.helm, self.horn);
+        // and what anybody on a round is carrying. Spec 0073.
+        let (pail, log) = (self.pail, self.log);
         let mut stand = |at: Vec3,
                          up: glam::Quat,
                          facing: f32,
@@ -4340,6 +4347,9 @@ impl Arcade {
                          // staying. `None` is somebody who is not on a
                          // round, who gets the idle and nothing else.
                          stopped: Option<(gesture::Errand, f32, f32)>,
+                         // and what is in their hand, per spec 0073, which
+                         // is `None` for anybody not on a round
+                         holding: Option<people::Load>,
                          shade: usize,
                          look: people::Look,
                          // **Only in reflections, per engine spec 0091.**
@@ -4766,6 +4776,48 @@ impl Arcade {
                     aim::NO_SHINE,
                 );
 
+                // **And whatever they are carrying, in the right.** Spec
+                // 0073. Hung off the fist exactly as the horn below is, so
+                // it swings with the arm rather than floating beside it,
+                // and on the other side from the horn so the watchman
+                // could hold both.
+                //
+                // The mesh hangs from its own origin down its local -y,
+                // which is the convention every limb here follows, so no
+                // turn of its own is wanted: the forearm's rotation is the
+                // whole of where it points. A pail on a hanging arm hangs
+                // plumb, and on a swinging one it swings, which is what a
+                // pail does.
+                if leg == 0 {
+                    if let Some(load) = holding {
+                        let held = match load {
+                            people::Load::Pail => pail,
+                            people::Load::Log => log,
+                        };
+
+                        if let Some(held) = held {
+                            let (wide, long) = load.size();
+                            let fist = wrist + hangs(arm_lower, people::HAND_WIDE);
+
+                            scene.push_material(
+                                held,
+                                &Transform::at(fist)
+                                    .with_rotation(arm_lower)
+                                    .with_scale(vec3(wide, long, wide)),
+                                // **The pile's own colour for the log**,
+                                // because it came off that pile, and the
+                                // village's timber for the pail, because
+                                // that is where the well is.
+                                match load {
+                                    people::Load::Pail => aim::VILLAGE_TIMBER,
+                                    people::Load::Log => aim::VALHALLA_ROOF,
+                                },
+                                aim::NO_SHINE,
+                            );
+                        }
+                    }
+                }
+
                 // **And Gjallarhorn in the left hand.** Spec 0055: the
                 // horn that has not been blown. It hangs from the fist
                 // rather than being raised, because Heimdall holds it
@@ -4820,6 +4872,9 @@ impl Arcade {
                 facing,
                 None,
                 None,
+                // the watchman is not on a round and carries nothing but
+                // the horn, which is his own
+                None,
                 2,
                 people::Look::Carved,
                 false,
@@ -4861,6 +4916,7 @@ impl Arcade {
                     doing.facing,
                     doing.walked,
                     doing.stopped,
+                    doing.holding,
                     n,
                     people::Look::Einherjar,
                     false,
@@ -4898,6 +4954,7 @@ impl Arcade {
                 doing.facing,
                 doing.walked,
                 doing.stopped,
+                doing.holding,
                 n + 3,
                 people::Look::Guest,
                 false,
@@ -4928,6 +4985,10 @@ impl Arcade {
                 // their own
                 Some(self.paced),
                 // and no errand: you are not on a round
+                None,
+                // and nothing in your hands, which is spec 0073's own
+                // out of scope: the figure in the glass is you, and you
+                // are not carrying a pail
                 None,
                 // your own coat, which is a seed like anybody else's
                 0,
@@ -7476,6 +7537,11 @@ impl Game for Arcade {
         self.helm =
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 10, people::helm_profile)));
         self.horn = Some(renderer.add_mesh(&bridge::horn_mesh()));
+        // what anybody on a round is carrying. Spec 0073.
+        self.pail =
+            Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 12, people::pail_profile)));
+        self.log =
+            Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 8, people::log_profile)));
         self.kerbs = [-1.0f32, 1.0]
             .map(|side| Some(renderer.add_mesh(&bridge::kerb_mesh(self.room.reaches, side))));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));

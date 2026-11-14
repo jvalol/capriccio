@@ -801,13 +801,21 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         facing,
         stays,
         doing: Errand::Wait,
+        carries: None,
     };
     let doing = |at: Vec3, facing: f32, stays: f32, doing: Errand| Stop {
         at,
         facing,
         stays,
         doing,
+        carries: None,
     };
+    // the same, leaving with something in hand. Spec 0073.
+    let carrying =
+        |at: Vec3, facing: f32, stays: f32, errand: Errand, carries: crate::people::Load| Stop {
+            carries: Some(carries),
+            ..doing(at, facing, stays, errand)
+        };
     let before = |thing: Vec3, looks: Vec3, stays: f32| {
         let (at, facing) = at_the(thing, thing + looks * 4.0, CLEAR_OF);
 
@@ -862,6 +870,11 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             lane(rail_at.x - 2.0),
         ],
         // **Water**: the well to the cabin across the street and back.
+        //
+        // **And the pail goes with them.** Spec 0073. `Draw` is a bucket
+        // up a well hand over hand, so the thing at the end of it is not a
+        // decision: they leave here holding it, carry it across the street
+        // and stand at the door with it, and come back empty.
         vec![
             {
                 let (at, facing) = at_the(
@@ -869,7 +882,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                     water + vec3(0.0, 0.0, -4.0),
                     WELL_WIDE * 0.5 + CLEAR_OF,
                 );
-                doing(at, facing, 6.0, Errand::Draw)
+                carrying(at, facing, 6.0, Errand::Draw, crate::people::Load::Pail)
             },
             lane(water.x + 1.0),
             before(doors[1].0, doors[1].1, 4.5),
@@ -1215,6 +1228,40 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Spec 0073: the pail leaves the well and comes back without it.
+    ///
+    /// **Asked of the round rather than of the stop that sets it**, because
+    /// what this wants to know is whether anybody in this village is ever
+    /// seen carrying anything, and a field set on a struct is not that.
+    #[test]
+    fn the_pail_leaves_the_well_and_comes_back_empty() {
+        let water = well(REACHES);
+        let round = &rounds(REACHES)[2];
+        let mut carried = 0;
+        let mut empty = 0;
+        let mut furthest: f32 = 0.0;
+
+        for step in 0..4_000 {
+            let doing = crate::people::doing(round, step as f32 * 0.05);
+
+            if doing.holding == Some(crate::people::Load::Pail) {
+                carried += 1;
+                furthest = furthest.max(doing.at.distance(water));
+            } else {
+                empty += 1;
+            }
+        }
+
+        assert!(carried > 0, "nobody ever carries the pail");
+        assert!(empty > 0, "the pail is never put down");
+        assert!(
+            furthest > 6.0,
+            "the pail never gets more than {:.1} metres from the well, so it \
+             is not being taken anywhere",
+            furthest
+        );
     }
 
     /// Spec 0067: and being moved out of each other does not move anybody

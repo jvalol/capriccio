@@ -662,6 +662,71 @@ pub const PACE: f32 = 1.1;
 /// short way round.
 pub const TURNS_IN: f32 = 0.7;
 
+/// Something somebody carries from one stop to the next, per spec 0073.
+///
+/// **Two, and both of them named by an errand that already existed.** Spec
+/// 0067's `Draw` is a bucket up a well and its `Lift` at the steading is an
+/// armful off a woodpile, so what is in the hand at the end of either is
+/// not a decision anybody has to make. What is in a wagon or a store is,
+/// and those stops carry nothing until somebody says what is in them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Load {
+    Pail,
+    Log,
+}
+
+/// How big each one is, in metres: across and along.
+pub const PAIL_WIDE: f32 = 0.23;
+pub const PAIL_TALL: f32 = 0.25;
+pub const LOG_WIDE: f32 = 0.11;
+pub const LOG_LONG: f32 = 0.42;
+
+impl Load {
+    /// How wide and how long one hangs, which the drawing scales by.
+    pub fn size(self) -> (f32, f32) {
+        match self {
+            Load::Pail => (PAIL_WIDE, PAIL_TALL),
+            Load::Log => (LOG_WIDE, LOG_LONG),
+        }
+    }
+}
+
+/// A pail: straight-sided, a little wider at the rim than at the foot.
+///
+/// **Closed at both ends**, like everything else off this lathe. Open at the
+/// top is two-sided or it is a tube you see the inside of the far wall of,
+/// and a pail with water in it has no inside worth showing at this size.
+///
+/// Hung rather than stood, so it runs from -1 at the foot to nought at the
+/// rim, which is the convention [`thigh_profile`] sets for anything that
+/// hangs off a joint.
+pub fn pail_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    let waist = if v < 0.08 {
+        (v / 0.08) * 0.82
+    } else if v > 0.92 {
+        (1.0 - v) / 0.08
+    } else {
+        0.82 + (v - 0.08) / 0.84 * 0.18
+    };
+
+    (v - 1.0, waist)
+}
+
+/// And a billet off a woodpile: a plain round log with its ends cut flat.
+pub fn log_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    let waist = if v < 0.06 {
+        v / 0.06
+    } else if v > 0.94 {
+        (1.0 - v) / 0.06
+    } else {
+        1.0
+    };
+
+    (v - 1.0, waist)
+}
+
 /// One stop on a round: where to stand, which way to face while there, and
 /// how long to stay.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -672,6 +737,15 @@ pub struct Stop {
     /// What they are there for, which is what their hands do while they
     /// stand. Spec 0067.
     pub doing: crate::gesture::Errand,
+    /// What they are holding when they leave here, and so for the whole of
+    /// the walk out and the stay at the other end. Spec 0073.
+    ///
+    /// **Said on the stop it comes from and not on the one it goes to**,
+    /// because a load is picked up somewhere and the place it is put down
+    /// is just wherever the round goes next. `None` on every stop is
+    /// everybody empty-handed, which is what this building was until spec
+    /// 0073.
+    pub carries: Option<Load>,
 }
 
 /// Where somebody on a round is at a given moment.
@@ -685,6 +759,8 @@ pub struct Doing {
     /// What they are doing where they are standing, how long they have been
     /// at it, and how long they are staying. `None` while they are walking.
     pub stopped: Option<(crate::gesture::Errand, f32, f32)>,
+    /// What is in their hand now. Spec 0073.
+    pub holding: Option<Load>,
 }
 
 /// How much room two people need between them before they are one person.
@@ -791,6 +867,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             facing: 0.0,
             walked: None,
             stopped: None,
+            holding: None,
         };
     };
 
@@ -812,8 +889,35 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             facing: first.facing,
             walked: None,
             stopped: Some((first.doing, 0.0, first.stays)),
+            holding: None,
         };
     }
+
+    // **What is in the hand is what the last real stop said.**
+    // Standing at a stop, that is the one before it, so they arrive with
+    // whatever they were sent for and stand there holding it. Walking,
+    // it is the stop they have just stepped off, so a pail picked up at
+    // a well is in the hand for the whole walk and the whole stay at the
+    // other end, and gone the moment they leave that.
+    //
+    // **And a corner is not a stop.** A stop stayed nought is a bend in a
+    // leg, which is what every one of them in this building is written as
+    // and what `clip`'s own route calls them. Read without this, the
+    // village's pail was picked up at the well and put down again two
+    // metres later at the corner that aims the walk across the street,
+    // which `tests::the_pail_leaves_the_well_and_comes_back_empty` found.
+    let held_from = |mut n: usize| {
+        for _ in 0..round.len() {
+            if round[n].stays > 0.0 {
+                break;
+            }
+
+            n = (n + round.len() - 1) % round.len();
+        }
+
+        round[n].carries
+    };
+    let left_behind = |n: usize| held_from((n + round.len() - 1) % round.len());
 
     let mut left = since.rem_euclid(whole);
     let mut walked = 0.0;
@@ -847,6 +951,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 facing,
                 walked: None,
                 stopped: Some((stop.doing, left, stays)),
+                holding: left_behind(n),
             };
         }
 
@@ -860,6 +965,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 facing: goes,
                 walked: Some(walked + way.length() * share),
                 stopped: None,
+                holding: held_from(n),
             };
         }
 
@@ -872,6 +978,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
         facing: first.facing,
         walked: None,
         stopped: Some((first.doing, 0.0, first.stays)),
+        holding: left_behind(0),
     }
 }
 
@@ -948,6 +1055,63 @@ mod tests {
         }
     }
 
+    /// Spec 0073: what is in the hand is what the stop they last left
+    /// said, for the whole of the walk out and the stay at the other end.
+    ///
+    /// **All four moments, because three of them pass on their own.** A
+    /// rule that only says "holding while walking" leaves somebody arriving
+    /// at a door and putting the pail down before they knock, and one that
+    /// says "holding at the stop it is set on" has them draw water they
+    /// were already carrying.
+    #[test]
+    fn a_load_is_carried_from_the_stop_that_gives_it() {
+        // the first two stops, because both have a stay: the third is a
+        // corner walked straight through, and a corner cannot show the
+        // difference between standing with a thing and walking with it
+        let mut round = a_round();
+        round[0].carries = Some(Load::Pail);
+
+        let legs: Vec<(f32, f32)> = round
+            .iter()
+            .enumerate()
+            .map(|(n, stop)| {
+                let next = round[(n + 1) % round.len()];
+
+                (stop.stays, stop.at.distance(next.at) / PACE)
+            })
+            .collect();
+        let at = |n: usize, into: f32| {
+            let before: f32 = legs[..n].iter().map(|(a, b)| a + b).sum();
+
+            doing(&round, before + into)
+        };
+
+        // standing at the stop that gives it, before they have picked it up
+        assert_eq!(
+            at(0, 0.1).holding,
+            None,
+            "holding it before it is picked up"
+        );
+        // walking away from there with it
+        assert_eq!(
+            at(0, legs[0].0 + 0.1).holding,
+            Some(Load::Pail),
+            "left without it"
+        );
+        // and still holding it at the far end
+        assert_eq!(
+            at(1, 0.1).holding,
+            Some(Load::Pail),
+            "put it down on arrival"
+        );
+        // and gone once they leave that
+        assert_eq!(
+            at(1, legs[1].0 + 0.1).holding,
+            None,
+            "carrying it back again"
+        );
+    }
+
     fn a_round() -> Vec<Stop> {
         vec![
             Stop {
@@ -955,12 +1119,14 @@ mod tests {
                 facing: 0.0,
                 stays: 4.0,
                 doing: crate::gesture::Errand::Wait,
+                carries: None,
             },
             Stop {
                 at: glam::vec3(6.0, 0.0, 0.0),
                 facing: 1.0,
                 stays: 3.0,
                 doing: crate::gesture::Errand::Stir,
+                carries: None,
             },
             // a corner, walked straight through
             Stop {
@@ -968,6 +1134,7 @@ mod tests {
                 facing: 2.0,
                 stays: 0.0,
                 doing: crate::gesture::Errand::Wait,
+                carries: None,
             },
         ]
     }
