@@ -138,9 +138,9 @@ write.
   round through it is the obvious next thing, and it wants the figure to not
   be drawn while it is in there or it is a body inside a lit room seen through
   a window.
-- **The fire in daylight.** It is written against the dark, like the hall's,
-  and at noon the flames clip to white. Nobody is ever in that lane at noon in
-  a picture but this one.
+- **The hall's long fire in daylight**, which stays written against the dark
+  because indoors it is. The two yard fires are damped now, which is
+  2026-11-14 below.
 
 ## 2026-11-14: what they do while they are standing
 
@@ -217,3 +217,29 @@ instead, which is cruder and is what there is.
 
 - Whether it reads as a person rather than as a part oscillating, which is
   the whole of what was asked and the one thing in here no test can see.
+
+## 2026-11-14: the fire at noon
+
+**It was a white blob and now it is orange.** `aim::HEARTH_FIRE` asks for 3.6
+in the red and 1.65 in the green, and two channels past one is white. Against
+the dark that reads as a fire because nothing near it is bright. At noon it is
+a hole in the lane, and nobody had taken a picture at that hour, which is why
+it sat in Out of scope.
+
+`garden::firelight` brings the want down as the sun comes up and the two yard
+fires multiply it in. The hall's long fire does not: indoors it is against the
+dark whichever hour it is.
+
+### Two things got this wrong before it was right
+
+**The first damping was on the wrong fire.** `aim::FIRE` and the flame loop I
+found first are the cellar's hearth, three floors down and never in daylight.
+It was committed to nothing and caught by the picture not changing.
+
+**And the number was on the wrong side of the arithmetic.** `gives_off`
+divides out the ambient so a colour lands on screen as written, which made it
+look as though bringing the want under one was enough. It divides out the
+ambient and nothing else: at noon the sun multiplies on top of that, so a want
+of 0.58 in the green still rendered white. The share of sun on a flame depends
+on which way the flame is facing, so what fixed it was rendering the common at
+noon three times rather than working it out. A tenth, at noon.

@@ -503,6 +503,35 @@ pub fn sunlit(since: f32) -> (Vec3, f32) {
     (colour, up.powf(0.7) * crate::aim::SUN_STRENGTH)
 }
 
+/// How much of a flame's colour shows, against how light it is out.
+///
+/// **Multiplied into what a flame wants to be**, which [`gives_off`] then
+/// divides the ambient out of. That one makes a colour land on screen as
+/// written whatever the hour; this one says what it should be asking for in
+/// the first place.
+///
+/// `aim::HEARTH_FIRE` asks for 3.6 in red and 1.65 in green, and two
+/// channels past one is white. Against the dark that reads as a fire,
+/// because nothing near it is bright. At noon it is a white blob in a lane,
+/// which is what spec 0067 wrote down as out of scope and is the only hour
+/// nobody had taken a picture at.
+///
+/// So the want comes down as the sun goes up, until the red still clips and
+/// the green is well under it: a flame that is still alight and is orange
+/// again. Nothing about a fire actually dims at noon. What changes is that
+/// there is no exposure here to do it for us, and that a real fire at
+/// midday is pale and hard to pick out, which is the same picture by
+/// another route.
+///
+/// Spec 0067.
+pub fn firelight(since: f32) -> f32 {
+    const AT_NOON: f32 = 0.10;
+
+    let up = sun_up(since).max(0.0);
+
+    1.0 - (1.0 - AT_NOON) * up.powf(0.6)
+}
+
 /// What fills the shade, which is the sky rather than the sun.
 ///
 /// Never nought: a storm at midnight is still a lid over the garden and a
@@ -4546,6 +4575,61 @@ pub const SKINS: [(u32, [f32; 3], usize); 3] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0067: a fire is a hole in the picture at noon and a fire at
+    /// night, and the difference is the renderer having no exposure rather
+    /// than anything about the fire.
+    #[test]
+    fn a_fire_stops_clipping_to_white_when_the_sun_is_up() {
+        let noon = when(0.25);
+        let midnight = when(0.75);
+        let wants = |since: f32| crate::aim::HEARTH_FIRE * firelight(since);
+
+        // **What is asked for is before the sun, not after it.** The first
+        // version of this asked the red to stay past one here, which is
+        // what makes a glow on screen, and that is the wrong side of the
+        // arithmetic: `gives_off` divides out the ambient and the noon sun
+        // then multiplies on top, so a want of a third still clips. Held
+        // to a third of what it asks for at night instead, which is a
+        // flame that is damped rather than out.
+        assert!(
+            wants(noon).x > wants(midnight).x * 0.08,
+            "a flame at noon asks for {:.2} in the red against {:.2} at night, which is out",
+            wants(noon).x,
+            wants(midnight).x
+        );
+        // **And well under it in the green, not merely under.**
+        // [`gives_off`] divides out the ambient and nothing else, so a
+        // surface the noon sun is also on lands several times what it
+        // asked for: at 0.58 in the green, which is under one and looked
+        // safe, the flame was still white on screen. Measured by rendering
+        // the common at noon rather than by arithmetic, because the share
+        // of sun on a flame depends on which way it is facing.
+        assert!(
+            wants(noon).y < 0.2,
+            "a flame at noon asks for {:.2} in the green, which the sun on top of it \
+             takes past one",
+            wants(noon).y
+        );
+        // and the red stays the brightest by a long way, which is what
+        // makes it orange rather than pale
+        assert!(wants(noon).x > wants(noon).y * 2.0);
+        assert!(
+            wants(midnight).y > 1.2,
+            "a flame at midnight asks for only {:.2} in the green",
+            wants(midnight).y
+        );
+
+        // and never brighter as the sun rises, at any hour of the morning
+        let mut was = wants(when(0.0)).x;
+
+        for n in 1..100 {
+            let now = wants(when(n as f32 * 0.0025)).x;
+
+            assert!(now <= was + 1e-4, "a flame got brighter as the sun rose");
+            was = now;
+        }
+    }
 
     /// Spec 0016: how far off a strike is sets everything about it, and it all
     /// moves together.

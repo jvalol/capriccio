@@ -3260,6 +3260,11 @@ impl Arcade {
             aim::VOID,
         );
 
+        // **Damped by the daylight, and only out here.** Spec 0067: a
+        // flame asks for two channels past one, which is white, and against
+        // the dark that reads as fire. At noon in a lane it is a hole in
+        // the picture. The hall's own long fire is left alone: indoors it
+        // is against the dark whatever the hour.
         if let Some(flame) = self.hearth_flame {
             for n in 0..village::RING_FLAMES {
                 let own = bridge::burning(self.since + n as f32 * 1.11);
@@ -3279,7 +3284,11 @@ impl Arcade {
                         (0.22 + own * 0.18) * 0.9,
                         valhalla::FLAME_WIDE * 0.8,
                     )),
-                    garden::gives_off(aim::HEARTH_FIRE * own, self.since).extend(1.0),
+                    garden::gives_off(
+                        aim::HEARTH_FIRE * own * garden::firelight(self.since),
+                        self.since,
+                    )
+                    .extend(1.0),
                 );
             }
 
@@ -3855,7 +3864,11 @@ impl Arcade {
                         (0.26 + own * 0.2) * size,
                         valhalla::FLAME_WIDE * size,
                     )),
-                    garden::gives_off(aim::HEARTH_FIRE * own, self.since).extend(1.0),
+                    garden::gives_off(
+                        aim::HEARTH_FIRE * own * garden::firelight(self.since),
+                        self.since,
+                    )
+                    .extend(1.0),
                 );
             }
 
