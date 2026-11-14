@@ -1205,7 +1205,12 @@ pub fn which_sky(since: f32) -> usize {
 /// `None` if the sky is not one of `SKIES`, or if it does not come up inside
 /// a fortnight, which with four skies rolled per day is not a thing that
 /// happens.
-#[cfg(test)]
+///
+/// **And for the staged shot of the village**, which is the one picture this
+/// building publishes with a sky in it. It was `cfg(test)` on the grounds
+/// that nothing which runs wants it, which was true until spec 0071: the
+/// first day this building ever has is a storm, so a shot that takes
+/// whatever the clock starts on takes that storm.
 pub fn under(hour: f32, sky: &str) -> Option<f32> {
     (0..14)
         .map(|n| when(hour) + day() * n as f32)

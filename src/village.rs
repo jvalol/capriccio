@@ -43,6 +43,65 @@ pub fn at(reaches: f32) -> Vec3 {
 pub const STREET_LONG: f32 = 58.0;
 pub const STREET_WIDE: f32 = 10.0;
 
+/// What the staged shot of the village is asked for by, and the name of the
+/// file it lands in.
+///
+/// The one account of it, like `beyond::slugged`: `--screenshot=village` and
+/// `media/village.png` and nowhere else says so.
+pub const SHOT: &str = "village";
+
+/// What hour the staged shot is taken at, and under which sky.
+///
+/// **A shot of this place is a shot of a sky**, which no other staged shot
+/// in this building is: the rest are in the hall or behind its wall. The
+/// first day the building ever has is a storm, so the hour is not enough on
+/// its own and `garden::under` is what finds a day that is both.
+///
+/// Mid-morning, with the sun off the street's own line, so the fronts down
+/// one side are lit and the other side is in shade. Noon down a street that
+/// runs east and west is a street with no shadow in it.
+pub const SHOT_AT: f32 = 0.28;
+pub const SHOT_SKY: &str = "fair";
+
+/// How long a day lasts while the shot is being taken.
+///
+/// **Its own number rather than `tour::FILM_DAY`.** The two agree today and
+/// are not the same question: that one is how long a fifty-eight second film
+/// may take to cross one evening, this one is how little five seconds of
+/// staging may move the sky. The photographer runs a game for five seconds
+/// before it draws, which at `garden::DAY` is a quarter of a day: the first
+/// take of this shot asked for mid-morning and got the middle of the night.
+pub const SHOT_DAY: f32 = 20.0 * 60.0;
+
+/// Where a staged shot of the village stands, which way it looks and how far
+/// down, per spec 0071.
+///
+/// **Said as shares of the street rather than as metres.** A picture of this
+/// place framed by three numbers in metres is a picture that comes apart the
+/// day a cabin moves, which is the fault `around` was written to answer one
+/// paragraph below. A third of the way out from the middle is a third of the
+/// way out however long the street gets.
+///
+/// Down the street from inside its east end, which is the end you would
+/// arrive at, and an eighth of the width off the middle so the ruts leave
+/// the frame at a corner rather than running up the centre of it. Aimed a
+/// little under the eye, because the street is what the picture is of and
+/// the sky is not.
+///
+/// **A quarter of the width off was too far**, and in the way Jake has
+/// already named once, on the arcade's own still: the near cabin on that
+/// side stood across a third of the frame, and the picture's job is the
+/// street rather than a cabin.
+pub fn posed(reaches: f32) -> (Vec3, f32, f32) {
+    let middle = at(reaches);
+    let stand = middle + vec3(STREET_LONG * 0.34, 0.0, STREET_WIDE * 0.12);
+    let look = middle + vec3(-STREET_LONG * 0.24, crate::EYE - 0.3, STREET_WIDE * 0.1);
+    let way = look - (stand + Vec3::Y * crate::EYE);
+    let flat = vec3(way.x, 0.0, way.z).length();
+
+    (stand, way.x.atan2(-way.z), way.y.atan2(flat))
+}
+
 /// And how far the whole place reaches, which is what keeps trees out of it
 /// and what the tests measure against.
 ///
@@ -883,6 +942,72 @@ mod tests {
     use super::*;
 
     const REACHES: f32 = 20.0;
+
+    /// Spec 0071. The one thing a staged shot can get wrong that nobody
+    /// notices until it is published: a camera pointing somewhere else.
+    #[test]
+    fn the_staged_shot_looks_down_the_street() {
+        let (stand, yaw, pitch) = posed(REACHES);
+        let around = around(REACHES);
+
+        assert!(
+            stand.x > around.min.x
+                && stand.x < around.max.x
+                && stand.z > around.min.z
+                && stand.z < around.max.z,
+            "the shot stands at {:?}, which is outside the village",
+            stand
+        );
+
+        // the street runs east and west, and this looks west along it, so
+        // the way ahead is nearly all -x. Yaw nought faces -z and grows
+        // toward +x, so west is -pi/2.
+        let ahead = vec3(yaw.sin(), 0.0, -yaw.cos());
+
+        assert!(
+            ahead.x < -0.9,
+            "the shot looks {:?}, which is not down the street",
+            ahead
+        );
+
+        // and a little under the eye rather than at the sky or at its own
+        // feet
+        assert!(
+            (-0.1..0.0).contains(&pitch),
+            "the shot is pitched {:.3}, which is not a look along a street",
+            pitch
+        );
+    }
+
+    /// Spec 0071. The first three takes of this were the middle of the
+    /// night, so the hour is worth a test of its own.
+    ///
+    /// **Asked of the garden rather than of the number.** A range written
+    /// round a constant is checked by the compiler and proves nothing; what
+    /// this wants to know is whether the sun is up at that hour, which only
+    /// the thing that moves the sun can say.
+    #[test]
+    fn the_shot_is_taken_in_daylight() {
+        let shot = crate::garden::when(SHOT_AT);
+
+        assert!(
+            crate::garden::sun_up(shot) > 0.5,
+            "the sun stands at {:.2} at the hour of the shot, which is not \
+             a street anybody can see",
+            crate::garden::sun_up(shot)
+        );
+
+        // and the five seconds the photographer runs for have to leave it
+        // there, which is the whole of why `SHOT_DAY` exists: at
+        // `garden::DAY` those five seconds are a quarter of a day.
+        let drawn = crate::garden::when(SHOT_AT + 5.0 / SHOT_DAY);
+
+        assert!(
+            crate::garden::sun_up(drawn) > 0.5,
+            "the sun has fallen to {:.2} by the time the picture is drawn",
+            crate::garden::sun_up(drawn)
+        );
+    }
 
     /// Spec 0068: a roof is pieces, and two courses do not line up.
     ///

@@ -344,10 +344,13 @@ fn flying() -> bool {
 fn how_long_a_day_is() -> f32 {
     blitzkit::one_argument("--day")
         .and_then(|said| said.trim().parse().ok())
-        .unwrap_or(if filming() {
-            tour::FILM_DAY
-        } else {
-            garden::DAY
+        .unwrap_or(match (filming(), staged_in_the_village()) {
+            (true, _) => tour::FILM_DAY,
+            // and the same job for the one staged shot with a sky in it,
+            // which is five seconds of staging rather than a minute of
+            // film. Spec 0071.
+            (_, true) => village::SHOT_DAY,
+            _ => garden::DAY,
         })
 }
 
@@ -375,7 +378,18 @@ fn starting_hour() -> Option<f32> {
         Some(said) => said.trim().parse().ok().map(garden::when),
         // and a film opens at its own hour, which is the one its one
         // outdoor shot is staged for. See `tour::FILM_AT`.
-        None => filming().then(|| garden::when(tour::FILM_AT)),
+        None if filming() => Some(garden::when(tour::FILM_AT)),
+        // **The village's shot names a sky as well as an hour**, because
+        // the first day this building has is a storm and a published
+        // picture of a street should not be whichever weather day nought
+        // rolled. Spec 0071. It falls back to the hour on its own if a
+        // fortnight holds no such day, which with four skies a day it
+        // does not.
+        None if staged_in_the_village() => Some(
+            garden::under(village::SHOT_AT, village::SHOT_SKY)
+                .unwrap_or_else(|| garden::when(village::SHOT_AT)),
+        ),
+        None => None,
     }
 }
 
@@ -541,6 +555,14 @@ fn staged_in_the_tesseract() -> bool {
 /// `--screenshot` on its own is the one that lands in `media/screenshot.png`.
 /// `--screenshot <slug>` is one of the bodies in `beyond::SHOWN`, by the slug
 /// `beyond::slugged` gives it, and `--screenshot hall` is the hall's own pose.
+/// Whether this run is staging the shot of the village. Spec 0071.
+///
+/// **The one staged shot that is out of doors.** Everything else `shots()`
+/// takes is in the hall or behind the wall, where the hour decides nothing.
+fn staged_in_the_village() -> bool {
+    staged_as().as_deref() == Some(village::SHOT)
+}
+
 fn staged_as() -> Option<String> {
     blitzkit::one_argument("--screenshot")
 }
@@ -573,6 +595,13 @@ fn shots() -> Vec<(String, String)> {
 
         out.push((slug.clone(), format!("media/{}.png", slug)));
     }
+
+    // and the village, which is the one shot of this building that is not
+    // the solar system behind its wall. Spec 0071.
+    out.push((
+        village::SHOT.to_owned(),
+        format!("media/{}.png", village::SHOT),
+    ));
 
     out
 }
@@ -1255,6 +1284,7 @@ impl Arcade {
                 (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).0,
                 (true, _, _) => posed_at_the_shapes(reaches).0,
                 (_, true, _) => tesseract::posed().0,
+                (_, _, true) if staged_in_the_village() => village::posed(reaches).0,
                 (_, _, true) => posed_at,
                 _ => doorway,
             },
@@ -1480,6 +1510,7 @@ impl Arcade {
                 (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).1,
                 (true, _, _) => posed_at_the_shapes(reaches).1,
                 (_, true, _) => tesseract::posed().1,
+                (_, _, true) if staged_in_the_village() => village::posed(reaches).1,
                 (_, _, true) => posed_yaw,
                 _ => 0.0,
             },
@@ -1488,6 +1519,7 @@ impl Arcade {
             pitch: match (staged_in_the_tesseract(), staged() && staged_in_the_hall()) {
                 (true, _) => tesseract::posed().2,
                 (_, true) => POSED_PITCH,
+                _ if staged_in_the_village() => village::posed(reaches).2,
                 _ => 0.0,
             },
             turning: 0.0,
@@ -15489,6 +15521,20 @@ mod tests {
                 Some(since),
             ),
         );
+    }
+
+    /// Spec 0071: a shot named in the list and never taken is a broken
+    /// image on a published page, and nothing else looks.
+    #[test]
+    fn every_staged_shot_has_a_picture() {
+        for (name, file) in shots() {
+            assert!(
+                std::path::Path::new(&file).is_file(),
+                "{} is staged as {} and there is no such file",
+                name,
+                file
+            );
+        }
     }
 
     /// Spec 0068: the hitching rail, with the horses at it.
