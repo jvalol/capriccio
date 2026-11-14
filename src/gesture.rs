@@ -319,6 +319,85 @@ fn waiting(out: &mut Stance, who: f32, stood: f32, settled: f32) {
     out.shoulder[0] += 0.05 * held;
 }
 
+/// What a horse tied to a rail is doing with itself, per spec 0070.
+///
+/// **The head is the big one, where a person's is the weight shift.** A
+/// person stands on two feet and manages it for a few seconds at a time, so
+/// what says they are alive is the hip. A horse stands on four and is
+/// stable: its stance says very little and its head says everything, on a
+/// metre of neck where two centimetres at the shoulder is ten at the muzzle.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Hitched {
+    /// How far the head has dropped below where it is carried, in metres.
+    pub head_drops: f32,
+    /// How far the head has swung off the body's own line, in metres.
+    pub head_aside: f32,
+    /// How far the tail is swung off where it hangs, in radians about the
+    /// horse's own forward.
+    pub tail: f32,
+    /// How far each hind leg is resting, nought to one, as the drawing
+    /// counts the two sides.
+    pub rests: [f32; 2],
+    /// How far the body is off where it stands, in metres, which the legs
+    /// do not take and everything above them does.
+    pub rise: f32,
+}
+
+/// What a horse at the rail is doing at this second.
+///
+/// `who` is anything that tells one animal from another and stays the same
+/// from frame to frame. `since` is the clock.
+pub fn hitched(who: f32, since: f32) -> Hitched {
+    let mut out = Hitched::default();
+
+    // **Breath**, which is the only regular thing here, because breathing
+    // is. Five seconds to the cycle against the people's 3.7, because a
+    // horse at rest breathes slower than a person standing.
+    out.rise += ((since / 5.0 + who) * TAU).sin() * 0.006;
+
+    // **The head, dropping and coming back on its own time.** Eased at both
+    // ends and away from the bottom of its reach for most of a turn, so it
+    // is a horse lowering its head rather than a head on a spring.
+    let (n, through) = turn_of(who, since, 9.0);
+    let reach = 0.10 + wiggle(who, n * 2.3) * 0.07;
+
+    out.head_drops += reach * eased(through * 2.5) * (1.0 - eased(through * 2.5 - 1.5));
+    // and a bob under it that never stops, off two periods that do not
+    // divide, like the people's sway
+    out.head_drops += (since * 0.37 + who).sin() * 0.010;
+    out.head_aside +=
+        ((since * 0.21 + who * 2.0).sin() * 0.030) + ((since * 0.13 + who).sin() * 0.022);
+
+    // **The tail swishes in bouts rather than swinging.** A tail on a
+    // steady cycle is the metronome this module is about. A horse swishes
+    // at a fly: two or three strokes that die away, then ten or twenty
+    // seconds of nothing.
+    let (n, through) = turn_of(who + 3.0, since, 13.0);
+    let bout = 0.11;
+
+    if through < bout {
+        let t = through / bout;
+
+        out.tail = ((t * TAU * 2.5).sin())
+            * (1.0 - t)
+            * eased(t * 6.0)
+            * (0.20 + wiggle(who, n * 4.7) * 0.09);
+    }
+
+    // **A hind leg rests, which is the four-legged weight shift.** One hind
+    // hoof tipped back with the load off it, swapped every half minute or
+    // so, with both down in between. Only a hind leg: a foreleg cocked the
+    // same way is a lame horse.
+    let (n, through) = turn_of(who + 7.0, since, 31.0);
+    let on = (n as usize) % 2;
+    let over = eased(through * 3.0) * (1.0 - eased(through * 3.0 - 2.0));
+
+    out.rests[on] = over;
+    out.rise -= 0.010 * over;
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,6 +428,161 @@ mod tests {
         most.max((one.turn - two.turn).abs())
             .max((one.lean - two.lean).abs())
             .max((one.rise - two.rise).abs() * 10.0)
+    }
+
+    /// How far apart two horses' poses are, in roughly comparable units:
+    /// the metres scaled up so a centimetre of head counts like a tenth of
+    /// a radian of tail.
+    fn apart_hitched(one: &Hitched, two: &Hitched) -> f32 {
+        ((one.head_drops - two.head_drops).abs() * 10.0)
+            .max((one.head_aside - two.head_aside).abs() * 10.0)
+            .max((one.tail - two.tail).abs())
+            .max((one.rests[0] - two.rests[0]).abs())
+            .max((one.rests[1] - two.rests[1]).abs())
+            .max((one.rise - two.rise).abs() * 10.0)
+    }
+
+    /// The same fault as the people's, one spec later: spec 0070 is here
+    /// because the horses were the last thing in the village holding a
+    /// pose.
+    #[test]
+    fn a_hitched_horse_is_never_still() {
+        for who in [0.7f32, 3.0, 5.4] {
+            let mut most: f32 = 0.0;
+
+            for step in 0..600 {
+                let since = step as f32 * 0.1;
+
+                most = most.max(apart_hitched(
+                    &hitched(who, since),
+                    &hitched(who, since + 0.1),
+                ));
+            }
+
+            assert!(
+                most > 0.004,
+                "a horse moves at most {:.5} in a tenth of a second, which is a sawhorse",
+                most
+            );
+        }
+    }
+
+    /// **The argument the whole spec rests on.** A horse on four legs says
+    /// nothing with its stance, so if the head is not the biggest thing
+    /// moving then nothing anybody can see is moving at all.
+    #[test]
+    fn a_horse_says_most_of_it_with_its_head() {
+        for who in [0.7f32, 3.0] {
+            let mut head: f32 = 0.0;
+            let mut body: f32 = 0.0;
+
+            for step in 0..1200 {
+                let one = hitched(who, step as f32 * 0.1);
+
+                head = head.max(one.head_drops.abs()).max(one.head_aside.abs());
+                body = body.max(one.rise.abs());
+            }
+
+            assert!(
+                head > body * 4.0,
+                "the head moves {:.4} and the body {:.4}, which is a horse \
+                 bobbing rather than a horse standing",
+                head,
+                body
+            );
+        }
+    }
+
+    /// A tail on a steady cycle is the metronome this module exists to
+    /// avoid, so it has to be still most of the time and quick when it
+    /// goes.
+    #[test]
+    fn a_tail_swishes_in_bouts_rather_than_swinging() {
+        for who in [0.7f32, 3.0, 5.4] {
+            let mut moving = 0;
+            let mut most: f32 = 0.0;
+
+            for step in 0..2000 {
+                let tail = hitched(who, step as f32 * 0.05).tail;
+
+                if tail.abs() > 0.02 {
+                    moving += 1;
+                }
+
+                most = most.max(tail.abs());
+            }
+
+            let share = moving as f32 / 2000.0;
+
+            assert!(
+                share < 0.25,
+                "the tail is moving {:.0}% of the time, which is a pendulum",
+                share * 100.0
+            );
+            assert!(
+                share > 0.02 && most > 0.1,
+                "the tail moves {:.0}% of the time and reaches {:.3}, which is a \
+                 tail nailed on",
+                share * 100.0,
+                most
+            );
+        }
+    }
+
+    /// A horse rests a hind leg. Two at once is a horse sitting down, and
+    /// the fore legs never do it at all, which is drawn rather than said
+    /// here: this holds the half of it that is a number.
+    #[test]
+    fn a_horse_rests_one_hind_leg_at_a_time() {
+        for who in [0.7f32, 3.0, 5.4] {
+            let mut each = [false, false];
+
+            for step in 0..6000 {
+                let rests = hitched(who, step as f32 * 0.1).rests;
+
+                assert!(
+                    rests[0] <= 0.0 || rests[1] <= 0.0,
+                    "both hind legs are resting at once, at {:.1} seconds",
+                    step as f32 * 0.1
+                );
+
+                for n in 0..2 {
+                    assert!(
+                        (0.0..=1.0).contains(&rests[n]),
+                        "a leg is resting {:.3}, which is not a share",
+                        rests[n]
+                    );
+
+                    each[n] |= rests[n] > 0.5;
+                }
+            }
+
+            assert!(
+                each[0] && each[1],
+                "over ten minutes it rested {:?}, so it favours one leg for ever",
+                each
+            );
+        }
+    }
+
+    /// Two animals at one rail driven off one clock, which is what the
+    /// village has.
+    #[test]
+    fn two_horses_are_not_the_same_horse() {
+        let (one, two) = (0.7f32, 3.0f32);
+        let mut most: f32 = 0.0;
+
+        for step in 0..1200 {
+            let since = step as f32 * 0.1;
+
+            most = most.max(apart_hitched(&hitched(one, since), &hitched(two, since)));
+        }
+
+        assert!(
+            most > 0.1,
+            "two horses are never more than {:.4} apart, which is one horse drawn twice",
+            most
+        );
     }
 
     /// The fault this whole module is for: a figure that arrives and freezes.

@@ -3602,12 +3602,17 @@ impl Arcade {
     /// legs: a barrel, a neck that leans, a head on the end of it and a
     /// tail, and nothing finer than that.
     ///
-    /// They stand. Spec 0067's gait is a two-legged walk and a horse that
-    /// used it would be a person on all fours.
+    /// They do not walk. Spec 0067's gait is a two-legged walk and a horse
+    /// that used it would be a person on all fours, which is as true now as
+    /// it was. What spec 0070 gives them is what they do standing: the
+    /// head, a tail that swishes in bouts, a hind leg rested, and breath.
     fn draw_the_village_horses(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
 
-        for (at, facing) in village::horses(reaches) {
+        for (which, (at, facing)) in village::horses(reaches).into_iter().enumerate() {
+            // **One number apiece, so the two are not the same horse.**
+            // Spec 0070. Everything below rides on it and on the clock.
+            let alive = gesture::hitched(which as f32 * 2.3 + 0.7, self.since);
             // **A quarter turn off the facing.** The body is built along
             // its own +x and a facing of `f` in this building looks down
             // `(sin f, 0, -cos f)`, so the two are ninety degrees apart:
@@ -3631,10 +3636,11 @@ impl Arcade {
                 );
             };
 
-            // the barrel, hung between the back and the belly
+            // the barrel, hung between the back and the belly, and riding
+            // on the breath and the rested hind leg
             piece(
                 scene,
-                Vec3::Y * (village::HORSE_BELLY + village::HORSE_DEEP * 0.5),
+                Vec3::Y * (village::HORSE_BELLY + village::HORSE_DEEP * 0.5 + alive.rise),
                 vec3(
                     village::HORSE_LONG,
                     village::HORSE_DEEP,
@@ -3645,8 +3651,20 @@ impl Arcade {
             );
 
             // four legs, standing on the ground and reaching the belly
+            //
+            // **One hind leg rests. Spec 0070.** Tipped so the hoof comes
+            // back under the body with the load off it, which is what a
+            // horse does with a hind leg and never with a fore: a foreleg
+            // cocked the same way is a lame horse. The legs do not take
+            // `rise`, because they stand on the ground.
             for along in [-1.0f32, 1.0] {
                 for side in [-1.0f32, 1.0] {
+                    let rests = if along < 0.0 {
+                        alive.rests[usize::from(side > 0.0)]
+                    } else {
+                        0.0
+                    };
+
                     piece(
                         scene,
                         vec3(
@@ -3655,7 +3673,7 @@ impl Arcade {
                             side * village::HORSE_WIDE * 0.3,
                         ),
                         vec3(0.14, village::HORSE_BELLY + 0.1, 0.14),
-                        0.0,
+                        -0.20 * rests,
                         aim::HORSE_COAT,
                     );
                 }
@@ -3663,8 +3681,24 @@ impl Arcade {
 
             // the neck, rising forward off the shoulder to where the head
             // is carried
-            let shoulder = vec3(village::HORSE_LONG * 0.4, village::HORSE_BACK - 0.1, 0.0);
-            let head = vec3(village::HORSE_LONG * 0.62, village::HORSE_HEAD, 0.0);
+            //
+            // **The head is where spec 0070 spends everything.** It is the
+            // one piece on a lever: two centimetres at the shoulder is ten
+            // at the muzzle, which is why a horse that is stable on four
+            // legs still reads as alive. Moving where it is carried moves
+            // the neck and the mane with it for nothing, because the lean
+            // and the length of both are worked out from this point rather
+            // than written down again.
+            let shoulder = vec3(
+                village::HORSE_LONG * 0.4,
+                village::HORSE_BACK - 0.1 + alive.rise,
+                0.0,
+            );
+            let head = vec3(
+                village::HORSE_LONG * 0.62,
+                village::HORSE_HEAD + alive.rise - alive.head_drops,
+                alive.head_aside,
+            );
             let rises = head - shoulder;
             let lean = -rises.x.atan2(rises.y);
 
@@ -3686,7 +3720,8 @@ impl Arcade {
                 aim::HORSE_COAT,
             );
 
-            // the mane down the back of the neck, and a tail off the rump
+            // the mane down the back of the neck, which follows the head
+            // because the neck does
             piece(
                 scene,
                 (shoulder + head) * 0.5 - vec3(0.13, 0.0, 0.0),
@@ -3694,12 +3729,28 @@ impl Arcade {
                 lean,
                 aim::HORSE_MANE,
             );
-            piece(
-                scene,
-                vec3(-village::HORSE_LONG * 0.5, village::HORSE_BACK - 0.3, 0.0),
-                vec3(0.11, 0.66, 0.14),
-                0.3,
+
+            // and the tail off the rump, swung about the horse's own
+            // forward from its root rather than about its middle: a box
+            // turned about its centre takes its top off the rump with it.
+            // Spec 0070. At a swish of nought this puts it exactly where
+            // the placement it replaced put it.
+            let half = Vec3::Y * 0.33;
+            let hangs = glam::Quat::from_rotation_z(0.3);
+            let root = vec3(
+                -village::HORSE_LONG * 0.5,
+                village::HORSE_BACK - 0.3 + alive.rise,
+                0.0,
+            ) + hangs * half;
+            let swishes = glam::Quat::from_rotation_x(alive.tail) * hangs;
+
+            scene.push_material(
+                cube,
+                &Transform::at(put(root - swishes * half))
+                    .with_rotation(turn * swishes)
+                    .with_scale(vec3(0.11, 0.66, 0.14)),
                 aim::HORSE_MANE,
+                aim::MATTE,
             );
         }
     }
