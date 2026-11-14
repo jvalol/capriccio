@@ -259,71 +259,249 @@ pub const GRAIN_SEED: u32 = 0x5EED_0005;
 pub const GRAINS: u32 = 5;
 const GRAIN_PALE: i32 = 218;
 
-pub fn grained(seed: u32) -> TextureData {
+/// How a board was cut out of the log, which is the whole difference between
+/// the two kinds of wood in this building.
+///
+/// Flat sawn takes the cut off the side of the log, so the saw crosses the
+/// rings and they come out as the long nested arches everybody calls
+/// cathedral figure. Quarter sawn splits the log to the heart first, so the
+/// rings stand on end and run the length of the board as straight stripes.
+///
+/// Spec 0068 says the steading is staved where the village is boarded. This
+/// is what that is: the hall's staves are riven off a block with an axe,
+/// which is quarter sawn by another name, and the village's boards come off
+/// a saw bench.
+#[derive(Copy, Clone, PartialEq)]
+pub enum Sawn {
+    Flat,
+    Quartered,
+}
+
+/// The xorshift this file's bakes are seeded from.
+fn rolling(seed: u32) -> impl FnMut() -> u32 {
     let mut rng = seed | 1;
-    let mut next = move || {
+
+    move || {
         rng ^= rng << 13;
         rng ^= rng >> 17;
         rng ^= rng << 5;
         rng
-    };
+    }
+}
 
-    // Where the tree's heart was, relative to this board. Outside it across the
-    // width and somewhere along its length, which is what makes the rings come
-    // out as the long nested arches everybody calls cathedral figure.
-    //
-    // It was straight lines before, because the rings were worked out from the
-    // distance across the board alone. That is a real thing to be: it is what a
-    // quarter sawn board looks like, and a quarter sawn board is stripes. Wood
-    // that reads as wood is flat sawn.
+/// One board's rings, worked out before any of it is drawn.
+///
+/// **In texels and not in metres**, because what it is told is the size of
+/// the picture. Two bakes of one board at different sizes are two different
+/// boards, which is right: they are two boards.
+struct Figure {
+    pith: (f32, f32),
+    year: f32,
+    late: f32,
+    wobble: Vec<f32>,
+    across: f32,
+    along: f32,
+    sawn: Sawn,
+    /// The pale wood between the dark bands, which decides how much of the
+    /// colour multiplied by this survives.
+    ///
+    /// **The cellar's is dark on purpose and the field's cannot be.** A
+    /// texture multiplies the colour it is drawn in, so a bake that averages
+    /// four fifths of white takes a fifth off every wall wearing it.
+    /// `aim::COFFER` was chosen with that already in it, which is why the
+    /// panelling is mahogany at 218. `aim::VILLAGE_WALL` was chosen for a
+    /// bare board, so a bake for the village has to come back near white or
+    /// the boards go grey against their own gable.
+    pale: f32,
+}
+
+/// A board cut from a seed, `across` by `along` texels.
+///
+/// **The order it asks the rolling for things is load bearing.** Two of the
+/// bakes below are the same arithmetic written out at different sizes and in
+/// different directions, and what keeps the cellar's panelling the bytes it
+/// has always been is that this takes its numbers in the order the one
+/// function used to.
+fn figure(
+    next: &mut impl FnMut() -> u32,
+    across: u32,
+    along: u32,
+    sawn: Sawn,
+    pale: i32,
+) -> Figure {
+    // Where the tree's heart was, relative to this board. Outside it across
+    // the width and somewhere along its length.
     let pith = (
-        -(GRAIN_WIDE as f32) * (0.35 + (next() % 500) as f32 / 1000.0),
-        GRAIN_TALL as f32 * ((next() % 1000) as f32 / 1000.0 - 0.25),
+        -(across as f32) * (0.35 + (next() % 500) as f32 / 1000.0),
+        along as f32 * ((next() % 1000) as f32 / 1000.0 - 0.25),
     );
 
-    // a year's growth, and how much of each year is the dark band at the end of
-    // it. Years are not all the same width, so the spacing wanders.
+    // a year's growth, and how much of each year is the dark band at the end
+    // of it. Years are not all the same width, so the spacing wanders.
     let year = 7.0 + (next() % 1000) as f32 / 1000.0 * 5.0;
     let late = 0.26 + (next() % 1000) as f32 / 1000.0 * 0.12;
     let wobble: Vec<f32> = (0..64)
         .map(|_| (next() % 1000) as f32 / 1000.0 - 0.5)
         .collect();
 
+    Figure {
+        pith,
+        year,
+        late,
+        wobble,
+        across: across as f32,
+        along: along as f32,
+        sawn,
+        pale: pale as f32,
+    }
+}
+
+impl Figure {
+    /// The shade at one point of the board, in texels from its corner.
+    fn at(&self, across: f32, along: f32, next: &mut impl FnMut() -> u32) -> u8 {
+        // how far this point is from the heart, which is what decides which
+        // year's wood it is.
+        //
+        // **Across alone when the board is quartered**, which is the rings
+        // standing on end: the saw is going along them rather than through
+        // them, so there are no arches to see and what is left is stripes.
+        let reach = match self.sawn {
+            Sawn::Flat => ((across - self.pith.0).powi(2) + (along - self.pith.1).powi(2)).sqrt(),
+            Sawn::Quartered => (across - self.pith.0).abs(),
+        };
+
+        // The rings are not true circles: a tree grows unevenly and the saw
+        // is not exactly flat, so the distance wanders a little.
+        //
+        // **And the wander goes the way the cut does.** On a flat sawn board
+        // it runs along the length, which is what makes the arches lean and
+        // breathe. On a riven stave it cannot: the split follows the grain,
+        // so a stripe that wandered along the stave would be a stripe the
+        // axe would have cut through. The wander there is across the stave
+        // instead, which makes the stripes uneven in width and dead straight
+        // down the length, which is what riven timber is.
+        let wanders = match self.sawn {
+            Sawn::Flat => along / self.along,
+            Sawn::Quartered => across / self.across,
+        };
+        let n = (wanders * self.wobble.len() as f32) as usize;
+        let drift = self.wobble[n.min(self.wobble.len() - 1)] * 3.2
+            + match self.sawn {
+                Sawn::Flat => (along * 0.04 + across * 0.02).sin() * 2.1,
+                Sawn::Quartered => (across * 0.06).sin() * 2.1,
+            };
+        let into = ((reach + drift) / self.year).fract().abs();
+
+        // the dark band at the end of a year, which is the grain you see,
+        // and it is darkest at its outer edge rather than evenly dark
+        let mut shade = self.pale;
+        if into > 1.0 - self.late {
+            let depth = (into - (1.0 - self.late)) / self.late;
+
+            shade -= 16.0 + 46.0 * depth * depth;
+        } else {
+            // and the pale wood between bands, which is not flat either
+            shade -= into * 7.0;
+        }
+
+        // the figure crowds together towards the edges of a flat sawn
+        // board, where the saw is cutting across the rings rather than
+        // along them
+        let edge = (across / self.across - 0.5).abs() * 2.0;
+        shade += edge * edge * 13.0;
+        shade += ((next() % 11) as f32 - 5.0) * 0.5;
+
+        shade.clamp(0.0, 255.0) as u8
+    }
+}
+
+pub fn grained(seed: u32) -> TextureData {
+    let mut next = rolling(seed);
+    let board = figure(&mut next, GRAIN_WIDE, GRAIN_TALL, Sawn::Flat, GRAIN_PALE);
     let mut pixels = Vec::with_capacity((GRAIN_WIDE * GRAIN_TALL * 4) as usize);
+
     for y in 0..GRAIN_TALL {
         for x in 0..GRAIN_WIDE {
-            let (across, along) = (x as f32, y as f32);
-            // how far this point is from the heart, which is what decides which
-            // year's wood it is
-            let reach = ((across - pith.0).powi(2) + (along - pith.1).powi(2)).sqrt();
+            let shade = board.at(x as f32, y as f32, &mut next);
 
-            // the rings are not true circles: a tree grows unevenly and the saw
-            // is not exactly flat, so the distance wanders a little
-            let n = ((along / GRAIN_TALL as f32) * wobble.len() as f32) as usize;
-            let drift =
-                wobble[n.min(wobble.len() - 1)] * 3.2 + (along * 0.04 + across * 0.02).sin() * 2.1;
-            let into = ((reach + drift) / year).fract().abs();
+            pixels.extend_from_slice(&[shade, shade, shade, 255]);
+        }
+    }
 
-            // the dark band at the end of a year, which is the grain you see,
-            // and it is darkest at its outer edge rather than evenly dark
-            let mut shade = GRAIN_PALE as f32;
-            if into > 1.0 - late {
-                let depth = (into - (1.0 - late)) / late;
+    TextureData::from_pixels(GRAIN_WIDE, GRAIN_TALL, pixels)
+}
 
-                shade -= 16.0 + 46.0 * depth * depth;
-            } else {
-                // and the pale wood between bands, which is not flat either
-                shade -= into * 7.0;
-            }
+/// Which of the cut boards a thing takes, off the seed it already has for
+/// its tone.
+///
+/// **One account of the choosing**, because the village and the steading
+/// both make it and a board that picks its figure one way and its shade
+/// another is two boards.
+pub fn pick(seed: f32) -> usize {
+    (seed.abs() * 13.0) as usize % GRAINS as usize
+}
 
-            // the figure crowds together towards the edges of a flat sawn
-            // board, where the saw is cutting across the rings rather than
-            // along them
-            let edge = (across / GRAIN_WIDE as f32 - 0.5).abs() * 2.0;
-            shade += edge * edge * 13.0;
-            shade += ((next() % 11) as f32 - 5.0) * 0.5;
+/// A weatherboard off the side of a cabin: flat sawn, and lying down.
+///
+/// **The long axis is `u` here and `v` in [`grained`]**, which is not a
+/// choice about wood. A cube's face runs its `u` along the face's own
+/// horizontal and its `v` down it, so a board nailed up horizontally has its
+/// length on `u`. Baked the other way round the figure runs across the board
+/// instead of along it, which is a plank with the grain in the wrong
+/// direction and reads immediately as wrong.
+/// Near white, so what a board shows is its own colour with the figure
+/// taken out of it rather than a colour dimmed by a quarter.
+const FIELD_PALE: i32 = 252;
 
-            let shade = shade.clamp(0.0, 255.0) as u8;
+pub const SIDING_ACROSS: u32 = 128;
+pub const SIDING_LONG: u32 = 1024;
+pub const SIDING_SEED: u32 = 0x5EED_0009;
+
+pub fn siding(seed: u32) -> TextureData {
+    let mut next = rolling(seed);
+    let board = figure(
+        &mut next,
+        SIDING_ACROSS,
+        SIDING_LONG,
+        Sawn::Flat,
+        FIELD_PALE,
+    );
+    let mut pixels = Vec::with_capacity((SIDING_ACROSS * SIDING_LONG * 4) as usize);
+
+    for across in 0..SIDING_ACROSS {
+        for along in 0..SIDING_LONG {
+            let shade = board.at(across as f32, along as f32, &mut next);
+
+            pixels.extend_from_slice(&[shade, shade, shade, 255]);
+        }
+    }
+
+    TextureData::from_pixels(SIDING_LONG, SIDING_ACROSS, pixels)
+}
+
+/// A stave split off a block with an axe, standing on end.
+///
+/// Quarter sawn, so it is stripes rather than arches, and upright, so the
+/// stripes run down `v` the way [`grained`]'s figure does. That is the whole
+/// of what tells the steading from the village at a glance: the same colour,
+/// the same courses, and the grain running the other way.
+pub const RIVEN_SEED: u32 = 0x5EED_000A;
+
+pub fn riven(seed: u32) -> TextureData {
+    let mut next = rolling(seed);
+    let stave = figure(
+        &mut next,
+        GRAIN_WIDE,
+        GRAIN_TALL,
+        Sawn::Quartered,
+        FIELD_PALE,
+    );
+    let mut pixels = Vec::with_capacity((GRAIN_WIDE * GRAIN_TALL * 4) as usize);
+
+    for along in 0..GRAIN_TALL {
+        for across in 0..GRAIN_WIDE {
+            let shade = stave.at(across as f32, along as f32, &mut next);
+
             pixels.extend_from_slice(&[shade, shade, shade, 255]);
         }
     }
@@ -1024,6 +1202,99 @@ pub fn tiled(seed: u32) -> TextureData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// How much the shade moves from one texel to the next along a line
+    /// through a bake, averaged over a good many lines.
+    ///
+    /// **Movement rather than band crossings**, which is the second measure
+    /// this test had. Counting crossings of a threshold says nothing useful
+    /// about a line that never leaves one ring: it has only its own
+    /// per-pixel speckle to cross with, so a dead straight stripe came out
+    /// as 176 bands, which is the opposite of what it is.
+    fn wander(made: &TextureData, down_a_column: bool) -> f32 {
+        let level = &made.levels[0];
+        let (wide, tall) = (level.width, level.height);
+        let (lines, many) = if down_a_column {
+            (wide, tall)
+        } else {
+            (tall, wide)
+        };
+        let shade = |x: u32, y: u32| level.pixels[((y * wide + x) * 4) as usize] as f32;
+        let mut moved = 0.0;
+        let mut counted = 0.0;
+
+        for line in (0..lines).step_by(8) {
+            for n in 1..many {
+                let (was, now) = if down_a_column {
+                    (shade(line, n - 1), shade(line, n))
+                } else {
+                    (shade(n - 1, line), shade(n, line))
+                };
+
+                moved += (now - was).abs();
+                counted += 1.0;
+            }
+        }
+
+        moved / counted
+    }
+
+    /// Spec 0068: the steading is staved where the village is boarded, and
+    /// what tells the two apart is which way the saw went.
+    ///
+    /// Same size, same seed, only [`Sawn`] different, so what this measures
+    /// is the cut and nothing else. A quarter sawn board's rings stand on
+    /// end and run its length, so a line down it stays in one ring for a
+    /// long way. A flat sawn one is nested arches, so the same line crosses
+    /// band after band.
+    #[test]
+    fn a_quartered_stave_is_stripes_where_a_sawn_board_is_arches() {
+        for n in 0..GRAINS {
+            let seed = GRAIN_SEED.wrapping_add(n * 7919);
+            let stave = riven(seed);
+            let board = grained(seed);
+            let (down, across) = (wander(&stave, true), wander(&stave, false));
+            let (board_down, board_across) = (wander(&board, true), wander(&board, false));
+
+            assert!(
+                down * 3.0 < across,
+                "a quartered stave moves {:.2} a texel down its length against {:.2} across it, \
+                 which is not a stripe running the length of anything",
+                down,
+                across
+            );
+            assert!(
+                board_down > across * 0.25,
+                "a flat sawn board moves {:.2} a texel down its length against the stave's \
+                 {:.2}, so the two cuts are not telling themselves apart",
+                board_down,
+                board_across
+            );
+        }
+    }
+
+    /// And each bake is the way round the wall it goes on needs.
+    ///
+    /// **The fault this is here for.** A cube's face runs `u` along its own
+    /// horizontal and `v` down it, so a board nailed up lying down has its
+    /// length on `u` and a stave standing on end has its length on `v`.
+    /// Bake either one the other way round and the grain runs across the
+    /// timber rather than along it, which is the mistake the village's
+    /// horses made standing broadside to the rail they were tied to.
+    #[test]
+    fn a_board_is_baked_the_way_round_it_is_nailed_up() {
+        let lying = siding(SIDING_SEED);
+        let standing = riven(RIVEN_SEED);
+
+        assert!(
+            lying.levels[0].width > lying.levels[0].height,
+            "a weatherboard lies down, so its length is the picture's width"
+        );
+        assert!(
+            standing.levels[0].height > standing.levels[0].width,
+            "a stave stands on end, so its length is the picture's height"
+        );
+    }
 
     /// The track as it is actually laid, so these read the picture the room
     /// gets rather than one made up for the test.

@@ -539,7 +539,7 @@ pub const BOARD_OUT: f32 = 0.035;
 ///
 /// Off the board's own place rather than off a roll, so one building is one
 /// building from one frame to the next and nothing has to be remembered.
-pub fn boarding(one: &Built) -> Vec<(Vec3, Vec3, f32)> {
+pub fn boarding(one: &Built) -> Vec<(Vec3, Vec3, f32, usize)> {
     let courses = ((one.eaves / (BOARD + BOARD_GAP)).floor() as usize).max(1);
     let mut out = Vec::new();
 
@@ -569,7 +569,7 @@ pub fn boarding(one: &Built) -> Vec<(Vec3, Vec3, f32)> {
             // repeats and no two walls of one building agree
             let tone = 1.0 + (seed * 1.7).sin() * 0.07 + (seed * 0.41).sin() * 0.05;
 
-            out.push((one.at + face, size, tone));
+            out.push((one.at + face, size, tone, crate::carpet::pick(seed)));
         }
     }
 

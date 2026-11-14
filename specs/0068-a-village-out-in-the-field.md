@@ -70,6 +70,15 @@ line between one and the next, and a shadow line wants an edge.
 - **The street has ruts**, at a wagon's own wheel spacing, in pieces that
   wander: a pair of straight lines is road markings, and what a wheel does is
   follow the last wheel without following it exactly.
+- **And each board has its own grain**, baked rather than drawn, which is
+  the one thing in this village that is a picture. Written down as out of
+  scope when this was built, on the grounds that it wanted
+  `room::tiled_plane` and a bake. The bake was right and the tiled plane was
+  not: a board here is already one cube spanning one wall, and a cube's face
+  carries its own nought to one, so the figure of one board fits one face
+  exactly with nothing to tile. `carpet::grained` had the arithmetic for it
+  already, and what it needed was lifting out of the cellar's panelling so
+  the same rings could be baked at another size and the other way round.
 - **No two pieces are the same shade.** Every board, shingle and course takes
   a tone off its own place, through two sines that do not divide, so the
   pattern up a wall never repeats and no two walls of one building agree. A
@@ -103,6 +112,8 @@ Spec 0067's rounds, over this geography. What Jake named, one errand each:
 - The same of the steading's turf. — `valhalla::tests::a_roof_is_pieces_and_two_courses_do_not_line_up`
 - The pieces cover a roof and no more. — `roofing::tests::a_course_covers_its_roof_and_no_more`
 - And no joint sits on the one below it. — `roofing::tests::the_joints_are_staggered_course_to_course`
+- A stave is stripes where a board is arches, which is the cut and not the colour. — `carpet::tests::a_quartered_stave_is_stripes_where_a_sawn_board_is_arches`
+- And each is baked the way round the wall it goes on needs. — `carpet::tests::a_board_is_baked_the_way_round_it_is_nailed_up`
 - The street matches its reference. — `tests::the_village_is_drawn`
 - The common and its cook fire match theirs. — `tests::the_village_common_is_drawn`
 - And the horses at the rail. — `tests::the_village_horses_are_drawn`
@@ -155,13 +166,63 @@ could not:
   outbuildings are. The hall at the top of the bridge is the one building in
   this game you go into and it should stay that way.
 - **Anything on the trail.** No station, no asking, nothing to answer.
-- **A picture of a board.** Everything with character on it here is geometry,
-  not texture, which is the cellar's own argument: a cube's corners run nought
-  to one however big it is, so a timber texture on a cabin's wall would be one
-  plank seven metres long. What is missing is grain *within* a board, and that
-  wants `room::tiled_plane` and a bake, which is its own change.
 - **A horse that moves.** Spec 0067's gait is a two-legged walk and a horse
   that used it would be a person on all fours.
 - **People avoiding each other.** Four rounds that crossed at the same second
   would walk through one another. They do not, and nothing here would stop it
   if they did.
+
+## 2026-11-14: the grain, and three things it had wrong
+
+**Jake: finish the grain within a board.** Done, for the village's boards and
+the steading's staves at once, because they are the same wood and the whole
+point of them is that they are cut differently.
+
+**One account of wood, three bakes.** The ring arithmetic came out of
+`carpet::grained` into a `Figure` that is handed a size, a cut and a
+paleness. `grained` still calls it at 128 by 384, flat sawn, and the cellar's
+panelling is byte for byte what it was, which was checked by hashing all five
+bakes before the change and after it rather than by looking at the room.
+
+**The way round is the whole of it.** A cube's face runs `u` along its own
+horizontal and `v` down it. A village board is nailed up lying down, so its
+length is on `u`; a steading stave stands on end, so its length is on `v`.
+`grained`'s figure runs down `v`, which is right for a stave and wrong for a
+board, and a board baked that way has the grain running across the timber.
+That is the horses' fault again, caught this time before anything was drawn
+because the question was asked of the vertex layout rather than of a picture.
+So `siding` is 1024 by 128 and `riven` is 128 by 384, and a test holds each
+to the shape of the wall it goes on.
+
+**A texture multiplies the colour it is drawn in**, which `aim::COFFER`
+already knew and `aim::VILLAGE_WALL` did not. The cellar's panelling is
+mahogany because a dark tint was chosen against a bake that averages four
+fifths of white. The village's wall colour was chosen for a bare board, so
+the same bake took a fifth off every cabin and left the boards grey against
+their own gable. The bakes out here are pale instead, at 252 against the
+cellar's 218, so a board shows its own colour with the figure taken out of it
+rather than a colour dimmed by a quarter. Nothing in `aim` moved.
+
+**And a riven stave's stripes do not wander.** The ring wander was written
+along the board's length, which is what makes flat sawn arches lean and
+breathe. On a stave that is wrong twice: a split follows the grain, so a
+stripe that wandered along the stave is a stripe the axe would have cut
+through. The wander goes across the stave there instead, which leaves the
+stripes dead straight down its length and uneven in width, which is what
+riven timber is.
+
+### What the measuring got wrong twice, before it measured anything
+
+The test for this counts how far the shade moves from one texel to the next,
+along the board and across it. It did not start there.
+
+It started by counting how many times a line crosses from pale wood into a
+dark band. That says nothing about a line that never leaves one ring: it has
+only its own per-pixel speckle to cross with, the threshold lands in the
+middle of that, and a dead straight stripe came out as 176 bands, which is
+the opposite of what it is. Taking the threshold from the whole picture
+rather than from the line did not fix it, because the line still sat on the
+threshold. Movement per texel has no threshold in it at all.
+
+Both faults looked like the stave being wrong and were the ruler being wrong,
+which is the reason this is written down.

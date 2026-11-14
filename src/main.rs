@@ -782,6 +782,10 @@ struct Arcade {
     wineglass: Option<MeshId>,
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
+    /// The village's boards, lying down, and the steading's staves, standing
+    /// up. Spec 0068.
+    siding: Vec<TextureId>,
+    riven: Vec<TextureId>,
     /// The stairwell's boarding, a quad per face. Spec 0007.
     boarding: Vec<MeshId>,
     stonework: Option<TextureId>,
@@ -1339,6 +1343,8 @@ impl Arcade {
             wineglass: None,
             afghan: None,
             grain: Vec::new(),
+            siding: Vec::new(),
+            riven: Vec::new(),
             boarding: Vec::new(),
             stonework: None,
             skies: Vec::new(),
@@ -3121,9 +3127,10 @@ impl Arcade {
             // 0068's second round: every surface out here was one flat
             // colour, which the steading gets away with at thirty metres
             // and a village looked at from the street does not.
-            for (at, size, tone) in village::boarding(&one) {
-                scene.push_material(
+            for (at, size, tone, pick) in village::boarding(&one) {
+                scene.push_textured(
                     cube,
+                    self.siding[pick],
                     &Transform::at(at).with_scale(size),
                     aim::VILLAGE_WALL * tone,
                     aim::MATTE,
@@ -3785,9 +3792,10 @@ impl Arcade {
 
         // the staves stood against the walls, which is what this place is
         // built of where the village is built of boards
-        for (at, size, tone) in valhalla::staves(reaches) {
-            scene.push_material(
+        for (at, size, tone, pick) in valhalla::staves(reaches) {
+            scene.push_textured(
                 cube,
+                self.riven[pick],
                 &Transform::at(at).with_scale(size),
                 aim::VALHALLA_WALL * tone,
                 aim::MATTE,
@@ -7238,6 +7246,18 @@ impl Game for Arcade {
         self.grain = (0..carpet::GRAINS)
             .map(|n| {
                 renderer.add_texture(&carpet::grained(carpet::GRAIN_SEED.wrapping_add(n * 7919)))
+            })
+            .collect();
+        // and the same again for the two places out in the field, which are
+        // the same wood cut two ways round. Spec 0068.
+        self.siding = (0..carpet::GRAINS)
+            .map(|n| {
+                renderer.add_texture(&carpet::siding(carpet::SIDING_SEED.wrapping_add(n * 7919)))
+            })
+            .collect();
+        self.riven = (0..carpet::GRAINS)
+            .map(|n| {
+                renderer.add_texture(&carpet::riven(carpet::RIVEN_SEED.wrapping_add(n * 7919)))
             })
             .collect();
         // a quad per face of the stairwell, each counted from its own size so a

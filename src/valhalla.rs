@@ -262,7 +262,7 @@ pub const STAVE_OUT: f32 = 0.05;
 /// **Nothing across the doorway.** The hall is the one building up here you
 /// walk into, and a stave wall drawn over its opening is a door painted on
 /// a wall. Spec 0060 cut that opening and this leaves it alone.
-pub fn staves(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
+pub fn staves(reaches: f32) -> Vec<(Vec3, Vec3, f32, usize)> {
     let (door, door_wide, door_high) = doorway(reaches);
     let mut out = Vec::new();
 
@@ -320,7 +320,7 @@ pub fn staves(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
                     vec3(STAVE, one.eaves, STAVE_OUT)
                 };
 
-                out.push((at, size, tone));
+                out.push((at, size, tone, crate::carpet::pick(seed)));
             }
         }
     }
