@@ -15583,9 +15583,21 @@ mod tests {
                 (0.2..0.4).contains(&hour)
                     && garden::weather(*since).name == "fair"
                     && rounds.iter().enumerate().any(|(n, round)| {
-                        people::doing(round, since + n as f32 * 4.3)
-                            .walked
-                            .is_some()
+                        let doing = people::doing(round, since + n as f32 * 4.3);
+
+                        // **Walking out in the lane, which it did not have
+                        // to say until spec 0072.** One of the three is
+                        // indoors about a quarter of the time now, and a
+                        // body walking the length of a hall nobody can see
+                        // into satisfies "somebody is walking" while the
+                        // picture shows a place with nobody in it.
+                        let air = valhalla::inside(reaches);
+                        let indoors = doing.at.x > air.min.x
+                            && doing.at.x < air.max.x
+                            && doing.at.z > air.min.z
+                            && doing.at.z < air.max.z;
+
+                        doing.walked.is_some() && !indoors
                     })
             })
             .expect("no fair afternoon with anybody walking in a thousand seconds");

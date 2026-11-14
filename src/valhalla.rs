@@ -569,6 +569,9 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         doing,
     };
     let fire = ring(reaches);
+    // the long fire down the hall, named here because `fire` is taken by
+    // the ring out in the lane
+    let trench = crate::valhalla::fire(reaches);
     let wood = pile(reaches);
     // where somebody stands to take wood off the pile: clear of it, on the
     // lane side of it, with the pile in front of them
@@ -596,6 +599,54 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // here points at the hall's door, with the whole of Bifrost
             // behind them
             stop(vec3(yard, door.y, door.z + 2.4), FRAC_PI_2, 7.0),
+            // **And in through it, which is spec 0072.** Every round
+            // here was outside until then, so the one who keeps the door
+            // was the one person in this building who never went through
+            // the door they keep.
+            //
+            // **Four corners and not one, because a leg is a straight
+            // line.** From the yard to the fire runs through the gable,
+            // and from the yard to the opening runs through the jamb: the
+            // first build did the second and clipped the north reveal by
+            // two centimetres, which `tests::no_round_walks_through_a_wall`
+            // found. So the last stretch outside and the first inside are
+            // both on the door's own centre line, and the turn happens
+            // out in the open where there is room for it. Every other
+            // worked door in this building is approached the same way and
+            // for the same reason.
+            //
+            // The inside one carries `FLOOR_UP`, because the hall's floor
+            // is a slab of its own standing that much above the steading's
+            // and a body in the doorway is on it.
+            stop(vec3(door.x + 1.4, door.y, door.z), -FRAC_PI_2, 0.0),
+            stop(
+                vec3(door.x - 1.4, door.y + FLOOR_UP, door.z),
+                -FRAC_PI_2,
+                0.0,
+            ),
+            // **At the foot of the long fire, on the door's own line.**
+            // Spec 0060 laid the trench down the length of the hall and
+            // put the high seat at the far gable, so the view from here is
+            // the one the room is built around: you come in at the east
+            // end and the fire runs away from you.
+            //
+            // Beside it rather than at its foot was the first try, and the
+            // walk to it cut the corner of the trench, which is a body in
+            // the coals. `FIRE_KERB` is there so you cannot ride over one.
+            // On the line there is no corner to cut, because the way in
+            // and the fire are the same straight run.
+            looking_at(
+                vec3(trench.max.x + CLEAR_OF, door.y + FLOOR_UP, door.z),
+                vec3(trench.center().x, door.y, door.z),
+                9.0,
+                Errand::Stir,
+            ),
+            stop(
+                vec3(door.x - 1.4, door.y + FLOOR_UP, door.z),
+                FRAC_PI_2,
+                0.0,
+            ),
+            stop(vec3(door.x + 1.4, door.y, door.z), FRAC_PI_2, 0.0),
             stop(
                 vec3(yard + 1.2, door.y, north.at.z - north.long * 0.5 - 2.0),
                 0.0,
@@ -2212,7 +2263,134 @@ mod tests {
         }
     }
 
-    /// Spec 0056: and everybody is standing on the ground, outdoors.
+    /// Spec 0072: somebody goes in through the door and comes out again.
+    ///
+    /// **Both halves, because either on its own is a different fault.**
+    /// A round that never goes in is the thing this spec is about, and one
+    /// that goes in and stays is a steading one person short for ever.
+    #[test]
+    fn somebody_goes_into_the_hall() {
+        let air = inside(REACHES);
+        let rounds = rounds(REACHES);
+        let indoors =
+            |at: Vec3| at.x > air.min.x && at.x < air.max.x && at.z > air.min.z && at.z < air.max.z;
+
+        let mut went_in = false;
+        let mut came_out = false;
+
+        for step in 0..4_000 {
+            let since = step as f32 * 0.1;
+            let inside_now = rounds
+                .iter()
+                .enumerate()
+                .any(|(n, round)| indoors(crate::people::doing(round, since + n as f32 * 4.3).at));
+
+            if inside_now {
+                went_in = true;
+            } else if went_in {
+                came_out = true;
+            }
+        }
+
+        let share = (0..4_000)
+            .filter(|step| {
+                let since = *step as f32 * 0.1;
+                rounds.iter().enumerate().any(|(n, round)| {
+                    indoors(crate::people::doing(round, since + n as f32 * 4.3).at)
+                })
+            })
+            .count() as f32
+            / 4_000.0;
+
+        // **And not for most of the round.** Three people live up here and
+        // one of them is now sometimes invisible, so a stay indoors that
+        // grew would empty the lane without anything saying so.
+        assert!(
+            (0.08..0.45).contains(&share),
+            "somebody is indoors {:.0}% of the time, and three people live here",
+            share * 100.0
+        );
+
+        assert!(
+            went_in,
+            "nobody goes into the hall over four hundred seconds"
+        );
+        assert!(
+            came_out,
+            "somebody goes into the hall and never comes out of it"
+        );
+    }
+
+    /// Spec 0072: and the way in is the doorway.
+    ///
+    /// **A leg is a straight line between two stops**, so a stop inside
+    /// the hall with nothing in the opening before it is a body walking
+    /// through a gable. This is the whole risk of going indoors and it is
+    /// arithmetic, so it is here rather than in a picture.
+    ///
+    /// Shaped on the village's `being_moved_apart_never_puts_anybody_in_a_wall`,
+    /// and it asks the same question after `people::apart` has had its say,
+    /// because being pushed off somebody else is how a body gets into a wall
+    /// it was never walked into.
+    #[test]
+    fn no_round_walks_through_a_wall() {
+        // **What you could step onto is skipped, and that is not the same
+        // as skipping the ground.** The hall's floor is a second slab,
+        // raised `FLOOR_UP` above the steading's, and a body standing on
+        // either of them touches it. It also clips the slab's east edge by
+        // three millimetres on the way in, because the rise is spread over
+        // the leg and the body reaches the edge before it finishes
+        // stepping up. `walk::RIDES` is the game's own account of what a
+        // body walks over rather than into, which is what a doorstep is. A
+        // wall is still a wall, because a wall is tall.
+        let solid = everything();
+        let rounds = rounds(REACHES);
+        let body = vec3(
+            crate::RADIUS * 2.0,
+            crate::people::TALL,
+            crate::RADIUS * 2.0,
+        );
+
+        for step in 0..8_000 {
+            let since = step as f32 * 0.05;
+            let mut here: Vec<Vec3> = rounds
+                .iter()
+                .enumerate()
+                .map(|(n, round)| crate::people::doing(round, since + n as f32 * 4.3).at)
+                .collect();
+
+            crate::people::apart(&mut here);
+
+            for (n, at) in here.iter().enumerate() {
+                let stands =
+                    Aabb::from_center_size(*at + Vec3::Y * crate::people::TALL * 0.5, body);
+
+                for one in solid.iter() {
+                    if one.max.y <= at.y + crate::walk::RIDES {
+                        continue;
+                    }
+
+                    assert!(
+                        !stands.intersects(one),
+                        "round {} is inside {:?} to {:?} at {:.2} seconds, standing at {:?}",
+                        n,
+                        one.min,
+                        one.max,
+                        since,
+                        at
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0056: and everybody is standing on the ground.
+    ///
+    /// **Outdoors, until spec 0072.** It reads the first stop of each
+    /// round, and the hall's inside is a legal place to stand now, so a
+    /// first stop in there would be a body in a wall by this test and is
+    /// not one. None of the three starts indoors and `people` is the one
+    /// account of where they start.
     #[test]
     fn everybody_stands_on_the_ground() {
         let floor = ground(REACHES);

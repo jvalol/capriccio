@@ -134,7 +134,10 @@ write.
 - **Going indoors.** Every round is outside. The hall's door is passable and a
   round through it is the obvious next thing, and it wants the figure to not
   be drawn while it is in there or it is a body inside a lit room seen through
-  a window.
+  a window. **Done by spec 0072**, which found the second half of that wrong:
+  a lit opening here is a panel set into a wall rather than a hole, and all of
+  them are on the face the door is on, so there is no window to be seen
+  through and nothing is culled.
 - **The hall's long fire in daylight**, which stays written against the dark
   because indoors it is. The two yard fires are damped now, which is
   2026-11-14 below.
