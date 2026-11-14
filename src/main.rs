@@ -4335,7 +4335,32 @@ impl Arcade {
                 Some(walked) => people::hips(walked) - people::LEG_TALL,
                 None => stance.rise,
             };
-            let up_to = |how_high: f32| at + over * (how_high * built.tall + rise);
+            // **And everything above the hips leans with the errand.** Spec
+            // 0067: a figure that holds a plumb torso while one arm goes out
+            // over a pot is an arm on a post, which is most of what was left
+            // reading as a machine once the joints moved. The legs do not
+            // lean, so the fold is at the hips, which is where a body folds.
+            //
+            // One accessor, so there is no height in this body that could be
+            // left out of it.
+            let plumb = |how_high: f32| at + over * (how_high * built.tall + rise);
+            let hips_at = plumb(people::LEG_TALL);
+            let leaning = glam::Quat::from_axis_angle(side, stance.lean);
+            let up_to = |how_high: f32| {
+                let straight = plumb(how_high);
+
+                if how_high <= people::LEG_TALL {
+                    straight
+                } else {
+                    hips_at + leaning * (straight - hips_at)
+                }
+            };
+            // what the torso and the head are turned by, which is the yaw
+            // with the lean on it, and which way the face points once it has
+            // leaned: a nose set off a level `ahead` on a bowed head comes
+            // out of the temple.
+            let held = leaning * turn;
+            let faces = leaning * ahead;
             // **A limb turns about the walker's own right, not about a
             // local x.** `turn * rot_x` swung every limb the wrong way
             // across the body while the feet, placed off `ahead`, went the
@@ -4346,12 +4371,16 @@ impl Arcade {
             // `side` either way, because an axis the whole closure already
             // shares cannot drift from one of them again.
             let swung = |angle: f32| glam::Quat::from_axis_angle(side, angle) * turn;
+            // **An arm hangs off a leaning torso and a leg does not.** The
+            // two were one closure, which is a body whose arms stay where
+            // its shoulders were.
+            let reached = |angle: f32| glam::Quat::from_axis_angle(side, angle) * held;
             let hangs = |by: glam::Quat, far: f32| by * vec3(0.0, -far * built.tall, 0.0);
 
             scene.push_material(
                 body,
                 &Transform::at(up_to(people::TORSO_FROM))
-                    .with_rotation(turn)
+                    .with_rotation(held)
                     .with_scale(thick),
                 coat,
                 aim::NO_SHINE,
@@ -4371,7 +4400,7 @@ impl Arcade {
             scene.push_material(
                 body,
                 &Transform::at(up_to(people::NECK_FROM + people::NECK_TALL * 0.5))
-                    .with_rotation(turn)
+                    .with_rotation(held)
                     .with_scale(vec3(
                         people::NECK_WIDE * built.wide,
                         (people::NECK_TALL + 0.05) * built.tall,
@@ -4387,7 +4416,7 @@ impl Arcade {
                     _ => head,
                 },
                 &Transform::at(up_to(people::HEAD_FROM))
-                    .with_rotation(turn)
+                    .with_rotation(held)
                     .with_scale(round),
                 skin,
                 aim::NO_SHINE,
@@ -4407,10 +4436,10 @@ impl Arcade {
                         cube,
                         &Transform::at(
                             up_to(people::HEAD_FROM + people::HEAD_TALL * people::EYE_UP)
-                                + ahead * (people::EYE_OUT * built.wide)
+                                + faces * (people::EYE_OUT * built.wide)
                                 + side * (hand * people::EYE_APART * built.wide),
                         )
-                        .with_rotation(turn)
+                        .with_rotation(held)
                         .with_scale(vec3(
                             people::EYE_WIDE * built.wide,
                             people::EYE_TALL * built.tall,
@@ -4431,7 +4460,7 @@ impl Arcade {
                     scene.push_material(
                         cloak,
                         &Transform::at(up_to(people::CLOAK_FROM))
-                            .with_rotation(turn)
+                            .with_rotation(held)
                             .with_scale(thick),
                         aim::CLOAKS[which],
                         aim::NO_SHINE,
@@ -4444,7 +4473,7 @@ impl Arcade {
                         &Transform::at(up_to(
                             people::HEAD_FROM + people::HEAD_TALL * people::HELM_FROM,
                         ))
-                        .with_rotation(turn)
+                        .with_rotation(held)
                         .with_scale(round),
                         aim::HELM,
                         aim::NO_SHINE,
@@ -4456,11 +4485,11 @@ impl Arcade {
                                 people::HEAD_FROM
                                     + people::HEAD_TALL
                                         * (people::HELM_FROM - people::NOSE_LONG * 0.5),
-                            ) + ahead
+                            ) + faces
                                 * (people::head_profile(people::BROW_UP).1 * 0.5 * built.wide
                                     + people::NOSE_THICK * 0.3),
                         )
-                        .with_rotation(turn)
+                        .with_rotation(held)
                         .with_scale(vec3(
                             people::NOSE_WIDE * built.wide,
                             people::HEAD_TALL * people::NOSE_LONG,
@@ -4486,14 +4515,14 @@ impl Arcade {
                         cube,
                         &Transform::at(
                             up_to(people::HEAD_FROM + people::HEAD_TALL * people::BROW_UP)
-                                + ahead * (sunk * face)
+                                + faces * (sunk * face)
                                 + side
                                     * (hand
                                         * (people::BROW_WIDE + people::BROW_APART)
                                         * 0.25
                                         * face),
                         )
-                        .with_rotation(turn)
+                        .with_rotation(held)
                         .with_scale(vec3(
                             (people::BROW_WIDE - people::BROW_APART) * 0.5 * face,
                             people::BROW_TALL * built.wide,
@@ -4605,13 +4634,13 @@ impl Arcade {
                     people::ARM_SHORT * built.tall,
                     people::ARM_THIN * built.wide,
                 );
-                let arm_upper = swung(shoulder);
+                let arm_upper = reached(shoulder);
                 let shoulder_at =
                     up_to(people::ARM_FROM) + side * (people::ARMS_APART * out * built.wide);
                 let elbow_at =
                     shoulder_at + hangs(arm_upper, people::THIGH_TALL * people::ARM_SHORT);
                 // and an elbow goes the other way
-                let arm_lower = swung(shoulder + elbow);
+                let arm_lower = reached(shoulder + elbow);
                 let wrist = elbow_at + hangs(arm_lower, people::SHIN_TALL * people::ARM_SHORT);
 
                 scene.push_material(
@@ -4723,11 +4752,26 @@ impl Arcade {
             // the weather and the sun run on; a round wants the same number
             // so a picture pinned at an hour puts everybody back where they
             // were, and nothing here is stepped forward.
-            for (n, round) in valhalla::rounds(reaches).into_iter().enumerate() {
+            // **Worked out together and then moved apart**, per spec 0067:
+            // the rounds up here run on three lengths that do not divide,
+            // so two of them eventually want the same spot at the same
+            // second, and measured they came within a centimetre.
+            let mut doings: Vec<people::Doing> = valhalla::rounds(reaches)
+                .into_iter()
+                .enumerate()
                 // started apart, so three rounds of nearly a length are not
                 // three people moving together
-                let doing = people::doing(&round, self.since + n as f32 * 4.3);
+                .map(|(n, round)| people::doing(&round, self.since + n as f32 * 4.3))
+                .collect();
+            let mut where_they_are: Vec<Vec3> = doings.iter().map(|doing| doing.at).collect();
 
+            people::apart(&mut where_they_are);
+
+            for (doing, at) in doings.iter_mut().zip(where_they_are) {
+                doing.at = at;
+            }
+
+            for (n, doing) in doings.into_iter().enumerate() {
                 stand(
                     doing.at,
                     glam::Quat::IDENTITY,
@@ -4750,9 +4794,21 @@ impl Arcade {
         // a little style on them and because a carved thing has no face by
         // nature. These are people living in a village and the plain body
         // is what says so.
-        for (n, round) in village::rounds(reaches).into_iter().enumerate() {
-            let doing = people::doing(&round, self.since + n as f32 * 5.7);
+        // the same, out in the field. Spec 0067.
+        let mut doings: Vec<people::Doing> = village::rounds(reaches)
+            .into_iter()
+            .enumerate()
+            .map(|(n, round)| people::doing(&round, self.since + n as f32 * 5.7))
+            .collect();
+        let mut where_they_are: Vec<Vec3> = doings.iter().map(|doing| doing.at).collect();
 
+        people::apart(&mut where_they_are);
+
+        for (doing, at) in doings.iter_mut().zip(where_they_are) {
+            doing.at = at;
+        }
+
+        for (n, doing) in doings.into_iter().enumerate() {
             stand(
                 doing.at,
                 glam::Quat::IDENTITY,
@@ -15322,6 +15378,43 @@ mod tests {
             standing_when(
                 vec3(middle.x + 17.0, 0.0, middle.z + 2.6),
                 vec3(middle.x - 14.0, EYE - 0.3, middle.z + 1.0),
+                false,
+                Some(since),
+            ),
+        );
+    }
+
+    /// Spec 0067: somebody at work, close enough to see them work.
+    ///
+    /// **The one picture in this suite with a standing figure in it big
+    /// enough to read.** Everything else catches people mid-stride or at
+    /// forty metres, so the whole of what a body does while it is standing
+    /// went in without a single reference moving: the lean could have been
+    /// written and not applied and nothing here would have said so.
+    #[test]
+    fn the_village_cook_is_drawn() {
+        let reaches = reaches();
+        let fire = village::ring(reaches);
+        let rounds = village::rounds(reaches);
+        // the first second the cook is well into the stay, under a fair sky
+        // in the afternoon, which is three wants that do not divide
+        let since = (0..40_000)
+            .map(|n| n as f32 * 0.05)
+            .find(|since| {
+                let doing = people::doing(&rounds[0], *since);
+
+                matches!(doing.stopped, Some((gesture::Errand::Stir, stood, _)) if stood > 2.5)
+                    && garden::weather(*since).name == "fair"
+                    && (0.2..0.45).contains(&garden::hour(*since))
+            })
+            .expect("a cook at the fire under a fair sky");
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("village-cook"),
+            (WIDE, TALL),
+            standing_when(
+                vec3(fire.x + 2.2, 0.0, fire.z + 5.0),
+                vec3(fire.x + 1.2, 1.2, fire.z),
                 false,
                 Some(since),
             ),

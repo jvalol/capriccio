@@ -1092,6 +1092,52 @@ mod tests {
         }
     }
 
+    /// Spec 0067: and being moved out of each other does not move anybody
+    /// into a wall.
+    ///
+    /// **The push has no idea what is around it.** `people::apart` moves two
+    /// people along the line between them and knows nothing else, so the
+    /// thing to ask is not whether it is careful but whether it ever lands
+    /// anybody somewhere solid. Ten minutes of every round, nudged, against
+    /// the same boxes the walk above is held to.
+    #[test]
+    fn being_moved_apart_never_puts_anybody_in_a_wall() {
+        let solid = solid(REACHES);
+        let rounds = rounds(REACHES);
+        let body = vec3(
+            crate::RADIUS * 2.0,
+            crate::people::TALL,
+            crate::RADIUS * 2.0,
+        );
+
+        for step in 0..12_000 {
+            let since = step as f32 * 0.05;
+            let mut here: Vec<Vec3> = rounds
+                .iter()
+                .enumerate()
+                .map(|(n, round)| crate::people::doing(round, since + n as f32 * 5.7).at)
+                .collect();
+
+            crate::people::apart(&mut here);
+
+            for (n, at) in here.iter().enumerate() {
+                let stands =
+                    Aabb::from_center_size(*at + Vec3::Y * crate::people::TALL * 0.5, body);
+
+                for one in solid.iter() {
+                    assert!(
+                        !stands.intersects(one),
+                        "round {} is pushed inside {:?} to {:?} at {:.1} seconds",
+                        n,
+                        one.min,
+                        one.max,
+                        since
+                    );
+                }
+            }
+        }
+    }
+
     /// Spec 0068: you can walk in from the garden and out again.
     ///
     /// **With the game's own `walk`**, because the baths' steps had four

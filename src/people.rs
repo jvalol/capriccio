@@ -687,6 +687,60 @@ pub struct Doing {
     pub stopped: Option<(crate::gesture::Errand, f32, f32)>,
 }
 
+/// How much room two people need between them before they are one person.
+///
+/// Shoulders are [`ARMS_APART`] either side of the middle, so two bodies
+/// touch at about half a metre. A little over that, so they pass rather
+/// than brush.
+pub const ROOM: f32 = 0.62;
+
+/// Nobody standing inside anybody else.
+///
+/// **Spec 0067 put this out of scope and the arithmetic took it back.** The
+/// rounds in one place run on their own lengths, 23 to 106 seconds in the
+/// village, and no two of those divide. So every phase relationship between
+/// two rounds comes round eventually, and any two paths that cross in space
+/// cross in time sooner or later: measured, the closest two villagers ever
+/// get is three centimetres, which is one person wearing another.
+///
+/// The two ways out that need no one to notice anybody else both fail. One
+/// clock for the whole village makes the phases fixed and the offsets a
+/// one-off choice, and it means padding a round of 23 seconds out to 106,
+/// which is somebody standing at a wagon for forty-seven seconds in a
+/// building whose day is twenty. Paths that never cross is not a village: a
+/// street is a thing people cross.
+///
+/// So they are moved apart, which is what people do. One symmetric pass per
+/// pair closer than [`ROOM`], twice over so a knot of three settles, and
+/// each one pushed half the shortfall. It is not steering and nobody looks
+/// where they are going: it is the smallest thing that is never wrong.
+///
+/// **Still a pure function of the time**, because every position handed in
+/// is one, which is what keeps a picture test able to pin a second.
+pub fn apart(here: &mut [Vec3]) {
+    for _ in 0..2 {
+        for a in 0..here.len() {
+            for b in (a + 1)..here.len() {
+                let way = here[b] - here[a];
+                let gap = way.length();
+
+                if gap >= ROOM {
+                    continue;
+                }
+
+                // two in the same spot have no line between them, and
+                // normalising nothing is nothing, which would leave them
+                // there for ever
+                let push = if gap > 1e-4 { way / gap } else { Vec3::X };
+                let half = (ROOM - gap) * 0.5;
+
+                here[a] -= push * half;
+                here[b] += push * half;
+            }
+        }
+    }
+}
+
 /// Which way somebody standing at `at` faces to be looking at `thing`.
 ///
 /// **The one place this is worked out.** A facing of `f` sends a body's own
@@ -844,6 +898,55 @@ fn turned(from: f32, to: f32, share: f32) -> f32 {
 mod tests {
 
     // --- spec 0067: somebody with somewhere to be -------------------------
+
+    /// Spec 0067: nobody wears anybody else.
+    ///
+    /// **Over ten minutes and not over a round**, because the rounds in one
+    /// place run on lengths that do not divide: the village's are 23, 32, 45
+    /// and 106 seconds, so two of them line up only now and then and the
+    /// worst second is a long way from the first. Unguarded, the closest two
+    /// villagers come is three centimetres, at 633 seconds in.
+    #[test]
+    fn nobody_ever_stands_inside_anybody_else() {
+        for (what, rounds, every) in [
+            ("the village", crate::village::rounds(20.0), 5.7f32),
+            ("the steading", crate::valhalla::rounds(20.0), 4.3),
+        ] {
+            let mut closest = f32::MAX;
+            let mut when = 0.0;
+
+            for step in 0..24_000 {
+                let since = step as f32 * 0.05;
+                let mut here: Vec<Vec3> = rounds
+                    .iter()
+                    .enumerate()
+                    .map(|(n, round)| doing(round, since + n as f32 * every).at)
+                    .collect();
+
+                apart(&mut here);
+
+                for a in 0..here.len() {
+                    for b in (a + 1)..here.len() {
+                        let gap = here[a].distance(here[b]);
+
+                        if gap < closest {
+                            closest = gap;
+                            when = since;
+                        }
+                    }
+                }
+            }
+
+            assert!(
+                closest > ROOM - 0.01,
+                "two of {}'s people come within {:.2} metres at {:.1} seconds, and a \
+                 body is half a metre across",
+                what,
+                closest,
+                when
+            );
+        }
+    }
 
     fn a_round() -> Vec<Stop> {
         vec![

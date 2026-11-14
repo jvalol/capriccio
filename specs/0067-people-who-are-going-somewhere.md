@@ -128,9 +128,6 @@ write.
 
 ## Out of scope
 
-- **Avoiding each other.** Two rounds that crossed at the same second would
-  walk through one another. They do not, because the stops are where they are,
-  and nothing here would stop it if they did.
 - **Carrying, bending and sitting.** The hands hold nothing and nobody gets
   off their feet. What they do at a stop is the errand's own motion, over an
   idle, which is 2026-11-14 below.
@@ -182,12 +179,22 @@ looks at things, held for a beat and brought back, which is what makes it a
 glance rather than a sweep. `Tend`, at the horses, stops to think every few
 turns, which no amount of smoothing does for a cycle that never pauses.
 
-**What the rig cannot do**, and it is most of a body. The arms swing forward
-and back only, because a limb turns about the walker's own right. There is no
-torso and no neck: both are drawn on the body's own yaw at a fixed height, so
-leaning or looking about would be a change to every head fitting in `main.rs`
-rather than a number in `gesture.rs`. The whole figure turns a little
-instead, which is cruder and is what there is.
+**What the rig cannot do**, and it is still most of a body. The arms swing
+forward and back only, because a limb turns about the walker's own right, and
+the head does not turn on the neck. The whole figure turns a little instead,
+which is cruder and is what there is.
+
+**The torso leans, which it did not an hour ago.** It was written down here
+as the thing that could not be done, on the grounds that every height above
+the hips is a separate push in `main.rs`. They are, and all ten of them go
+through one accessor, so the lean went in `up_to`: below the hips a height is
+plumb and above them it is turned about the hips, which is where a body
+folds. The arms hang off it, the legs do not, and the face points along it,
+because a nose set off a level forward on a bowed head comes out of the
+temple.
+
+It is the difference between a cook and an arm on a post, and it was the
+largest single thing left reading as a machine.
 
 ### Three things the pictures caught, which no test would have
 
@@ -212,6 +219,9 @@ instead, which is cruder and is what there is.
 - A gesture fades up and down rather than switching on. — `gesture::tests::a_gesture_fades_up_and_down_rather_than_switching_on`
 - The shoulder and the elbow are two signals and not one. — `gesture::tests::the_shoulder_and_the_elbow_do_not_turn_together`
 - And nothing bends the wrong way or too far. — `gesture::tests::nothing_bends_the_wrong_way_or_too_far`
+- Somebody at work looks like it, close enough to see. — `tests::the_village_cook_is_drawn`
+- Nobody ever stands inside anybody else. — `people::tests::nobody_ever_stands_inside_anybody_else`
+- And being moved out of each other puts nobody in a wall. — `village::tests::being_moved_apart_never_puts_anybody_in_a_wall`
 
 ### Verified by hand
 
@@ -243,3 +253,45 @@ ambient and nothing else: at noon the sun multiplies on top of that, so a want
 of 0.58 in the green still rendered white. The share of sun on a flame depends
 on which way the flame is facing, so what fixed it was rendering the common at
 noon three times rather than working it out. A tenth, at noon.
+
+## 2026-11-14: the picture that was missing
+
+**Every reference in the suite passed when the lean went in.** Not because
+the lean was wrong but because nothing in them shows a standing figure big
+enough to read: the steading's picture is pinned at a second where somebody
+is mid-stride, and the village's two are forty metres of street. So the whole
+of what a body does while it is standing could have been written and not
+applied, and nothing would have said so.
+
+`tests::the_village_cook_is_drawn` is that picture: the cook at the pot, five
+metres off, at a second found by walking his own round until he is well into
+the stay under a fair afternoon. Writing the lean and leaving it unapplied
+fails it, which was checked by doing exactly that.
+
+## 2026-11-14: they do see each other, after all
+
+**This was out of scope on the grounds that nobody had seen it happen.** The
+arithmetic says it has to. The rounds in one place run on their own lengths,
+23, 32, 45 and 106 seconds in the village, and no two of those divide, so
+every phase relationship between two rounds comes round eventually and any
+two paths that cross in space cross in time sooner or later. Measured over
+twenty minutes, the closest two villagers come is three centimetres, at 633
+seconds. That is one person wearing another.
+
+**Both ways out that need nobody to notice anybody fail.** One clock for the
+village makes the phases fixed and the offsets a one-off choice, and it means
+padding a round of 23 seconds out to 106, which is somebody standing at a
+wagon for forty-seven seconds in a building whose day is twenty. Paths that
+never cross is not a village, because a street is a thing people cross.
+
+So `people::apart` moves them. One symmetric pass per pair closer than
+`ROOM`, twice over so a knot of three settles, each pushed half the
+shortfall. It is not steering, nobody looks where they are going, and it is
+the smallest thing that is never wrong. Positions stay a pure function of the
+time, which is what keeps a picture able to pin a second.
+
+**And it knows nothing about walls**, which is the question worth asking of a
+push that only knows about people. Ten minutes of every round, nudged, held
+against the same boxes the walk test uses: nobody lands anywhere solid. That
+is a measurement rather than a guarantee, and it is written here so the next
+person who moves a cabin knows to run it again.

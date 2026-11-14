@@ -168,9 +168,10 @@ could not:
 - **Anything on the trail.** No station, no asking, nothing to answer.
 - **A horse that moves.** Spec 0067's gait is a two-legged walk and a horse
   that used it would be a person on all fours.
-- **People avoiding each other.** Four rounds that crossed at the same second
-  would walk through one another. They do not, and nothing here would stop it
-  if they did.
+- **People looking where they are going.** They do not walk through one
+  another any more, which spec 0067's 2026-11-14 note is about, but what
+  keeps them apart is a push and not a pair of eyes: nobody slows, nobody
+  steps round, and two who want the same spot both give half.
 
 ## 2026-11-14: the grain, and three things it had wrong
 

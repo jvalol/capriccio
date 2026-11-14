@@ -72,6 +72,13 @@ pub struct Stance {
     pub rise: f32,
     /// How far off the stop's own facing they have turned, in radians.
     pub turn: f32,
+    /// How far the body is leaning forward from the hips, in radians.
+    ///
+    /// **The one thing that stops a gesture being an arm on a post.**
+    /// Somebody reaching over a pot or lifting off a wagon takes their
+    /// shoulders with them; a figure that holds a plumb torso while the arm
+    /// goes out is doing neither of those and is visibly doing neither.
+    pub lean: f32,
 }
 
 /// A number between -1 and 1 off two things that do not divide.
@@ -154,6 +161,8 @@ fn idle(who: f32, stood: f32) -> Stance {
     out.turn += (if on == 0 { 1.0 } else { -1.0 }) * 0.045 * lean * over;
     // and the arm on the loose side hangs a little further back
     out.shoulder[other] += 0.06 * over;
+    // and the shoulders come back a little over the loaded hip
+    out.lean -= 0.012 * over;
 
     out
 }
@@ -209,8 +218,10 @@ pub fn standing(errand: Errand, who: f32, stood: f32, stays: f32) -> Stance {
             // the other hand rests on something, and is not a mirror of it
             out.shoulder[1] += 0.10 * settled;
             out.elbow[1] += (0.5 + (stood * 0.4 + who).sin() * 0.06) * settled;
-            // a cook leans over the pot
+            // a cook leans over the pot, and sways with the stroke rather
+            // than holding the lean still
             out.rise -= 0.035 * settled;
+            out.lean += (0.20 + shoulder * 0.05) * settled;
         }
         Errand::Lift => {
             let (n, through) = turn_of(who, stood, 3.4);
@@ -234,6 +245,9 @@ pub fn standing(errand: Errand, who: f32, stood: f32, stays: f32) -> Stance {
             out.knee[0] += 0.22 * down * settled;
             out.knee[1] += 0.20 * down * settled;
             out.rise -= 0.09 * down * settled;
+            // **Bent to it at the bottom and upright at the top**, which is
+            // most of what says the thing has weight.
+            out.lean += (0.08 + down * 0.30) * settled;
         }
         Errand::Draw => {
             let (n, through) = turn_of(who, stood, 1.5);
@@ -250,6 +264,7 @@ pub fn standing(errand: Errand, who: f32, stood: f32, stays: f32) -> Stance {
             }
 
             out.rise -= 0.02 * settled;
+            out.lean += 0.14 * settled;
         }
         Errand::Tend => {
             let (n, through) = turn_of(who, stood, 2.6);
@@ -268,6 +283,7 @@ pub fn standing(errand: Errand, who: f32, stood: f32, stays: f32) -> Stance {
             out.elbow[0] += (0.55 + elbow * 0.30) * reach * settled;
             out.shoulder[1] += -0.05 * settled;
             out.turn += (through - 0.5) * 0.06 * settled;
+            out.lean += 0.07 * reach * settled;
         }
         Errand::Knock => {
             // once, not a cycle: reach for the latch, then let the arm down
@@ -275,6 +291,7 @@ pub fn standing(errand: Errand, who: f32, stood: f32, stays: f32) -> Stance {
 
             out.shoulder[0] += 0.85 * reach;
             out.elbow[0] += 0.95 * reach;
+            out.lean += 0.10 * reach;
             // and afterwards they stand there with their hands down, which
             // the idle under this is already doing
         }
@@ -330,6 +347,7 @@ mod tests {
         }
 
         most.max((one.turn - two.turn).abs())
+            .max((one.lean - two.lean).abs())
             .max((one.rise - two.rise).abs() * 10.0)
     }
 
@@ -515,6 +533,12 @@ mod tests {
                         "{:?} moves the hips {:.3} metres",
                         errand,
                         now.rise
+                    );
+                    assert!(
+                        (-0.1..=0.55).contains(&now.lean),
+                        "{:?} leans {:.2}, which is a bow or a backflip",
+                        errand,
+                        now.lean
                     );
                     assert!(
                         now.turn.abs() < 0.6,
