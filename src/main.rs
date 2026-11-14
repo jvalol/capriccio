@@ -14,6 +14,7 @@ mod display;
 mod field;
 mod garden;
 mod gate;
+mod gesture;
 mod glass;
 mod globe;
 mod gyro;
@@ -4238,6 +4239,11 @@ impl Arcade {
                          up: glam::Quat,
                          facing: f32,
                          walked: Option<f32>,
+                         // what they are doing while they stand, how long
+                         // they have been at it and how long they are
+                         // staying. `None` is somebody who is not on a
+                         // round, who gets the idle and nothing else.
+                         stopped: Option<(gesture::Errand, f32, f32)>,
                          shade: usize,
                          look: people::Look,
                          // **Only in reflections, per engine spec 0091.**
@@ -4251,6 +4257,20 @@ impl Arcade {
             if only_in_glass {
                 scene.only_in_reflections();
             }
+            // **What their hands and their weight are doing while they
+            // stand**, which is nothing at all while they walk. Spec 0067.
+            //
+            // Worked out before anything reads the facing, because one of
+            // the things it moves is the facing: a body that shifts its
+            // weight turns a little with it, and the head and the eyes are
+            // drawn on the body's own yaw rather than on one of their own.
+            let stance = match (walked, stopped) {
+                (None, Some((errand, stood, stays))) => {
+                    gesture::standing(errand, shade as f32 * 1.7 + 0.3, stood, stays)
+                }
+                _ => gesture::Stance::default(),
+            };
+            let facing = facing + stance.turn;
             // **Minus the facing, which is not a typo.** A turn of `facing`
             // about y sends a body's own forward of `-Z` to
             // `(-sin facing, 0, -cos facing)`, and every other account of
@@ -4300,7 +4320,7 @@ impl Arcade {
             // what reads as a machine.
             let rise = match walked {
                 Some(walked) => people::hips(walked) - people::LEG_TALL,
-                None => 0.0,
+                None => stance.rise,
             };
             let up_to = |how_high: f32| at + over * (how_high * built.tall + rise);
             // **A limb turns about the walker's own right, not about a
@@ -4481,7 +4501,16 @@ impl Arcade {
                         people::shoulder(walked, leg),
                         people::elbow(walked, leg),
                     ),
-                    None => (0.0, 0.0, 0.0, 0.0),
+                    // **Not nought.** Spec 0067: every joint at nought is
+                    // where a figure that read as a person while it walked
+                    // becomes a mannequin the moment it arrives, and most
+                    // of anybody's day out here is standing.
+                    None => (
+                        stance.hip[leg],
+                        stance.knee[leg],
+                        stance.shoulder[leg],
+                        stance.elbow[leg],
+                    ),
                 };
 
                 // **The leg, turned about the hip rather than slid away
@@ -4665,6 +4694,7 @@ impl Arcade {
                 glam::Quat::IDENTITY,
                 facing,
                 None,
+                None,
                 2,
                 people::Look::Carved,
                 false,
@@ -4690,6 +4720,7 @@ impl Arcade {
                     glam::Quat::IDENTITY,
                     doing.facing,
                     doing.walked,
+                    doing.stopped,
                     n,
                     people::Look::Einherjar,
                     false,
@@ -4714,6 +4745,7 @@ impl Arcade {
                 glam::Quat::IDENTITY,
                 doing.facing,
                 doing.walked,
+                doing.stopped,
                 n + 3,
                 people::Look::Guest,
                 false,
@@ -4743,6 +4775,8 @@ impl Arcade {
                 // the legs swing with the walking rather than on a clock of
                 // their own
                 Some(self.paced),
+                // and no errand: you are not on a round
+                None,
                 // your own coat, which is a seed like anybody else's
                 0,
                 people::Look::Guest,

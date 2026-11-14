@@ -669,6 +669,9 @@ pub struct Stop {
     pub at: Vec3,
     pub facing: f32,
     pub stays: f32,
+    /// What they are there for, which is what their hands do while they
+    /// stand. Spec 0067.
+    pub doing: crate::gesture::Errand,
 }
 
 /// Where somebody on a round is at a given moment.
@@ -679,6 +682,9 @@ pub struct Doing {
     /// How far they have walked in all, which is what the gait runs on, or
     /// `None` while they are standing still.
     pub walked: Option<f32>,
+    /// What they are doing where they are standing, how long they have been
+    /// at it, and how long they are staying. `None` while they are walking.
+    pub stopped: Option<(crate::gesture::Errand, f32, f32)>,
 }
 
 /// Which way somebody standing at `at` faces to be looking at `thing`.
@@ -730,6 +736,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             at: Vec3::ZERO,
             facing: 0.0,
             walked: None,
+            stopped: None,
         };
     };
 
@@ -750,6 +757,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             at: first.at,
             facing: first.facing,
             walked: None,
+            stopped: Some((first.doing, 0.0, first.stays)),
         };
     }
 
@@ -784,6 +792,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 at: stop.at,
                 facing,
                 walked: None,
+                stopped: Some((stop.doing, left, stays)),
             };
         }
 
@@ -796,6 +805,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 at: stop.at + way * share,
                 facing: goes,
                 walked: Some(walked + way.length() * share),
+                stopped: None,
             };
         }
 
@@ -807,6 +817,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
         at: first.at,
         facing: first.facing,
         walked: None,
+        stopped: Some((first.doing, 0.0, first.stays)),
     }
 }
 
@@ -840,17 +851,20 @@ mod tests {
                 at: Vec3::ZERO,
                 facing: 0.0,
                 stays: 4.0,
+                doing: crate::gesture::Errand::Wait,
             },
             Stop {
                 at: glam::vec3(6.0, 0.0, 0.0),
                 facing: 1.0,
                 stays: 3.0,
+                doing: crate::gesture::Errand::Stir,
             },
             // a corner, walked straight through
             Stop {
                 at: glam::vec3(6.0, 0.0, -5.0),
                 facing: 2.0,
                 stays: 0.0,
+                doing: crate::gesture::Errand::Wait,
             },
         ]
     }

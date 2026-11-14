@@ -131,9 +131,9 @@ write.
 - **Avoiding each other.** Two rounds that crossed at the same second would
   walk through one another. They do not, because the stops are where they are,
   and nothing here would stop it if they did.
-- **Doing anything at a stop.** They stand and face the thing. There is no
-  carrying, no bending, no sitting: the body has no hands and the arms swing
-  off the gait.
+- **Carrying, bending and sitting.** The hands hold nothing and nobody gets
+  off their feet. What they do at a stop is the errand's own motion, over an
+  idle, which is 2026-11-14 below.
 - **Going indoors.** Every round is outside. The hall's door is passable and a
   round through it is the obvious next thing, and it wants the figure to not
   be drawn while it is in there or it is a body inside a lit room seen through
@@ -141,3 +141,79 @@ write.
 - **The fire in daylight.** It is written against the dark, like the hall's,
   and at noon the flames clip to white. Nobody is ever in that lane at noon in
   a picture but this one.
+
+## 2026-11-14: what they do while they are standing
+
+**Jake: the gesture at a stop, and it only lands if it reads as natural and
+not robotic, as though the motion was recorded by a human actor.** Nothing
+here is recorded and nothing here will be mistaken for it. What is written
+down is the handful of things that separate a person standing from a machine
+paused, and they are rules rather than keyframes.
+
+**The robot was the moment they arrived.** A round walked somebody to the
+fire and then set every joint to nought. A figure that reads as a person
+while it moves becomes a mannequin the instant it gets where it was going,
+and standing is most of what anybody out here is doing at any second, so it
+was most of what they were.
+
+Four rules, in `gesture.rs`, each of them a thing an animator would say:
+
+- **Nothing is ever still.** Under every errand there is an idle that does
+  not stop: breath at four millimetres, a sway off two periods that do not
+  divide, and a weight shift every six seconds or so that moves the hips,
+  both knees and the whole body's facing at once. The weight shift is the
+  big one. Standing evenly on two feet is a thing people manage for a few
+  seconds at a time.
+- **The joints do not start together.** A shoulder leads and the elbow
+  follows a tenth of a cycle later, which is the difference between an arm
+  and a lever.
+- **No two repetitions match.** Each turn of a cycle takes its own length
+  and its own reach off a hash of who is doing it and which turn it is. The
+  jitter is in the length as well as the size, because a motion that is
+  always the same length is a metronome whatever its amplitude.
+- **And it starts and stops at rest.** The gesture fades up over the first
+  moments at a stop and back down before they leave, so nobody begins
+  mid-stroke or walks away with an arm out.
+
+**Six errands**, named for the errand and not for the motion: `Stir`,
+`Lift`, `Draw`, `Tend`, `Knock` and `Wait`. `Wait` is its own errand rather
+than the absence of one: somebody at the end of a street with nothing to do
+looks at things, held for a beat and brought back, which is what makes it a
+glance rather than a sweep. `Tend`, at the horses, stops to think every few
+turns, which no amount of smoothing does for a cycle that never pauses.
+
+**What the rig cannot do**, and it is most of a body. The arms swing forward
+and back only, because a limb turns about the walker's own right. There is no
+torso and no neck: both are drawn on the body's own yaw at a fixed height, so
+leaning or looking about would be a change to every head fitting in `main.rs`
+rather than a number in `gesture.rs`. The whole figure turns a little
+instead, which is cruder and is what there is.
+
+### Three things the pictures caught, which no test would have
+
+- **The cook was waving at the fire from across the common.** `CLEAR_OF` is
+  1.6 metres and keeps a body out of what it walks past, so a stop at the
+  ring put him 2.8 metres from a pot, with an arm 0.7 long. `TENDS_FROM` is
+  the ring's own edge and half a stride, which is where somebody stands to
+  reach what is over it.
+- **And his arm hung down with a twitch in it.** The first build swung the
+  shoulder a quarter of a radian, which is not a hand over a pot. A gesture
+  is mostly a held pose with a small movement on top of it, and the held
+  pose is the part that says what the errand is.
+- **A hash with `fract` in it returns -3 to 1, not -1 to 1**, because Rust
+  keeps the sign. A quarter of the cycle lengths came out negative, which ran
+  the cycles backwards, and a quarter of the reaches came out inside out. It
+  presented as five separate faults in five separate errands.
+
+## Acceptance criteria, added
+
+- Nobody standing still is actually still. — `gesture::tests::nobody_standing_still_is_actually_still`
+- And no two turns of a cycle are the same. — `gesture::tests::no_two_turns_of_a_cycle_are_the_same`
+- A gesture fades up and down rather than switching on. — `gesture::tests::a_gesture_fades_up_and_down_rather_than_switching_on`
+- The shoulder and the elbow are two signals and not one. — `gesture::tests::the_shoulder_and_the_elbow_do_not_turn_together`
+- And nothing bends the wrong way or too far. — `gesture::tests::nothing_bends_the_wrong_way_or_too_far`
+
+### Verified by hand
+
+- Whether it reads as a person rather than as a part oscillating, which is
+  the whole of what was asked and the one thing in here no test can see.

@@ -178,6 +178,15 @@ pub const CLEAR_OF: f32 = 1.6;
 
 /// The firepit in the middle of the street, and the ring round it.
 pub const RING_WIDE: f32 = 2.4;
+
+/// How far from the middle of the fire somebody cooking on it stands.
+///
+/// **Nearer than `CLEAR_OF`, and it has to be.** The general clearance keeps
+/// a body out of a thing it is walking past, which put the cook 2.8 metres
+/// from a pot and gave him an arm 0.7 long: spec 0067's stir came out as a
+/// man waving at a fire from across the common. This is the ring's own edge
+/// and half a stride, which is where you stand to reach what is over it.
+pub const TENDS_FROM: f32 = RING_WIDE * 0.5 + 0.5;
 pub const RING_HIGH: f32 = 0.3;
 pub const RING_STONES: usize = 13;
 pub const RING_FLAMES: usize = 3;
@@ -718,6 +727,7 @@ fn at_the(thing: Vec3, from: Vec3, clear: f32) -> (Vec3, f32) {
 /// crowd is not what this is: what makes a place read as lived in is that
 /// something is always happening somewhere in it.
 pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
+    use crate::gesture::Errand;
     use crate::people::Stop;
 
     let middle = at(reaches);
@@ -727,11 +737,22 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
     let carts = wagons(reaches);
     let rail_at = rail(reaches);
     let water = well(reaches);
-    let stop = |at: Vec3, facing: f32, stays: f32| Stop { at, facing, stays };
+    let stop = |at: Vec3, facing: f32, stays: f32| Stop {
+        at,
+        facing,
+        stays,
+        doing: Errand::Wait,
+    };
+    let doing = |at: Vec3, facing: f32, stays: f32, doing: Errand| Stop {
+        at,
+        facing,
+        stays,
+        doing,
+    };
     let before = |thing: Vec3, looks: Vec3, stays: f32| {
         let (at, facing) = at_the(thing, thing + looks * 4.0, CLEAR_OF);
 
-        stop(at, facing, stays)
+        doing(at, facing, stays, Errand::Knock)
     };
     // the lane a round walks along, which is the middle of the street and
     // where nothing stands
@@ -741,11 +762,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         // **Cooking**: out of the south cabin nearest the common, to the
         // fire, and back. This is the errand Jake named first.
         {
-            let (by_fire, at_fire) = at_the(
-                fire,
-                vec3(fire.x + 6.0, 0.0, fire.z),
-                RING_WIDE * 0.5 + CLEAR_OF,
-            );
+            let (by_fire, at_fire) = at_the(fire, vec3(fire.x + 6.0, 0.0, fire.z), TENDS_FROM);
             // **Out past the cabin's own corner before turning for the
             // fire.** Walked straight, the leg from the doorstep cut the
             // south-west corner of the cabin it had just come out of, which
@@ -762,7 +779,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             vec![
                 before(doors[5].0, doors[5].1, 5.0),
                 round,
-                stop(by_fire, at_fire, 7.0),
+                doing(by_fire, at_fire, 7.0, Errand::Stir),
                 round,
             ]
         },
@@ -775,13 +792,13 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                     carts[0].0 + vec3(0.0, 0.0, 4.0),
                     WAGON_WIDE * 0.5 + CLEAR_OF,
                 );
-                stop(at, facing, 5.5)
+                doing(at, facing, 5.5, Errand::Lift)
             },
             lane(rail_at.x - 2.0),
             {
                 let (at, facing) =
                     at_the(rail_at, rail_at + vec3(0.0, 0.0, -4.0), RAIL_LONG * 0.36);
-                stop(at, facing, 6.0)
+                doing(at, facing, 6.0, Errand::Tend)
             },
             lane(rail_at.x - 2.0),
         ],
@@ -793,7 +810,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                     water + vec3(0.0, 0.0, -4.0),
                     WELL_WIDE * 0.5 + CLEAR_OF,
                 );
-                stop(at, facing, 6.0)
+                doing(at, facing, 6.0, Errand::Draw)
             },
             lane(water.x + 1.0),
             before(doors[1].0, doors[1].1, 4.5),

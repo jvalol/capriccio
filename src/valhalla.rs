@@ -538,6 +538,7 @@ pub const CLEAR_OF: f32 = 1.6;
 /// straight through, which is how a round turns without the turn being a
 /// pause: see `people::doing`.
 pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
+    use crate::gesture::Errand;
     use crate::people::Stop;
 
     let middle = at(reaches);
@@ -548,7 +549,12 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
     // to the north, which are the sides that look onto the lane
     let north = stores[2];
     let behind = stores[3];
-    let stop = |at: Vec3, facing: f32, stays: f32| Stop { at, facing, stays };
+    let stop = |at: Vec3, facing: f32, stays: f32| Stop {
+        at,
+        facing,
+        stays,
+        doing: Errand::Wait,
+    };
     // **A stop that is at something looks at it, worked out and not
     // written.** Every facing below that had a thing to be about was
     // written by hand and three of the four had the sign the wrong way,
@@ -556,8 +562,12 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
     // round the back all stood with their backs to the errand they had
     // just walked to. `people::facing` is the one account of which way
     // round it goes.
-    let looking_at =
-        |at: Vec3, thing: Vec3, stays: f32| stop(at, crate::people::facing(at, thing), stays);
+    let looking_at = |at: Vec3, thing: Vec3, stays: f32, doing: Errand| Stop {
+        at,
+        facing: crate::people::facing(at, thing),
+        stays,
+        doing,
+    };
     let fire = ring(reaches);
     let wood = pile(reaches);
     // where somebody stands to take wood off the pile: clear of it, on the
@@ -595,6 +605,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 vec3(north.at.x, door.y, north.at.z - north.long * 0.5 - CLEAR_OF),
                 north.at,
                 4.5,
+                Errand::Lift,
             ),
             stop(
                 vec3(yard + 1.2, door.y, north.at.z - north.long * 0.5 - 2.0),
@@ -611,6 +622,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 at_the_wood,
                 vec3(at_the_wood.x, door.y, (wood.min.z + wood.max.z) * 0.5),
                 4.0,
+                Errand::Lift,
             ),
             // **Clear of the ring and not clear of its middle.** Standing
             // `CLEAR_OF` from the middle of a fire 2.2 across puts a body
@@ -623,7 +635,12 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // twenty-six metre drop. South is fourteen metres of slab and
             // the walk from the pile is one straight leg, so the corner
             // that used to swing round the ring is gone with it.
-            looking_at(vec3(fire.x, door.y, fire.z - clear_of_the_fire), fire, 6.5),
+            looking_at(
+                vec3(fire.x, door.y, fire.z - clear_of_the_fire),
+                fire,
+                6.5,
+                Errand::Stir,
+            ),
         ],
         // **And one round the back**, past the gable to the third store and
         // round again. It is the only round that leaves the lane, and what
@@ -638,6 +655,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 ),
                 behind.at,
                 5.5,
+                Errand::Lift,
             ),
             stop(vec3(middle.x - 2.0, door.y, middle.z - 7.5), 0.0, 0.0),
             // **Written off the fire and not off the lane**, because the
@@ -648,6 +666,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 vec3(fire.x - clear_of_the_fire, door.y, fire.z - 1.5),
                 door,
                 4.0,
+                Errand::Wait,
             ),
             stop(vec3(middle.x - 2.0, door.y, middle.z - 7.5), 0.0, 0.0),
         ],
