@@ -373,7 +373,31 @@ fn waiting(out: &mut Stance, who: f32, stood: f32, settled: f32) {
 /// what `None` means and is what every errand did before this.
 pub fn lets_go_at(errand: Errand) -> Option<f32> {
     match errand {
-        Errand::Stoop => Some(0.78),
+        Errand::Stoop => Some(STOOP_BOTTOM),
+        _ => None,
+    }
+}
+
+/// How far into a stoop the hand is at the ground, which is the bottom of
+/// its first dip.
+///
+/// **One number, because it is one moment.** Letting go and taking hold are
+/// the same instant of the same motion seen from either end, so an errand
+/// that can put a thing down at a given moment can pick one up at it. Two
+/// numbers here would be two accounts of where the bottom of the dip is,
+/// and a change to the stoop's clock would move one of them.
+pub const STOOP_BOTTOM: f32 = 0.78;
+
+/// How long after arriving an errand closes its hand on something lying on
+/// the ground, per spec 0080, or `None` for an errand that never reaches it.
+///
+/// **The same errands and the same moment as [`lets_go_at`].** A stoop is
+/// the only thing in this building that gets a hand down to the floor, and
+/// which way the load is going is the round's business rather than the
+/// body's: the hand is at the ground either way.
+pub fn picks_up_at(errand: Errand) -> Option<f32> {
+    match errand {
+        Errand::Stoop => Some(STOOP_BOTTOM),
         _ => None,
     }
 }

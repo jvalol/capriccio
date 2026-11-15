@@ -894,6 +894,16 @@ pub struct Stop {
     /// out as a reach instead, a log would land between somebody and the
     /// fire they were putting it on.
     pub puts_at: Option<Vec3>,
+    /// Where a load this stop leaves with is lifted off the ground, if it
+    /// comes off the ground at all. Spec 0080.
+    ///
+    /// **Set with `carries`, which says what comes up.** A stop that takes
+    /// something up arrives empty-handed and leaves holding it, and spec
+    /// 0073's rule already says the second half of that: this says the
+    /// load was lying on the ground beforehand rather than coming off a
+    /// shelf, a wagon bed or a well rope, which is the difference between
+    /// a stoop and a reach.
+    pub takes_at: Option<Vec3>,
     /// How high the seat is, if this stop is one you sit at. Spec 0074.
     ///
     /// **The height and not a flag**, because a body has to be let down
@@ -927,12 +937,16 @@ pub struct Doing {
     /// How high the seat under them is, or `None` if they are on their
     /// feet. Spec 0074. Never set while they are walking.
     pub seated: Option<f32>,
-    /// A load they have just put down, and where it is lying. Spec 0078.
+    /// A load lying on the ground at their feet, and where it is lying.
+    /// Spec 0078 for one they have just put down and spec 0080 for one
+    /// they are about to take up.
     ///
-    /// **Only while they are still at the stop they put it at.** What
-    /// happens to it after that is the fire's, or the floor's, and
-    /// neither is a thing a round knows: a load that stayed would be a
-    /// pile growing for ever off a list that has no memory.
+    /// **Only while they are standing over it.** What happens to a load
+    /// after somebody walks away from it is the fire's, or the floor's,
+    /// and neither is a thing a round knows: a load that stayed would be
+    /// a pile growing for ever off a list that has no memory. The same
+    /// bound is why a load waiting to be taken up is not lying there all
+    /// round the loop.
     pub left: Option<(Load, Vec3)>,
 }
 
@@ -1130,13 +1144,33 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             // lying where they put it. The errand says when, because the
             // errand is the motion that does it.
             let carried = left_behind(n);
-            let given_up = carried.is_some() && held_from(n).is_none();
+            let leaving = held_from(n);
+            let given_up = carried.is_some() && leaving.is_none();
             let let_go = crate::gesture::lets_go_at(stop.doing)
                 .map(|when| given_up && left >= when)
                 .unwrap_or(false);
-            let (holding, put) = match (let_go, stop.puts_at, carried) {
-                (true, Some(where_), Some(load)) => (None, Some((load, where_))),
-                _ => (carried, None),
+
+            // **And it closes partway through the other way round.** Spec
+            // 0080. A stop that arrives empty and leaves holding something
+            // off the ground has the same moment in the middle of it, with
+            // the load lying there up to it and in the hand after.
+            let taken_up = match (carried, leaving, stop.takes_at) {
+                (None, Some(load), Some(where_)) => Some((load, where_)),
+                _ => None,
+            };
+            let (holding, put) = match taken_up {
+                // an errand that never reaches the ground takes nothing
+                // off it, which `tests::every_stop_that_takes_something_up_bends_for_it`
+                // is what stops a round saying so
+                Some((load, where_)) => match crate::gesture::picks_up_at(stop.doing) {
+                    Some(when) if left >= when => (Some(load), None),
+                    Some(_) => (None, Some((load, where_))),
+                    None => (None, None),
+                },
+                None => match (let_go, stop.puts_at, carried) {
+                    (true, Some(where_), Some(load)) => (None, Some((load, where_))),
+                    _ => (carried, None),
+                },
             };
 
             return Doing {
@@ -1301,6 +1335,100 @@ mod tests {
         assert_eq!(at(2, 0.1).left, None, "it is still there after they leave");
     }
 
+    /// Spec 0080: and it comes up off the ground the same way round.
+    ///
+    /// **Four moments, because the near miss is a pail that was always
+    /// there.** A load drawn at `takes_at` for the whole loop would pass a
+    /// test that only looked at the stop it comes up on, and would leave a
+    /// pail lying at a wellhead that nobody is standing at.
+    #[test]
+    fn a_load_comes_up_off_the_ground() {
+        let lies = glam::vec3(6.4, 0.0, 0.5);
+        let mut round = a_round();
+        round[1].doing = crate::gesture::Errand::Stoop;
+        round[1].takes_at = Some(lies);
+        round[1].carries = Some(Load::Pail);
+
+        let legs: Vec<(f32, f32)> = round
+            .iter()
+            .enumerate()
+            .map(|(n, stop)| {
+                let next = round[(n + 1) % round.len()];
+
+                (stop.stays, stop.at.distance(next.at) / PACE)
+            })
+            .collect();
+        let at = |n: usize, into: f32| {
+            let before: f32 = legs[..n].iter().map(|(a, b)| a + b).sum();
+
+            doing(&round, before + into)
+        };
+        let when = crate::gesture::picks_up_at(crate::gesture::Errand::Stoop)
+            .expect("a stoop reaches the ground");
+
+        // standing over it, before the hand closes
+        let early = at(1, when - 0.2);
+
+        assert_eq!(early.holding, None, "it was in the hand before they bent");
+        assert_eq!(early.left, Some((Load::Pail, lies)), "it was nowhere");
+
+        // and after
+        let late = at(1, when + 0.2);
+
+        assert_eq!(late.holding, Some(Load::Pail), "it never came up");
+        assert_eq!(late.left, None, "it is both in the hand and on the ground");
+
+        // and it goes with them
+        assert_eq!(
+            at(1, round[1].stays + 0.3).holding,
+            Some(Load::Pail),
+            "it was dropped on the way out"
+        );
+
+        // and it is not lying there before anybody has hauled it up
+        assert_eq!(at(0, 0.1).left, None, "it is lying there a whole loop");
+    }
+
+    /// Spec 0080: and nobody takes something off the ground without
+    /// bending for it.
+    ///
+    /// **The one way a round can lie about this.** `Stop::takes_at` says
+    /// where a load comes up and the errand says when, so a stop that
+    /// takes something up with an errand that never reaches the ground is
+    /// a load that appears in a hand out of nothing. Nothing in `doing`
+    /// can refuse it, because it is handed the list rather than asked for
+    /// one.
+    #[test]
+    fn every_stop_that_takes_something_up_bends_for_it() {
+        for (what, rounds) in [
+            ("the village", crate::village::rounds(20.0)),
+            ("the steading", crate::valhalla::rounds(20.0)),
+        ] {
+            for (n, round) in rounds.iter().enumerate() {
+                for stop in round {
+                    if stop.takes_at.is_none() {
+                        continue;
+                    }
+
+                    assert!(
+                        stop.carries.is_some(),
+                        "a stop on {}'s round {} takes something up and leaves \
+                         empty-handed",
+                        what,
+                        n
+                    );
+                    assert!(
+                        crate::gesture::picks_up_at(stop.doing).is_some(),
+                        "a stop on {}'s round {} takes something off the ground \
+                         with an errand that never reaches it",
+                        what,
+                        n
+                    );
+                }
+            }
+        }
+    }
+
     /// Spec 0073: what is in the hand is what the stop they last left
     /// said, for the whole of the walk out and the stay at the other end.
     ///
@@ -1368,6 +1496,7 @@ mod tests {
                 carries: None,
                 sits: None,
                 puts_at: None,
+                takes_at: None,
             },
             Stop {
                 at: glam::vec3(6.0, 0.0, 0.0),
@@ -1377,6 +1506,7 @@ mod tests {
                 carries: None,
                 sits: None,
                 puts_at: None,
+                takes_at: None,
             },
             // a corner, walked straight through
             Stop {
@@ -1387,6 +1517,7 @@ mod tests {
                 carries: None,
                 sits: None,
                 puts_at: None,
+                takes_at: None,
             },
         ]
     }

@@ -767,6 +767,28 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
         .collect()
 }
 
+/// How far to one side of a stop something set down at somebody's feet
+/// stands. Spec 0080.
+///
+/// **Clear of the body and inside a stoop's reach.** A body is 0.9 across,
+/// so anything nearer than about 0.45 is under a shoulder and never seen,
+/// and an arm is 0.74 long, so anything much past this cannot be reached
+/// from a stoop without a stride.
+pub const SETS_DOWN: f32 = 0.52;
+
+/// A point `how_far` to one side of somebody standing at `at` and facing
+/// `facing`.
+///
+/// Forward is `(sin, 0, -cos)` of a facing, which is the convention
+/// [`crate::people::facing`] is built on, so across it is `(cos, 0, sin)`.
+pub fn aside(at: Vec3, facing: f32, how_far: f32) -> Vec3 {
+    vec3(
+        at.x + facing.cos() * how_far,
+        at.y,
+        at.z + facing.sin() * how_far,
+    )
+}
+
 /// Where somebody stands to use a thing: clear of it, facing it.
 fn at_the(thing: Vec3, from: Vec3, clear: f32) -> (Vec3, f32) {
     let way = (from - thing).normalize_or_zero();
@@ -804,6 +826,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         carries: None,
         sits: None,
         puts_at: None,
+        takes_at: None,
     };
     let doing = |at: Vec3, facing: f32, stays: f32, doing: Errand| Stop {
         at,
@@ -813,6 +836,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         carries: None,
         sits: None,
         puts_at: None,
+        takes_at: None,
     };
     // the same, leaving with something in hand. Spec 0073.
     let carrying =
@@ -902,19 +926,34 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         // up a well hand over hand, so the thing at the end of it is not a
         // decision: they leave here holding it, carry it across the street
         // and stand at the door with it, and come back empty.
-        vec![
-            {
-                let (at, facing) = at_the(
-                    water,
-                    water + vec3(0.0, 0.0, -4.0),
-                    WELL_WIDE * 0.5 + CLEAR_OF,
-                );
-                carrying(at, facing, 6.0, Errand::Draw, crate::people::Load::Pail)
-            },
-            lane(water.x + 1.0),
-            before(doors[1].0, doors[1].1, 4.5),
-            lane(water.x + 1.0),
-        ],
+        //
+        // **And it comes up off the ground.** Spec 0080. Hauling is both
+        // hands on a rope and the pail lands at the wellhead, so what the
+        // hand does next is bend and lift it: two stops at the wellhead,
+        // because a stop has one errand and hauling and lifting are two.
+        {
+            let (at, facing) = at_the(
+                water,
+                water + vec3(0.0, 0.0, -4.0),
+                WELL_WIDE * 0.5 + CLEAR_OF,
+            );
+            // **Beside them and not in front.** Spec 0079 put a sack
+            // halfway to the thing the stop was at and found it under the
+            // body; the other answer is to one side, where nothing of
+            // theirs is over it and a stooping hand still reaches.
+            let beside = aside(at, facing, SETS_DOWN);
+
+            vec![
+                doing(at, facing, 6.0, Errand::Draw),
+                Stop {
+                    takes_at: Some(beside),
+                    ..carrying(at, facing, 2.5, Errand::Stoop, crate::people::Load::Pail)
+                },
+                lane(water.x + 1.0),
+                before(doors[1].0, doors[1].1, 4.5),
+                lane(water.x + 1.0),
+            ]
+        },
         // **And somebody walking the length of it**, barn end to the east
         // end and back, which is what makes the street a street rather than
         // three errands that happen to be near each other.
@@ -1343,6 +1382,61 @@ mod tests {
              is not being taken anywhere",
             furthest
         );
+    }
+
+    /// Spec 0080: and it comes up off the wellhead rather than out of a
+    /// hand.
+    ///
+    /// **Where it lies is the half of this a test can see.** That the hand
+    /// closes on it is `people::tests::a_load_comes_up_off_the_ground`'s;
+    /// what this one is for is that the place it lies is beside the body
+    /// and not under it, which is the mistake spec 0079 made and which no
+    /// amount of correct timing fixes.
+    #[test]
+    fn the_pail_comes_up_off_the_wellhead() {
+        let water = well(REACHES);
+        let round = &rounds(REACHES)[2];
+        let mut lay: Option<Vec3> = None;
+        let mut stood = Vec3::ZERO;
+
+        for step in 0..4_000 {
+            let doing = crate::people::doing(round, step as f32 * 0.05);
+
+            if let Some((load, where_)) = doing.left {
+                assert_eq!(
+                    load,
+                    crate::people::Load::Pail,
+                    "something other than the pail is on the ground"
+                );
+                lay = Some(where_);
+                stood = doing.at;
+            }
+        }
+
+        let lay = lay.expect("the pail is never on the ground at all");
+        let aside = lay.distance(stood);
+
+        assert!(
+            aside > crate::RADIUS,
+            "the pail stands {:.2} metres from the feet of the person who \
+             lifts it, and a body is {:.2} across, so it is under them",
+            aside,
+            crate::RADIUS * 2.0
+        );
+        assert!(
+            aside < crate::people::ARM_TALL,
+            "the pail stands {:.2} metres away, which is past the reach of \
+             an arm {:.2} long",
+            aside,
+            crate::people::ARM_TALL
+        );
+        assert!(
+            lay.distance(water) < WELL_WIDE * 0.5 + CLEAR_OF + SETS_DOWN,
+            "the pail is lifted {:.2} metres from the well, which is not a \
+             wellhead",
+            lay.distance(water)
+        );
+        assert_eq!(lay.y, 0.0, "the pail is lying off the ground");
     }
 
     /// Spec 0067: and being moved out of each other does not move anybody

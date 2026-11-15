@@ -557,6 +557,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         carries: None,
         sits: None,
         puts_at: None,
+        takes_at: None,
     };
     // **A stop that is at something looks at it, worked out and not
     // written.** Every facing below that had a thing to be about was
@@ -573,6 +574,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         carries: None,
         sits: None,
         puts_at: None,
+        takes_at: None,
     };
     // the same, leaving with something in hand. Spec 0073.
     let carrying =

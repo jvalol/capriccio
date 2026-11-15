@@ -15744,6 +15744,50 @@ mod tests {
         );
     }
 
+    /// Spec 0080: the wellhead, at the second the pail is on the ground
+    /// and a hand is going down to it.
+    ///
+    /// **The only thing that can say whether a load beside a body is
+    /// visible.** `village::tests::the_pail_comes_up_off_the_wellhead`
+    /// holds the arithmetic, which is that the pail is further from the
+    /// feet than a body is wide. Whether that clears the shoulder at the
+    /// angle anybody looks from is a picture's question, and spec 0079
+    /// spent a long stretch chasing a sack that was never once in frame.
+    #[test]
+    fn the_village_well_is_drawn() {
+        let reaches = reaches();
+        let water = village::well(reaches);
+        let rounds = village::rounds(reaches);
+        // well down into the stoop, with the pail still on the ground, in
+        // the afternoon under a fair sky
+        // **And the round's own clock, which is not the picture's.** Every
+        // village round is drawn at `since + n * 5.7`, so a second found
+        // on the bare round is a second when somebody else is at the well.
+        let offset = 2.0 * 5.7;
+        let since = (0..40_000)
+            .map(|n| n as f32 * 0.05)
+            .find(|since| {
+                let doing = people::doing(&rounds[2], since + offset);
+
+                doing.left.is_some()
+                    && matches!(doing.stopped, Some((_, stood, _)) if stood > 0.72)
+                    && garden::weather(*since).name == "fair"
+                    && (0.2..0.45).contains(&garden::hour(*since))
+            })
+            .expect("nobody stoops to a pail under a fair sky");
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("village-well"),
+            (WIDE, TALL),
+            standing_when(
+                vec3(water.x - 2.5, 0.0, water.z - 1.0),
+                vec3(water.x - 0.3, 0.7, water.z - 2.3),
+                false,
+                Some(since),
+            ),
+        );
+    }
+
     /// Spec 0071: a shot named in the list and never taken is a broken
     /// image on a published page, and nothing else looks.
     #[test]
