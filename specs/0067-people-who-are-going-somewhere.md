@@ -133,7 +133,9 @@ write.
   idle, which is 2026-11-14 below. **Carrying is done by spec 0073**, which
   found that the rig was never what stopped it: a hand is drawn at the end of
   every forearm and the watchman's horn has hung off one since spec 0055.
-  Bending and sitting stand.
+  **Sitting is done by spec 0074**, for the same reason: the rig has the
+  hip and the knee it wants, and the hall has had benches since spec 0060.
+  Bending stands.
 - **Going indoors.** Every round is outside. The hall's door is passable and a
   round through it is the obvious next thing, and it wants the figure to not
   be drawn while it is in there or it is a body inside a lit room seen through

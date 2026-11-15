@@ -319,6 +319,76 @@ fn waiting(out: &mut Stance, who: f32, stood: f32, settled: f32) {
     out.shoulder[0] += 0.05 * held;
 }
 
+/// What somebody sitting on a bench is doing, per spec 0074.
+///
+/// **Its own function and not a flag on [`standing`].** A seated body's
+/// idle is a different idle: the big thing about standing is the weight
+/// going from one foot to the other, and somebody on a bench has put their
+/// weight down. The errands are no use either, since `Lift` dips both knees
+/// and `Draw` works two arms over a well, and neither is a thing you do
+/// sitting in a hall.
+///
+/// The drop to the seat is not in here. This gives the pose; where the
+/// bench is is the drawing's, because only the drawing knows how tall this
+/// particular body is.
+///
+/// `stays` is how long they are sitting, which is only used to settle at
+/// both ends, the way every gesture in this module does. `seat` is how
+/// high the thing under them is and `tall` how big this body is, because a
+/// seated pose is the one pose in this module that depends on both.
+pub fn sitting(who: f32, stood: f32, stays: f32, seat: f32, tall: f32) -> Stance {
+    let mut out = Stance::default();
+    let settled = eased(stood / 1.1) * eased((stays - stood) / 0.9);
+
+    // **The thigh takes whatever angle puts the feet on the floor**, and
+    // the knee keeps the shin plumb under it. Spec 0046's own convention:
+    // positive is forward at the hip, and the knee is subtracted from it,
+    // so `hip - knee` of nought is a shin straight down.
+    //
+    // Level was the first build and the steading's benches are 0.52 where
+    // a shin is 0.447, which left the feet seven centimetres off the
+    // floor: near enough to read as a mistake and not far enough to read
+    // as dangling. Where a seat is lower than a shin this comes out
+    // negative and the knees rise instead, which is the same arithmetic
+    // and the same thing a low stool does to you.
+    let tilt = ((seat - crate::people::SHIN_TALL * tall) / (crate::people::THIGH_TALL * tall))
+        .clamp(-1.0, 1.0)
+        .asin();
+
+    for leg in 0..2 {
+        out.hip[leg] = PI * 0.5 - tilt;
+        out.knee[leg] = PI * 0.5 - tilt;
+    }
+
+    // breath, the same four millimetres as standing
+    out.rise += ((stood / 3.7 + who) * TAU).sin() * 0.004;
+
+    // **And a shift on the seat rather than between the feet.** Nobody
+    // holds one position on a bench either. It leans the body a little,
+    // takes one knee out further than the other and turns the whole figure
+    // with it, which is the same three things the standing shift moves and
+    // none of the same joints.
+    let (n, through) = turn_of(who, stood, 8.5);
+    let on = (n as usize) % 2;
+    let over = eased(through * 3.0) * (1.0 - eased(through * 3.0 - 2.0));
+    let how_far = 0.5 + wiggle(who, n * 2.9) * 0.4;
+
+    out.hip[on] += (0.10 + wiggle(who, n * 6.1) * 0.05) * over;
+    out.knee[on] -= 0.12 * over;
+    out.turn += (if on == 0 { 1.0 } else { -1.0 }) * 0.05 * how_far * over;
+    out.lean += (0.04 + 0.05 * how_far) * over;
+    // and the hands follow the body rather than hanging where they were
+    out.shoulder[on] += 0.07 * over;
+
+    // a sway under all of it, off two periods that do not divide
+    out.turn += ((stood * 0.27 + who * 2.0).sin() * 0.011) + ((stood * 0.15 + who).sin() * 0.008);
+    // and somebody sitting in a hall looks about, which is the one thing
+    // `waiting` already says how to do
+    waiting(&mut out, who + 1.7, stood, settled);
+
+    out
+}
+
 /// What a horse tied to a rail is doing with itself, per spec 0070.
 ///
 /// **The head is the big one, where a person's is the weight shift.** A
@@ -440,6 +510,72 @@ mod tests {
             .max((one.rests[0] - two.rests[0]).abs())
             .max((one.rests[1] - two.rests[1]).abs())
             .max((one.rise - two.rise).abs() * 10.0)
+    }
+
+    /// Spec 0074: a seated leg is a thigh forward and a shin straight down
+    /// under it, with the foot on the floor.
+    ///
+    /// **Worked out rather than looked at**, because seven centimetres of
+    /// float is the size of fault that reads as wrong in a picture and is
+    /// never obvious in one. The first build sat everybody with a level
+    /// thigh, which on this building's own benches is exactly that.
+    #[test]
+    fn a_seated_foot_reaches_the_floor() {
+        let (thigh, shin) = (crate::people::THIGH_TALL, crate::people::SHIN_TALL);
+
+        for tall in [0.94f32, 1.0, 1.06] {
+            for seat in [0.40f32, 0.45, 0.52, 0.58] {
+                let pose = sitting(0.3, 0.0, 9.0, seat, tall);
+
+                for leg in 0..2 {
+                    // the shin hangs off the thigh's own line by
+                    // `hip - knee`, so nought is plumb
+                    assert!(
+                        (pose.hip[leg] - pose.knee[leg]).abs() < 1e-5,
+                        "the shin is {:.3} off plumb on a seat of {:.2}",
+                        pose.hip[leg] - pose.knee[leg],
+                        seat
+                    );
+
+                    // and the foot lands where the floor is
+                    let tilt = PI * 0.5 - pose.hip[leg];
+                    let foot = seat - thigh * tall * tilt.sin() - shin * tall;
+
+                    assert!(
+                        foot.abs() < 0.01,
+                        "a foot lands {:.3} off the floor on a seat of {:.2} \
+                         under a body of {:.2}",
+                        foot,
+                        seat,
+                        tall
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0074, and the same claim as every other pose in here: a body
+    /// that stops moving the moment it sits down is the fault this module
+    /// exists for.
+    #[test]
+    fn nobody_sitting_is_actually_still() {
+        for who in [0.3f32, 1.7, 4.9] {
+            let mut most: f32 = 0.0;
+
+            for step in 0..200 {
+                let stood = 1.0 + step as f32 * 0.1;
+                let now = sitting(who, stood, 24.0, 0.52, 1.0);
+                let next = sitting(who, stood + 0.1, 24.0, 0.52, 1.0);
+
+                most = most.max(apart(&now, &next));
+            }
+
+            assert!(
+                most > 0.004,
+                "somebody sitting moves at most {:.5} in a tenth of a second",
+                most
+            );
+        }
     }
 
     /// The same fault as the people's, one spec later: spec 0070 is here

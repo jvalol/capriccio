@@ -737,6 +737,12 @@ pub struct Stop {
     /// What they are there for, which is what their hands do while they
     /// stand. Spec 0067.
     pub doing: crate::gesture::Errand,
+    /// How high the seat is, if this stop is one you sit at. Spec 0074.
+    ///
+    /// **The height and not a flag**, because a body has to be let down
+    /// onto something and the bench is the one account of how far. Measured
+    /// from the ground this stop stands on.
+    pub sits: Option<f32>,
     /// What they are holding when they leave here, and so for the whole of
     /// the walk out and the stay at the other end. Spec 0073.
     ///
@@ -761,6 +767,9 @@ pub struct Doing {
     pub stopped: Option<(crate::gesture::Errand, f32, f32)>,
     /// What is in their hand now. Spec 0073.
     pub holding: Option<Load>,
+    /// How high the seat under them is, or `None` if they are on their
+    /// feet. Spec 0074. Never set while they are walking.
+    pub seated: Option<f32>,
 }
 
 /// How much room two people need between them before they are one person.
@@ -868,6 +877,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             walked: None,
             stopped: None,
             holding: None,
+            seated: None,
         };
     };
 
@@ -890,6 +900,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             walked: None,
             stopped: Some((first.doing, 0.0, first.stays)),
             holding: None,
+            seated: first.sits,
         };
     }
 
@@ -952,6 +963,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 walked: None,
                 stopped: Some((stop.doing, left, stays)),
                 holding: left_behind(n),
+                seated: stop.sits,
             };
         }
 
@@ -966,6 +978,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 walked: Some(walked + way.length() * share),
                 stopped: None,
                 holding: held_from(n),
+                seated: None,
             };
         }
 
@@ -979,6 +992,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
         walked: None,
         stopped: Some((first.doing, 0.0, first.stays)),
         holding: left_behind(0),
+        seated: first.sits,
     }
 }
 
@@ -1120,6 +1134,7 @@ mod tests {
                 stays: 4.0,
                 doing: crate::gesture::Errand::Wait,
                 carries: None,
+                sits: None,
             },
             Stop {
                 at: glam::vec3(6.0, 0.0, 0.0),
@@ -1127,6 +1142,7 @@ mod tests {
                 stays: 3.0,
                 doing: crate::gesture::Errand::Stir,
                 carries: None,
+                sits: None,
             },
             // a corner, walked straight through
             Stop {
@@ -1135,6 +1151,7 @@ mod tests {
                 stays: 0.0,
                 doing: crate::gesture::Errand::Wait,
                 carries: None,
+                sits: None,
             },
         ]
     }

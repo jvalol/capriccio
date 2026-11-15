@@ -4350,6 +4350,9 @@ impl Arcade {
                          // and what is in their hand, per spec 0073, which
                          // is `None` for anybody not on a round
                          holding: Option<people::Load>,
+                         // and how high the seat under them is, per spec
+                         // 0074, or `None` for anybody on their feet
+                         seated: Option<f32>,
                          shade: usize,
                          look: people::Look,
                          // **Only in reflections, per engine spec 0091.**
@@ -4370,8 +4373,19 @@ impl Arcade {
             // the things it moves is the facing: a body that shifts its
             // weight turns a little with it, and the head and the eyes are
             // drawn on the body's own yaw rather than on one of their own.
-            let stance = match (walked, stopped) {
-                (None, Some((errand, stood, stays))) => {
+            let stance = match (walked, stopped, seated) {
+                // **Sitting is its own pose and not an errand.** Spec
+                // 0074: the big thing about standing is the weight going
+                // from one foot to the other, and somebody on a bench has
+                // put theirs down.
+                (None, Some((_, stood, stays)), Some(seat)) => gesture::sitting(
+                    shade as f32 * 1.7 + 0.3,
+                    stood,
+                    stays,
+                    seat,
+                    people::built(shade).tall,
+                ),
+                (None, Some((errand, stood, stays)), _) => {
                     gesture::standing(errand, shade as f32 * 1.7 + 0.3, stood, stays)
                 }
                 _ => gesture::Stance::default(),
@@ -4426,7 +4440,18 @@ impl Arcade {
             // what reads as a machine.
             let rise = match walked {
                 Some(walked) => people::hips(walked) - people::LEG_TALL,
-                None => stance.rise,
+                // **And down onto the bench, if there is one.** Spec 0074.
+                // The hips normally ride at `LEG_TALL` off the floor for a
+                // body of this height; sitting, they ride at the seat. The
+                // gesture gives the pose and this gives the drop, because
+                // only here knows how tall this particular body is.
+                None => {
+                    stance.rise
+                        + match seated {
+                            Some(seat) => seat - people::LEG_TALL * built.tall,
+                            None => 0.0,
+                        }
+                }
             };
             // **And everything above the hips leans with the errand.** Spec
             // 0067: a figure that holds a plumb torso while one arm goes out
@@ -4875,6 +4900,8 @@ impl Arcade {
                 // the watchman is not on a round and carries nothing but
                 // the horn, which is his own
                 None,
+                // and he stands, which is the whole of spec 0055
+                None,
                 2,
                 people::Look::Carved,
                 false,
@@ -4917,6 +4944,7 @@ impl Arcade {
                     doing.walked,
                     doing.stopped,
                     doing.holding,
+                    doing.seated,
                     n,
                     people::Look::Einherjar,
                     false,
@@ -4955,6 +4983,7 @@ impl Arcade {
                 doing.walked,
                 doing.stopped,
                 doing.holding,
+                doing.seated,
                 n + 3,
                 people::Look::Guest,
                 false,
@@ -4989,6 +5018,8 @@ impl Arcade {
                 // and nothing in your hands, which is spec 0073's own
                 // out of scope: the figure in the glass is you, and you
                 // are not carrying a pail
+                None,
+                // nor sitting down, for the same reason
                 None,
                 // your own coat, which is a seed like anybody else's
                 0,

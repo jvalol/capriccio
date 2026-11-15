@@ -555,6 +555,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         stays,
         doing: Errand::Wait,
         carries: None,
+        sits: None,
     };
     // **A stop that is at something looks at it, worked out and not
     // written.** Every facing below that had a thing to be about was
@@ -569,6 +570,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         stays,
         doing,
         carries: None,
+        sits: None,
     };
     // the same, leaving with something in hand. Spec 0073.
     let carrying =
@@ -576,6 +578,11 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             carries: Some(carries),
             ..looking_at(at, thing, stays, doing)
         };
+    // and the same, sat down on something. Spec 0074.
+    let sitting = |at: Vec3, thing: Vec3, stays: f32, seat: f32| Stop {
+        sits: Some(seat),
+        ..looking_at(at, thing, stays, Errand::Wait)
+    };
     let fire = ring(reaches);
     // the long fire down the hall, named here because `fire` is taken by
     // the ring out in the lane
@@ -649,6 +656,88 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 9.0,
                 Errand::Stir,
             ),
+            // **And then they sit down.** Spec 0074. Spec 0060 put a
+            // bench down both flanks of this hall, and until now the only
+            // thing anybody did in here was stand at the fire. The north
+            // one, facing the trench, which is what a bench down the flank
+            // of a hall with a fire down its middle is aimed at.
+            //
+            // The height comes off `benches` rather than being written
+            // again, because two accounts of how high a bench is come
+            // apart the day somebody raises it.
+            // **North clear of the trench's end before turning down the
+            // hall.** Spec 0074. The fire is stood at on the door's own
+            // line and the bench is down one flank, so the straight line
+            // between them cuts the corner of a trench that `FIRE_KERB`
+            // exists to stop you walking into. One corner either side of
+            // the sit takes it round the end instead, and the same point
+            // serves going and coming back.
+            {
+                let seat = benches(reaches)[1];
+                // out into the aisle on the bench's own side, between the
+                // trench and the posts, which is the only strip in this
+                // room anybody walks down
+                let toward = (trench.center().z - seat.center().z).signum();
+
+                stop(
+                    vec3(
+                        trench.max.x + CLEAR_OF,
+                        door.y + FLOOR_UP,
+                        trench.center().z - toward * POST_ASIDE * 0.55,
+                    ),
+                    0.0,
+                    0.0,
+                )
+            },
+            {
+                let seat = benches(reaches)[1];
+                // **Between two posts, because the colonnade stands
+                // between the aisle and the benches**, 0.19 clear of the
+                // bench face, which is not a gap anybody walks along. The
+                // bay nearest the door, which is the one somebody coming
+                // in would take, and its middle so the walk threads it.
+                let bays = post_line(reaches);
+                let along = (bays[bays.len() - 1] + bays[bays.len() - 2]) * 0.5;
+                // **On the edge of it and not in the middle.** A bench
+                // here is 1.1 deep, which is a thing you could sleep on,
+                // and somebody sat in the middle of one has their shins
+                // inside it: a thigh is 0.50 long, so the knee lands short
+                // of the front and the shin drops behind the face. The
+                // hips go a hand's width onto the edge nearer the fire,
+                // and the legs hang in the open.
+                //
+                // **And the stop is where they stand to sit**, which is
+                // `people::SITS_BACK` in front of that, with the bench at
+                // their back. Nothing in this building has to treat a body
+                // standing inside furniture as legal that way, and both
+                // wall tests keep their teeth.
+                let toward = (trench.center().z - seat.center().z).signum();
+                let edge = if toward < 0.0 { seat.min.z } else { seat.max.z };
+
+                sitting(
+                    vec3(along, door.y + FLOOR_UP, edge - toward * 0.26),
+                    vec3(along, door.y, trench.center().z),
+                    11.0,
+                    BENCH_HIGH,
+                )
+            },
+            {
+                let seat = benches(reaches)[1];
+                // out into the aisle on the bench's own side, between the
+                // trench and the posts, which is the only strip in this
+                // room anybody walks down
+                let toward = (trench.center().z - seat.center().z).signum();
+
+                stop(
+                    vec3(
+                        trench.max.x + CLEAR_OF,
+                        door.y + FLOOR_UP,
+                        trench.center().z - toward * POST_ASIDE * 0.55,
+                    ),
+                    0.0,
+                    0.0,
+                )
+            },
             stop(
                 vec3(door.x - 1.4, door.y + FLOOR_UP, door.z),
                 FRAC_PI_2,
@@ -1605,6 +1694,7 @@ mod tests {
     #[test]
     fn nobody_walks_through_a_wall() {
         let solid = everything();
+        let seats = benches(REACHES);
         let body = vec3(
             crate::RADIUS * 2.0,
             crate::people::TALL,
@@ -1630,6 +1720,16 @@ mod tests {
                 for one in solid.iter() {
                     // the ground they walk on is solid and is meant to be
                     if one.max.y <= doing.at.y + 0.05 {
+                        continue;
+                    }
+
+                    // **And a bench is not a wall.** Spec 0074. The
+                    // colonnade stands 0.19 clear of the bench face, which
+                    // `benches` own comment calls a strip narrower than a
+                    // body and never anywhere to walk, so a bench can only
+                    // be reached by occupying it, which is what sitting on
+                    // one is. What these two tests are for is walls.
+                    if seats.iter().any(|seat| seat == one) {
                         continue;
                     }
 
@@ -2275,6 +2375,48 @@ mod tests {
         }
     }
 
+    /// Spec 0074: somebody sits on the bench, and sits on it rather than
+    /// beside it.
+    ///
+    /// **The bench this hall has had since spec 0060 and nobody has ever
+    /// used.** The seat it reports is the bench's own height, and where
+    /// they sit is over the bench's own footprint, so neither can drift
+    /// from the furniture.
+    #[test]
+    fn somebody_sits_down_in_the_hall() {
+        let round = &rounds(REACHES)[0];
+        let seats = benches(REACHES);
+        let mut sat = 0;
+
+        for step in 0..4_000 {
+            let doing = crate::people::doing(round, step as f32 * 0.05);
+            let Some(seat) = doing.seated else {
+                continue;
+            };
+
+            sat += 1;
+
+            assert!(
+                (seat - BENCH_HIGH).abs() < 1e-5,
+                "they sit on something {:.3} high and the benches are {:.3}",
+                seat,
+                BENCH_HIGH
+            );
+            assert!(
+                seats.iter().any(|one| {
+                    doing.at.x > one.min.x
+                        && doing.at.x < one.max.x
+                        && doing.at.z > one.min.z
+                        && doing.at.z < one.max.z
+                }),
+                "they sit at {:?}, which is not over a bench",
+                doing.at
+            );
+        }
+
+        assert!(sat > 0, "nobody ever sits down");
+    }
+
     /// Spec 0073: and the wood gets from the pile to the fire.
     ///
     /// **The two ends of it, because carrying is a thing between two
@@ -2386,6 +2528,7 @@ mod tests {
         // body walks over rather than into, which is what a doorstep is. A
         // wall is still a wall, because a wall is tall.
         let solid = everything();
+        let seats = benches(REACHES);
         let rounds = rounds(REACHES);
         let body = vec3(
             crate::RADIUS * 2.0,
@@ -2409,6 +2552,12 @@ mod tests {
 
                 for one in solid.iter() {
                     if one.max.y <= at.y + crate::walk::RIDES {
+                        continue;
+                    }
+
+                    // and a bench is not a wall either, for the reason
+                    // `nobody_walks_through_a_wall` gives. Spec 0074.
+                    if seats.iter().any(|seat| seat == one) {
                         continue;
                     }
 
