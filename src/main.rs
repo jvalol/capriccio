@@ -4541,11 +4541,7 @@ impl Arcade {
                 neck.unwrap_or(body),
                 &Transform::at(up_to(people::NECK_FROM - people::NECK_SUNK))
                     .with_rotation(held)
-                    .with_scale(vec3(
-                        people::NECK_WIDE * built.wide,
-                        (people::NECK_TALL + people::NECK_SUNK * 2.0) * built.tall,
-                        people::NECK_WIDE * built.wide,
-                    )),
+                    .with_scale(thick),
                 skin,
                 aim::NO_SHINE,
             );

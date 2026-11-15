@@ -64,11 +64,32 @@ ceiling.
   touch it.
 - **A lathe is still a lathe.** See spec 0075's own last section.
 
+## 2026-11-14: and the fix left the same trap behind
+
+The neck's own profile went in normalised, taking its size from the scale
+it was drawn with. Every other profile in that file is in metres:
+`torso_profile` gives 0.45, `cloak_profile` gives `CLOAK_TALL`, and what
+the drawing multiplies them by is how big this particular person is, a
+number near one. One profile of a different kind is the next version of
+the bug this spec is about, and it would have arrived the first time
+somebody scaled the neck the way all the others are scaled: 1.18 metres
+across.
+
+It is in metres now, scaled by `thick` like the rest, and `NECK_LONG`
+names the length so the mesh and the gap it spans cannot drift. Nothing
+moved: every picture reference passed untouched, which is what says this
+was a refactor and not a change.
+
+**And the rule is held rather than written down.** `a_figure_is_not_nothing`
+walks the profiles, so it gained the neck, the cloak and the helm, and it
+now asks each of them to be a part of a body rather than a unit shape.
+
 ## Acceptance criteria
 
 - A neck is wider than the hole it fills. — `people::tests::a_neck_fills_the_hole_in_the_shoulders`
 - And it runs into the shoulders below and the head above. — `people::tests::a_neck_reaches_the_shoulders_and_the_head`
 - The figure still draws close up. — `tests::the_figure_is_drawn_close`
+- Every profile in the file is a part of a body, in metres. — `people::tests::a_figure_is_not_nothing`
 
 ### Verified by hand
 

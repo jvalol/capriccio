@@ -326,11 +326,24 @@ pub const NECK_SUNK: f32 = 0.025;
 /// sizes too big. What showed through round it was the inside of the far
 /// wall of the torso.
 ///
-/// Closed at both ends, like everything else off this lathe, and the
-/// widths are multiples of `NECK_WIDE` rather than metres, because the
-/// drawing scales by that.
+/// Closed at both ends, like everything else off this lathe.
+///
+/// **In metres, like every other profile in this file.** The first build
+/// of this one was normalised and took its size from the scale it was
+/// drawn with, which is the only one of its kind here and is exactly the
+/// mismatch spec 0076 is about: `torso_profile` gives 0.45 and
+/// `cloak_profile` gives `CLOAK_TALL`, and what the drawing multiplies
+/// them by is how big this particular person is. A neck scaled that way
+/// by somebody who had not read this would have come out 1.18 metres
+/// across.
+///
+/// It runs `NECK_SUNK` past each end, because what it joins is the
+/// shoulders below and the head above and a seam at either is worse than
+/// the overlap.
 pub fn neck_profile(v: f32) -> (f32, f32) {
     let v = v.clamp(0.0, 1.0);
+    // a little wider where it meets the shoulders, which is what a neck
+    // does
     let waist = if v < 0.06 {
         (v / 0.06) * 1.18
     } else if v > 0.94 {
@@ -339,8 +352,12 @@ pub fn neck_profile(v: f32) -> (f32, f32) {
         1.18 - (v - 0.06) / 0.88 * 0.18
     };
 
-    (v, waist)
+    (v * NECK_LONG, waist * NECK_WIDE)
 }
+
+/// How long the neck's own mesh is, which is the gap it spans plus the
+/// `NECK_SUNK` it runs into each end of it.
+pub const NECK_LONG: f32 = NECK_TALL + NECK_SUNK * 2.0;
 
 /// How far from the middle a leg and an arm hang.
 pub const LEGS_APART: f32 = 0.1;
@@ -1372,6 +1389,9 @@ mod tests {
             ("the head", head_profile as fn(f32) -> (f32, f32)),
             ("a thigh", thigh_profile as fn(f32) -> (f32, f32)),
             ("a shin", shin_profile as fn(f32) -> (f32, f32)),
+            ("the neck", neck_profile as fn(f32) -> (f32, f32)),
+            ("the cloak", cloak_profile as fn(f32) -> (f32, f32)),
+            ("the helm", helm_profile as fn(f32) -> (f32, f32)),
         ] {
             let mesh = crate::cellar::turned(16, 24, profile);
 
@@ -1389,10 +1409,28 @@ mod tests {
                 .fold(0.0f32, f32::max);
 
             assert!(
-                widest > 0.1,
+                widest > 0.04,
                 "{} is a wire, {:.3} at its widest",
                 what,
                 widest
+            );
+
+            // **And it is in metres.** Spec 0076. Every profile in this
+            // file gives a body's own measurements and the drawing scales
+            // them by how big this particular person is, which is a
+            // number near one. A profile written normalised instead reads
+            // as working until somebody scales it the way all the others
+            // are scaled, and then it is a metre across. The neck was
+            // that for an hour.
+            let along = profile(1.0).0 - profile(0.0).0;
+
+            assert!(
+                widest < 0.8 && along.abs() < 1.4,
+                "{} is {:.3} across and {:.3} long, which is not a part of \
+                 anybody: this file's profiles are metres",
+                what,
+                widest,
+                along.abs()
             );
         }
     }
@@ -1443,8 +1481,7 @@ mod tests {
         let hole = torso_profile(1.0).1;
         let base = (0..=100)
             .map(|step| neck_profile(step as f32 / 100.0).1)
-            .fold(0.0f32, f32::max)
-            * NECK_WIDE;
+            .fold(0.0f32, f32::max);
 
         assert!(
             base > hole,
@@ -1464,7 +1501,9 @@ mod tests {
     #[test]
     fn a_neck_reaches_the_shoulders_and_the_head() {
         let foot = NECK_FROM - NECK_SUNK;
-        let head = foot + NECK_TALL + NECK_SUNK * 2.0;
+        // asked of the mesh rather than of the sum, because the mesh is
+        // what gets drawn
+        let head = foot + neck_profile(1.0).0;
 
         assert!(
             foot < NECK_FROM,
