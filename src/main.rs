@@ -4421,6 +4421,11 @@ impl Arcade {
             // gives each of them a height and a build.
             let built = people::built(shade);
             let thick = vec3(built.wide, built.tall, built.wide);
+            // **And a torso is not round.** Spec 0075: everything here
+            // comes off one wheel, which gives a circular section, and a
+            // chest is half again as wide as it is deep. The limbs keep
+            // the round one, because an arm and a leg are round.
+            let broad = vec3(built.wide, built.tall, built.wide * people::TORSO_DEEP);
             let round = vec3(built.wide, built.wide, built.wide);
             let which = shade % aim::COATS.len();
             let coat = aim::COATS[which];
@@ -4499,7 +4504,7 @@ impl Arcade {
                 body,
                 &Transform::at(up_to(people::TORSO_FROM))
                     .with_rotation(held)
-                    .with_scale(thick),
+                    .with_scale(broad),
                 coat,
                 aim::NO_SHINE,
             );
@@ -4579,7 +4584,7 @@ impl Arcade {
                         cloak,
                         &Transform::at(up_to(people::CLOAK_FROM))
                             .with_rotation(held)
-                            .with_scale(thick),
+                            .with_scale(broad),
                         aim::CLOAKS[which],
                         aim::NO_SHINE,
                     );

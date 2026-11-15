@@ -320,7 +320,16 @@ pub const LEGS_APART: f32 = 0.1;
 /// so hung at 0.205 it stood four centimetres proud of the body and read as
 /// a seam rather than as an arm.
 pub const ARMS_APART: f32 = 0.245;
-pub const ARM_FROM: f32 = 1.42;
+/// **Where the body is widest and not where it stops.** Spec 0075. It was
+/// 1.42, which is `TORSO_FROM + TORSO_TALL`, the very top of the lathe,
+/// and the profile there has already come in to 0.21 to let a neck
+/// through. The arm hangs `ARMS_APART` off the middle, so a shoulder at
+/// that height stood fourteen centimetres clear of the body with daylight
+/// between the two: arms pinned on rather than grown.
+///
+/// The widest point of the torso is at 0.92 of its height, which is what
+/// this is now, and the shoulder sits against the body there.
+pub const ARM_FROM: f32 = TORSO_FROM + TORSO_TALL * 0.92;
 pub const ARM_TALL: f32 = 0.74;
 
 /// Where a limb bends, as a fraction of its length down from the joint it
@@ -394,14 +403,33 @@ fn through(table: &[(f32, f32)], v: f32) -> f32 {
     table.last().map(|(_, wide)| *wide).unwrap_or(0.0)
 }
 
+/// How deep a torso is against how wide, per spec 0075.
+///
+/// **Because a lathe is round and a person is not.** The body comes off
+/// the same wheel as everything else here, which makes its section a
+/// circle: as deep front to back as it is wide across. That is a barrel,
+/// and it is why the figure read as a dome with a head on it from every
+/// angle at once, with no shoulder line anywhere in it.
+///
+/// A chest is about 0.32 across and 0.22 through.
+pub const TORSO_DEEP: f32 = 0.70;
+
 /// Hips, waist, chest, shoulders and a neck to sit a head on.
 ///
 /// Closed at the bottom, because an open lathe is one you see through from
 /// the far side, and the point it closes to is at `TORSO_FROM`, between the
 /// tops of the legs and out of sight. Open at the neck, which the head caps.
 pub fn torso_profile(v: f32) -> (f32, f32) {
-    const SHAPE: [(f32, f32); 8] = [
+    const SHAPE: [(f32, f32); 9] = [
         (0.00, 0.00),
+        // **Shut in a thirtieth and not a tenth.** Spec 0075. The line
+        // above said the point it closes to is out of sight between the
+        // tops of the legs, and it is not: the legs stand `LEGS_APART`
+        // either side and you see straight up between them, so a tenth of
+        // the torso's height spent tapering to nothing is a cone where a
+        // body is widest. Closed at once, it is a flat bottom you cannot
+        // see anyway.
+        (0.03, 0.30),
         (0.10, 0.32),
         (0.22, 0.345),
         (0.42, 0.33),
@@ -1321,6 +1349,61 @@ mod tests {
                 widest
             );
         }
+    }
+
+    /// Spec 0075: an arm hangs against the body rather than beside it.
+    ///
+    /// **The one number that made the figures look pinned together.** The
+    /// shoulder hung from the top of the torso, which is where the lathe
+    /// has already come in to let a neck through, so there was daylight
+    /// between every arm and the body it belonged to.
+    #[test]
+    fn an_arm_hangs_against_the_body() {
+        // where on the torso the shoulder is, as a share of its height
+        let v = (ARM_FROM - TORSO_FROM) / TORSO_TALL;
+        let torso = torso_profile(v).1 * 0.5;
+        // an arm is the limb table scaled thin, and the joint is its top
+        let arm = limb_wide(1.0) * ARM_THIN * 0.5;
+
+        assert!(
+            ARMS_APART <= torso + arm,
+            "a shoulder sits {:.3} out and the body reaches {:.3} there, so \
+             the arm hangs {:.3} clear of it",
+            ARMS_APART,
+            torso + arm,
+            ARMS_APART - torso - arm
+        );
+
+        // and it is where the body is widest, not merely wide enough
+        let widest = (0..=100)
+            .map(|step| torso_profile(step as f32 / 100.0).1)
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            torso_profile(v).1 > widest * 0.98,
+            "the body is {:.3} at the shoulder and {:.3} at its widest",
+            torso_profile(v).1,
+            widest
+        );
+    }
+
+    /// Spec 0075: and the torso shuts at the bottom rather than tapering
+    /// to a point.
+    ///
+    /// **Because what it closes to is not out of sight.** The line that
+    /// said so assumed the legs hid it, and the legs stand `LEGS_APART`
+    /// either side with a clear view up between them.
+    #[test]
+    fn a_torso_is_not_a_cone_at_the_bottom() {
+        let hips = torso_profile(0.10).1;
+
+        assert!(
+            torso_profile(0.03).1 > hips * 0.85,
+            "a thirtieth of the way up the torso is {:.3} of {:.3} wide, \
+             which is a point between the legs",
+            torso_profile(0.03).1,
+            hips
+        );
     }
 
     /// Spec 0033: a head is about a seventh of somebody, and it is domed.
