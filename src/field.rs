@@ -1113,11 +1113,12 @@ mod tests {
         let from = vec3(starts(reaches) + 2.5, 0.0, middle.z);
         let to = vec3(starts(reaches) - 20.0, 0.0, middle.z);
         let step = 1.0 / 60.0;
+        let building = the_building();
         let mut at = from;
         let mut falling = 0.0;
 
         for _ in 0..(14.0 / step) as u32 {
-            let solid = standing_on(reaches, at);
+            let solid = standing_on(reaches, &building, at);
             let way = vec3(to.x - at.x, 0.0, to.z - at.z);
             let wish = if way.length_squared() > 1e-4 {
                 way.normalize() * crate::SPEED
@@ -1368,14 +1369,61 @@ mod tests {
 
     /// Everything a body can walk into from where it is, which is what
     /// `Arcade::standing_on` hands the walk.
-    fn standing_on(reaches: f32, at: Vec3) -> Vec<Aabb> {
-        let mut solid = crate::room::Room::of(crate::games()).solid();
+    ///
+    /// **The building is handed in rather than built here.** Spec 0083.
+    /// It does not move and the body does, so the only part of this that
+    /// depends on `at` is the field's own boxes. Built here, it was
+    /// `Room::of(games()).solid()` on every frame of every walk: 446
+    /// microseconds and 878 boxes a call, which over one test's fourteen
+    /// thousand frames is six and a half seconds.
+    fn standing_on(reaches: f32, building: &[Aabb], at: Vec3) -> Vec<Aabb> {
+        let mut solid = building.to_vec();
 
         if afoot(&solid, at) {
             solid.extend(self::solid(reaches, at));
         }
 
         solid
+    }
+
+    /// The building's own solid boxes, built once for a walk that takes
+    /// thousands of steps through it. Spec 0083.
+    fn the_building() -> Vec<Aabb> {
+        crate::room::Room::of(crate::games()).solid()
+    }
+
+    /// Spec 0083: the building is the same every time it is built, which is
+    /// the whole of what makes building it once safe.
+    ///
+    /// **The one way the hoist could be wrong.** Three walks used to ask
+    /// for the building on every frame and now ask once, which is the same
+    /// thing exactly as long as the answer does not change. If a room ever
+    /// starts laying itself out from a clock or a seed drawn fresh, this is
+    /// where that is said, rather than in a walk that quietly starts
+    /// testing a different building from the one it used to.
+    #[test]
+    fn the_building_is_the_same_every_time() {
+        let once = the_building();
+        let twice = the_building();
+
+        assert!(
+            !once.is_empty(),
+            "the building has no solid boxes at all, so this compares nothing"
+        );
+        assert_eq!(
+            once.len(),
+            twice.len(),
+            "the building came out a different size the second time"
+        );
+
+        for (n, (a, b)) in once.iter().zip(twice.iter()).enumerate() {
+            assert_eq!(
+                (a.min, a.max),
+                (b.min, b.max),
+                "box {} of the building moved between one build and the next",
+                n
+            );
+        }
     }
 
     /// Spec 0040: and no grass indoors, going down the stair to the
@@ -1538,6 +1586,7 @@ mod tests {
         let middle = crate::garden::at(reaches);
         let half = crate::garden::half();
         let step = 1.0 / 60.0;
+        let building = the_building();
         let mut rolls = Rolls::of((0x5EED, 0x11FE), 0xA11);
 
         for (what, from) in [
@@ -1568,7 +1617,7 @@ mod tests {
                 }
 
                 let wish = vec3(round.cos(), 0.0, round.sin()) * crate::SPEED;
-                let solid = standing_on(reaches, at);
+                let solid = standing_on(reaches, &building, at);
                 let (next, fell) =
                     crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
 
@@ -1607,6 +1656,7 @@ mod tests {
         let middle = crate::garden::at(reaches).z;
         let half = crate::garden::half().y;
         let step = 1.0 / 60.0;
+        let building = the_building();
 
         for from in [
             vec3(face - 6.0, 0.0, middle + half + 6.0),
@@ -1618,7 +1668,7 @@ mod tests {
             let mut falling = 0.0;
 
             for _ in 0..(20.0 / step) as u32 {
-                let solid = standing_on(reaches, at);
+                let solid = standing_on(reaches, &building, at);
                 let wish = vec3(1.0, 0.0, 0.0) * crate::SPEED;
                 let (next, fell) =
                     crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
