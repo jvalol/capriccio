@@ -803,6 +803,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         doing: Errand::Wait,
         carries: None,
         sits: None,
+        puts_at: None,
     };
     let doing = |at: Vec3, facing: f32, stays: f32, doing: Errand| Stop {
         at,
@@ -811,6 +812,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         doing,
         carries: None,
         sits: None,
+        puts_at: None,
     };
     // the same, leaving with something in hand. Spec 0073.
     let carrying =

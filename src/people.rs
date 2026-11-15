@@ -781,6 +781,19 @@ impl Load {
         }
     }
 
+    /// Whether one lies down when it is put down. Spec 0078.
+    ///
+    /// **A pail stands and a log lies.** Both hang plumb from a fist,
+    /// because that is gravity on something held at one end, and the
+    /// moment it is on the ground that stops being true of the log: a
+    /// billet standing on end in a fire is a post.
+    pub fn lies_flat(self) -> bool {
+        match self {
+            Load::Pail => false,
+            Load::Log => true,
+        }
+    }
+
     /// How much of a body's business carrying one is, nought to one.
     /// Spec 0077.
     ///
@@ -841,6 +854,16 @@ pub struct Stop {
     /// What they are there for, which is what their hands do while they
     /// stand. Spec 0067.
     pub doing: crate::gesture::Errand,
+    /// Where a load given up here is put, if it is put anywhere. Spec
+    /// 0078.
+    ///
+    /// **The thing the stop is at, not a reach in front of it.** A stop
+    /// that works at something already faces it, and `people::facing` is
+    /// the one account of which way round that goes, so the place the
+    /// load lands is the same point that account is built from. Written
+    /// out as a reach instead, a log would land between somebody and the
+    /// fire they were putting it on.
+    pub puts_at: Option<Vec3>,
     /// How high the seat is, if this stop is one you sit at. Spec 0074.
     ///
     /// **The height and not a flag**, because a body has to be let down
@@ -874,6 +897,13 @@ pub struct Doing {
     /// How high the seat under them is, or `None` if they are on their
     /// feet. Spec 0074. Never set while they are walking.
     pub seated: Option<f32>,
+    /// A load they have just put down, and where it is lying. Spec 0078.
+    ///
+    /// **Only while they are still at the stop they put it at.** What
+    /// happens to it after that is the fire's, or the floor's, and
+    /// neither is a thing a round knows: a load that stayed would be a
+    /// pile growing for ever off a list that has no memory.
+    pub left: Option<(Load, Vec3)>,
 }
 
 /// How much room two people need between them before they are one person.
@@ -982,6 +1012,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             stopped: None,
             holding: None,
             seated: None,
+            left: None,
         };
     };
 
@@ -1005,6 +1036,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
             stopped: Some((first.doing, 0.0, first.stays)),
             holding: None,
             seated: first.sits,
+            left: None,
         };
     }
 
@@ -1061,13 +1093,30 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 stop.facing
             };
 
+            // **The hand opens partway through the stay, not at the
+            // moment they walk off.** Spec 0078. A load given up here is
+            // one they arrived with and will not leave with, so there is a
+            // moment in between when it stops being in the hand and starts
+            // lying where they put it. The errand says when, because the
+            // errand is the motion that does it.
+            let carried = left_behind(n);
+            let given_up = carried.is_some() && held_from(n).is_none();
+            let let_go = crate::gesture::lets_go_at(stop.doing)
+                .map(|when| given_up && left >= when)
+                .unwrap_or(false);
+            let (holding, put) = match (let_go, stop.puts_at, carried) {
+                (true, Some(where_), Some(load)) => (None, Some((load, where_))),
+                _ => (carried, None),
+            };
+
             return Doing {
                 at: stop.at,
                 facing,
                 walked: None,
                 stopped: Some((stop.doing, left, stays)),
-                holding: left_behind(n),
+                holding,
                 seated: stop.sits,
+                left: put,
             };
         }
 
@@ -1083,6 +1132,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
                 stopped: None,
                 holding: held_from(n),
                 seated: None,
+                left: None,
             };
         }
 
@@ -1097,6 +1147,7 @@ pub fn doing(round: &[Stop], since: f32) -> Doing {
         stopped: Some((first.doing, 0.0, first.stays)),
         holding: left_behind(0),
         seated: first.sits,
+        left: None,
     }
 }
 
@@ -1173,6 +1224,53 @@ mod tests {
         }
     }
 
+    /// Spec 0078: a load leaves the hand partway through the stay and
+    /// lies where it was put.
+    ///
+    /// **Both halves of one moment.** It stopped being in the hand at the
+    /// second they walked off before this, which is a thing vanishing
+    /// rather than a thing being put down.
+    #[test]
+    fn a_load_leaves_the_hand_partway_through_the_stay() {
+        let goes = glam::vec3(9.0, 0.5, 9.0);
+        let mut round = a_round();
+        round[0].carries = Some(Load::Log);
+        round[1].doing = crate::gesture::Errand::Stoop;
+        round[1].puts_at = Some(goes);
+
+        let legs: Vec<(f32, f32)> = round
+            .iter()
+            .enumerate()
+            .map(|(n, stop)| {
+                let next = round[(n + 1) % round.len()];
+
+                (stop.stays, stop.at.distance(next.at) / PACE)
+            })
+            .collect();
+        let at = |n: usize, into: f32| {
+            let before: f32 = legs[..n].iter().map(|(a, b)| a + b).sum();
+
+            doing(&round, before + into)
+        };
+        let when = crate::gesture::lets_go_at(crate::gesture::Errand::Stoop)
+            .expect("a stoop lets go of what it is holding");
+
+        // arriving with it, before the hand opens
+        let early = at(1, when - 0.2);
+
+        assert_eq!(early.holding, Some(Load::Log), "arrived without it");
+        assert_eq!(early.left, None, "put it down before bending");
+
+        // and after
+        let late = at(1, when + 0.2);
+
+        assert_eq!(late.holding, None, "still holding it after letting go");
+        assert_eq!(late.left, Some((Load::Log, goes)), "it went nowhere");
+
+        // and it is not lying there once they have gone
+        assert_eq!(at(2, 0.1).left, None, "it is still there after they leave");
+    }
+
     /// Spec 0073: what is in the hand is what the stop they last left
     /// said, for the whole of the walk out and the stay at the other end.
     ///
@@ -1239,6 +1337,7 @@ mod tests {
                 doing: crate::gesture::Errand::Wait,
                 carries: None,
                 sits: None,
+                puts_at: None,
             },
             Stop {
                 at: glam::vec3(6.0, 0.0, 0.0),
@@ -1247,6 +1346,7 @@ mod tests {
                 doing: crate::gesture::Errand::Stir,
                 carries: None,
                 sits: None,
+                puts_at: None,
             },
             // a corner, walked straight through
             Stop {
@@ -1256,6 +1356,7 @@ mod tests {
                 doing: crate::gesture::Errand::Wait,
                 carries: None,
                 sits: None,
+                puts_at: None,
             },
         ]
     }

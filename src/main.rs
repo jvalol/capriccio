@@ -4357,6 +4357,9 @@ impl Arcade {
                          // and how high the seat under them is, per spec
                          // 0074, or `None` for anybody on their feet
                          seated: Option<f32>,
+                         // and anything they have just put down, with
+                         // where it is lying. Spec 0078.
+                         left: Option<(people::Load, Vec3)>,
                          shade: usize,
                          look: people::Look,
                          // **Only in reflections, per engine spec 0091.**
@@ -4948,6 +4951,46 @@ impl Arcade {
                 }
             }
 
+            // **And anything they have put down, lying where they put
+            // it.** Spec 0078. Not hung off the body at all: this one is
+            // a thing in the world for as long as somebody is standing
+            // over it, which is why it takes the place rather than the
+            // fist. Plumb, like a carried one, because it is standing on
+            // something.
+            if let Some((load, where_)) = left {
+                let held = match load {
+                    people::Load::Pail => pail,
+                    people::Load::Log => log,
+                };
+
+                if let Some(held) = held {
+                    let (wide, long) = load.size();
+                    // a log lies where it was dropped and a pail stands on
+                    // its own foot, which is the difference between a
+                    // billet on a fire and a bucket by a door
+                    let (turn, off) = if load.lies_flat() {
+                        (
+                            up * glam::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+                            over * wide + ahead * long * 0.5,
+                        )
+                    } else {
+                        (up, over * long)
+                    };
+
+                    scene.push_material(
+                        held,
+                        &Transform::at(where_ + off)
+                            .with_rotation(turn)
+                            .with_scale(vec3(wide, long, wide)),
+                        match load {
+                            people::Load::Pail => aim::VILLAGE_TIMBER,
+                            people::Load::Log => aim::VALHALLA_ROOF,
+                        },
+                        aim::NO_SHINE,
+                    );
+                }
+            }
+
             // and closed where it was opened, so the bracket cannot be left
             // open by a path through this closure
             if only_in_glass {
@@ -4971,6 +5014,7 @@ impl Arcade {
                 // the horn, which is his own
                 None,
                 // and he stands, which is the whole of spec 0055
+                None,
                 None,
                 2,
                 people::Look::Carved,
@@ -5015,6 +5059,7 @@ impl Arcade {
                     doing.stopped,
                     doing.holding,
                     doing.seated,
+                    doing.left,
                     n,
                     people::Look::Einherjar,
                     false,
@@ -5054,6 +5099,7 @@ impl Arcade {
                 doing.stopped,
                 doing.holding,
                 doing.seated,
+                doing.left,
                 n + 3,
                 people::Look::Guest,
                 false,
@@ -5090,6 +5136,8 @@ impl Arcade {
                 // are not carrying a pail
                 None,
                 // nor sitting down, for the same reason
+                None,
+                // and you put nothing down either
                 None,
                 // your own coat, which is a seed like anybody else's
                 0,

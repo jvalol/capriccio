@@ -556,6 +556,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         doing: Errand::Wait,
         carries: None,
         sits: None,
+        puts_at: None,
     };
     // **A stop that is at something looks at it, worked out and not
     // written.** Every facing below that had a thing to be about was
@@ -571,6 +572,7 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         doing,
         carries: None,
         sits: None,
+        puts_at: None,
     };
     // the same, leaving with something in hand. Spec 0073.
     let carrying =
@@ -578,6 +580,16 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             carries: Some(carries),
             ..looking_at(at, thing, stays, doing)
         };
+    // and the same, putting down what it came with onto the thing it is
+    // at. Spec 0078.
+    // **Two points, because where you look and where you reach are not
+    // the same.** You look at the fire and you lay the wood on the edge of
+    // it nearest you: laid at the middle instead, a log goes into the
+    // flames and is a brown sliver behind a stone.
+    let onto = |at: Vec3, looks_at: Vec3, puts_at: Vec3, stays: f32| Stop {
+        puts_at: Some(puts_at),
+        ..looking_at(at, looks_at, stays, Errand::Stoop)
+    };
     // and the same, sat down on something. Spec 0074.
     let sitting = |at: Vec3, thing: Vec3, stays: f32, seat: f32| Stop {
         sits: Some(seat),
@@ -662,11 +674,17 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // coals at ankle height, so this is a stoop like the one at
             // the ring outside. Spec 0077. They leave empty, which is what
             // `carries` being unset here says.
-            looking_at(
+            onto(
                 vec3(trench.max.x + CLEAR_OF, door.y + FLOOR_UP, door.z),
                 vec3(trench.center().x, door.y, door.z),
+                // the near end of a trench sixteen metres long, not its
+                // middle, which is eight metres out of reach
+                vec3(
+                    trench.max.x - 0.5,
+                    door.y + FLOOR_UP + FIRE_KERB,
+                    trench.center().z,
+                ),
                 9.0,
-                Errand::Stoop,
             ),
             // **And then they sit down.** Spec 0074. Spec 0060 put a
             // bench down both flanks of this hall, and until now the only
@@ -810,11 +828,11 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // there is no pot here: this one arrives with a log off the
             // pile, per spec 0073, and a log goes onto a fire of eleven
             // stones at ankle height.
-            looking_at(
+            onto(
                 vec3(fire.x, door.y, fire.z - clear_of_the_fire),
                 fire,
+                fire + Vec3::Y * RING_HIGH - Vec3::Z * RING_WIDE * 0.3,
                 6.5,
-                Errand::Stoop,
             ),
         ],
         // **And one round the back**, past the gable to the third store and
@@ -2438,6 +2456,49 @@ mod tests {
         }
 
         assert!(sat > 0, "nobody ever sits down");
+    }
+
+    /// Spec 0078: and the wood ends up on the fire rather than vanishing
+    /// off a hand.
+    ///
+    /// **Both fires, because both were a transfer that did not transfer.**
+    /// The one in the hall and the ring out in the lane each take a log
+    /// somebody carried to them.
+    #[test]
+    fn the_wood_ends_up_on_the_fires() {
+        let trench = fire(REACHES);
+        let ring = ring(REACHES);
+
+        for (which, round, near) in [
+            ("the hall", &rounds(REACHES)[0], trench.center()),
+            ("the ring", &rounds(REACHES)[1], ring),
+        ] {
+            let mut laid = None;
+
+            for step in 0..4_000 {
+                if let Some((load, at)) = crate::people::doing(round, step as f32 * 0.05).left {
+                    laid = Some((load, at));
+                    break;
+                }
+            }
+
+            let Some((load, at)) = laid else {
+                panic!("nothing is ever put down at {}", which);
+            };
+
+            assert_eq!(
+                load,
+                crate::people::Load::Log,
+                "{} takes the wrong thing",
+                which
+            );
+            assert!(
+                at.distance(vec3(near.x, at.y, near.z)) < 9.0,
+                "{} has the wood laid at {:?}, which is nowhere near it",
+                which,
+                at
+            );
+        }
     }
 
     /// Jake, 2026-11-14: the store has firewood. So it gets from there to

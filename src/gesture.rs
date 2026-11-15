@@ -359,6 +359,25 @@ fn waiting(out: &mut Stance, who: f32, stood: f32, settled: f32) {
     out.shoulder[0] += 0.05 * held;
 }
 
+/// How long after arriving an errand lets go of what it is carrying, per
+/// spec 0078, or `None` for an errand that never does.
+///
+/// **The bottom of the first dip.** `Stoop` turns on 4.6 seconds and its
+/// dip finishes a third of the way through, so the lowest point is around
+/// 0.78 of a second in. The length jitters by a fifth per person and per
+/// turn, which at the distance anybody watches this from is not a thing
+/// you could see: what matters is that the hand opens while it is down
+/// rather than while the body is upright.
+///
+/// Everything else here holds what it has until it walks away, which is
+/// what `None` means and is what every errand did before this.
+pub fn lets_go_at(errand: Errand) -> Option<f32> {
+    match errand {
+        Errand::Stoop => Some(0.78),
+        _ => None,
+    }
+}
+
 /// What carrying something does to a body that is not standing still, per
 /// spec 0077.
 ///
