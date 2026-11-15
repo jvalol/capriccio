@@ -845,6 +845,7 @@ struct Arcade {
     /// What somebody on a round carries, per spec 0073.
     pail: Option<MeshId>,
     log: Option<MeshId>,
+    sack: Option<MeshId>,
     /// A neck, which is not the torso scaled down. Spec 0076.
     neck: Option<MeshId>,
     /// The verge down either side of the ramp, per `bridge::KERB_UP`.
@@ -1392,6 +1393,7 @@ impl Arcade {
             horn: None,
             pail: None,
             log: None,
+            sack: None,
             neck: None,
             kerbs: [None; 2],
             dome: None,
@@ -4340,7 +4342,7 @@ impl Arcade {
         // them, so the body is built in its own terms and then turned.
         let (carved_head, cloak, helm, horn) = (self.carved_head, self.cloak, self.helm, self.horn);
         // and what anybody on a round is carrying. Spec 0073.
-        let (pail, log) = (self.pail, self.log);
+        let (pail, log, sack) = (self.pail, self.log, self.sack);
         let neck = self.neck;
         let mut stand = |at: Vec3,
                          up: glam::Quat,
@@ -4867,10 +4869,11 @@ impl Arcade {
                         let held = match load {
                             people::Load::Pail => pail,
                             people::Load::Log => log,
+                            people::Load::Feed => sack,
                         };
 
                         if let Some(held) = held {
-                            let (wide, long) = load.size();
+                            let (_, long) = load.size();
                             let fist = wrist + hangs(arm_lower, people::HAND_WIDE);
                             // **Set down, if they are sitting.** Spec
                             // 0077. A seated hand is at the height of the
@@ -4899,9 +4902,7 @@ impl Arcade {
                             // held like a lance. Spec 0077.
                             scene.push_material(
                                 held,
-                                &Transform::at(fist)
-                                    .with_rotation(up)
-                                    .with_scale(vec3(wide, long, wide)),
+                                &Transform::at(fist).with_rotation(up),
                                 // **The pile's own colour for the log**,
                                 // because it came off that pile, and the
                                 // village's timber for the pail, because
@@ -4909,6 +4910,7 @@ impl Arcade {
                                 match load {
                                     people::Load::Pail => aim::VILLAGE_TIMBER,
                                     people::Load::Log => aim::VALHALLA_ROOF,
+                                    people::Load::Feed => aim::VILLAGE_SACK,
                                 },
                                 aim::NO_SHINE,
                             );
@@ -4961,6 +4963,7 @@ impl Arcade {
                 let held = match load {
                     people::Load::Pail => pail,
                     people::Load::Log => log,
+                    people::Load::Feed => sack,
                 };
 
                 if let Some(held) = held {
@@ -4979,12 +4982,11 @@ impl Arcade {
 
                     scene.push_material(
                         held,
-                        &Transform::at(where_ + off)
-                            .with_rotation(turn)
-                            .with_scale(vec3(wide, long, wide)),
+                        &Transform::at(where_ + off).with_rotation(turn),
                         match load {
                             people::Load::Pail => aim::VILLAGE_TIMBER,
                             people::Load::Log => aim::VALHALLA_ROOF,
+                            people::Load::Feed => aim::VILLAGE_SACK,
                         },
                         aim::NO_SHINE,
                     );
@@ -7693,6 +7695,8 @@ impl Game for Arcade {
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 12, people::pail_profile)));
         self.log =
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 8, people::log_profile)));
+        self.sack =
+            Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 12, people::sack_profile)));
         self.kerbs = [-1.0f32, 1.0]
             .map(|side| Some(renderer.add_mesh(&bridge::kerb_mesh(self.room.reaches, side))));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));

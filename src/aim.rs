@@ -1280,6 +1280,13 @@ pub const VILLAGE_DOOR: Vec4 = vec4(0.235, 0.175, 0.125, 1.0);
 
 pub const VILLAGE_IRON: Vec4 = vec4(0.115, 0.115, 0.125, 1.0);
 
+/// A sack of feed off the wagon. Spec 0079.
+///
+/// **Paler than anything else out here**, because it is the one thing in
+/// this village that is cloth rather than timber, earth or iron, and a
+/// sack the colour of the street is a lump on the street.
+pub const VILLAGE_SACK: Vec4 = vec4(0.44, 0.405, 0.305, 1.0);
+
 /// And the water in the trough and the well, which gives back the sky
 /// rather than having a colour of its own.
 pub const VILLAGE_WATER: Vec4 = vec4(0.13, 0.17, 0.21, 1.0);

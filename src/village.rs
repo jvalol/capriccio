@@ -863,9 +863,32 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                     carts[0].0 + vec3(0.0, 0.0, 4.0),
                     WAGON_WIDE * 0.5 + CLEAR_OF,
                 );
-                doing(at, facing, 5.5, Errand::Lift)
+                // **And what is in the wagon is feed for the horses.**
+                // Jake, 2026-11-14. Spec 0073 left this stop empty-handed
+                // because what a wagon holds is not a thing arithmetic can
+                // answer, and this round has gone from a wagon to a rail
+                // of horses carrying nothing since spec 0068.
+                carrying(at, facing, 5.5, Errand::Lift, crate::people::Load::Feed)
             },
             lane(rail_at.x - 2.0),
+            // **Down at their feet before anybody is patted.** Spec 0078.
+            // Two stops in one place, because a stop has one errand and
+            // this is two things: you set the sack down, and then you see
+            // to the horse. The sack goes a little short of the rail,
+            // which is where a horse can reach it and nobody trips on it.
+            {
+                let (at, facing) =
+                    at_the(rail_at, rail_at + vec3(0.0, 0.0, -4.0), RAIL_LONG * 0.36);
+
+                Stop {
+                    // most of the way to the rail and not half, because
+                    // half is at their own feet: a body is 0.9 across and
+                    // they stand `RAIL_LONG * 0.36` off it, so the sack
+                    // went down under them and was never once visible
+                    puts_at: Some(vec3(at.x, 0.0, at.z + (rail_at.z - at.z) * 0.82)),
+                    ..doing(at, facing, 3.5, Errand::Stoop)
+                }
+            },
             {
                 let (at, facing) =
                     at_the(rail_at, rail_at + vec3(0.0, 0.0, -4.0), RAIL_LONG * 0.36);
@@ -1232,6 +1255,60 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Spec 0079: the feed gets from the wagon to the horses and is put
+    /// down where one of them could reach it.
+    ///
+    /// **Where it lands is the half that can go wrong.** Half way from the
+    /// stop to the rail is under the body that carried it: somebody stands
+    /// `RAIL_LONG * 0.36` off the rail and is 0.9 across, so the sack was
+    /// at their own feet and never once showed.
+    #[test]
+    fn the_feed_gets_from_the_wagon_to_the_horses() {
+        let rail_at = rail(REACHES);
+        let carts = wagons(REACHES);
+        let round = &rounds(REACHES)[1];
+        let mut at_the_wagon = false;
+        let mut laid = None;
+
+        for step in 0..6_000 {
+            let doing = crate::people::doing(round, step as f32 * 0.05);
+
+            if doing.holding == Some(crate::people::Load::Feed) {
+                at_the_wagon |= doing.at.distance(carts[0].0) < 5.0;
+            }
+
+            if let Some(put) = doing.left {
+                laid = Some((put, doing.at));
+            }
+        }
+
+        assert!(at_the_wagon, "the feed is never picked up at the wagon");
+
+        let Some(((load, where_), stood)) = laid else {
+            panic!("the feed is never put down");
+        };
+
+        assert_eq!(
+            load,
+            crate::people::Load::Feed,
+            "something else is put down"
+        );
+        // **Within a head's reach of the rail**, which is the whole of
+        // where it should be: half way from the stop to the rail is a
+        // sack at the carrier's own feet, and that measures a metre from
+        // the rail and a metre from them, so a looser bound passes it.
+        let to_rail = where_.distance(vec3(rail_at.x, where_.y, rail_at.z));
+        let to_them = where_.distance(vec3(stood.x, where_.y, stood.z));
+
+        assert!(
+            to_rail < 0.5,
+            "the feed is laid {:.2} from the rail and {:.2} from the person, \
+             which is nearer them than the horses",
+            to_rail,
+            to_them
+        );
     }
 
     /// Spec 0073: the pail leaves the well and comes back without it.

@@ -764,6 +764,9 @@ pub const TURNS_IN: f32 = 0.7;
 pub enum Load {
     Pail,
     Log,
+    /// A sack of feed off the wagon, for the horses at the rail. Jake,
+    /// 2026-11-14, asked what was in it. Spec 0079.
+    Feed,
 }
 
 /// How big each one is, in metres: across and along.
@@ -771,6 +774,8 @@ pub const PAIL_WIDE: f32 = 0.23;
 pub const PAIL_TALL: f32 = 0.25;
 pub const LOG_WIDE: f32 = 0.11;
 pub const LOG_LONG: f32 = 0.42;
+pub const SACK_WIDE: f32 = 0.40;
+pub const SACK_TALL: f32 = 0.38;
 
 impl Load {
     /// How wide and how long one hangs, which the drawing scales by.
@@ -778,6 +783,7 @@ impl Load {
         match self {
             Load::Pail => (PAIL_WIDE, PAIL_TALL),
             Load::Log => (LOG_WIDE, LOG_LONG),
+            Load::Feed => (SACK_WIDE, SACK_TALL),
         }
     }
 
@@ -789,7 +795,9 @@ impl Load {
     /// billet standing on end in a fire is a post.
     pub fn lies_flat(self) -> bool {
         match self {
-            Load::Pail => false,
+            // a sack slumps where it is dropped and does not roll, so it
+            // stands like the pail does
+            Load::Pail | Load::Feed => false,
             Load::Log => true,
         }
     }
@@ -803,6 +811,8 @@ impl Load {
     pub fn how_heavy(self) -> f32 {
         match self {
             Load::Pail => 1.0,
+            // a sack of feed is the heaviest thing anybody here carries
+            Load::Feed => 1.15,
             Load::Log => 0.45,
         }
     }
@@ -827,7 +837,27 @@ pub fn pail_profile(v: f32) -> (f32, f32) {
         0.82 + (v - 0.08) / 0.84 * 0.18
     };
 
-    (v - 1.0, waist)
+    ((v - 1.0) * PAIL_TALL, waist * PAIL_WIDE)
+}
+
+/// A sack: full and round at the foot, gathered at the neck. Spec 0079.
+///
+/// **In metres, like every other profile here**, which spec 0076 is about.
+pub fn sack_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    // **Slumped rather than turned.** Full almost all the way up and
+    // gathered hard at the throat in the last fifth: the first build
+    // tapered evenly from the foot, which off a lathe is an urn, and a
+    // sack of feed standing by a rail looked like a piece of pottery.
+    let body = (1.0 - ((v - 0.25) / 0.95).powi(2) * 0.55).clamp(0.0, 1.0);
+    let neck = if v > 0.78 {
+        1.0 - ((v - 0.78) / 0.22).powf(1.6) * 0.78
+    } else {
+        1.0
+    };
+    let ends = if v < 0.06 { v / 0.06 } else { 1.0 };
+
+    ((v - 1.0) * SACK_TALL, body * neck * ends * SACK_WIDE)
 }
 
 /// And a billet off a woodpile: a plain round log with its ends cut flat.
@@ -841,7 +871,7 @@ pub fn log_profile(v: f32) -> (f32, f32) {
         1.0
     };
 
-    (v - 1.0, waist)
+    ((v - 1.0) * LOG_LONG, waist * LOG_WIDE)
 }
 
 /// One stop on a round: where to stand, which way to face while there, and
@@ -1506,6 +1536,13 @@ mod tests {
             ("the neck", neck_profile as fn(f32) -> (f32, f32)),
             ("the cloak", cloak_profile as fn(f32) -> (f32, f32)),
             ("the helm", helm_profile as fn(f32) -> (f32, f32)),
+            // and the things they carry, which are the same rule: spec
+            // 0079 wrote a fourth of these in metres while the other
+            // three were shapes, and it came out a tenth of a metre
+            // across because the drawing scaled it by its own size twice
+            ("a pail", pail_profile as fn(f32) -> (f32, f32)),
+            ("a log", log_profile as fn(f32) -> (f32, f32)),
+            ("a sack", sack_profile as fn(f32) -> (f32, f32)),
         ] {
             let mesh = crate::cellar::turned(16, 24, profile);
 
