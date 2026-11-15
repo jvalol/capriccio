@@ -854,15 +854,40 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 ///
 /// **How far down.** Far enough that the surface is between you and the
 /// lens from anywhere in the room, which is what makes it light coming up
-/// through the water rather than a lamp at the waterline.
-pub const POOL_LIGHT_DOWN: f32 = 0.40;
+/// through the water rather than a lamp at the waterline. Shallow enough
+/// that the lens itself is still something you can see.
+///
+/// **0.20 and not 0.40.** At 0.40 the sight line from the room ran two and
+/// a half metres through water and Beer's law took the disc out entirely,
+/// so the only thing that read was the pool of light it threw on the wall.
+/// Jake, 2026-11-15, once the surface was lit over each one: the lens at
+/// 0.20. Half as far down is a quarter of the water in the way at the
+/// angle anybody looks from.
+///
+/// It wants the lens under it, which [`POOL_LENS`] is what settles: half
+/// of a dome 0.44 across stands higher than this.
+pub const POOL_LIGHT_DOWN: f32 = 0.20;
 
-/// How wide the lens is and how far it stands proud of the wall.
+/// How wide the lens is, as a radius, and how far it stands proud of the
+/// wall.
 ///
 /// **Proud, and not flush.** A lens level with the lining is two surfaces
 /// in one plane, which is the fault this room has already had twice: the
 /// stripes round the pool and the chequerboard down its wall.
-pub const POOL_LENS: f32 = 0.22;
+///
+/// **A radius, which is the thing that caught this out.** The dome is
+/// twice it across, so at 0.22 it stood 0.44 wide and its top broke the
+/// water 0.02 above still once [`POOL_LIGHT_DOWN`] came up to 0.20. 0.16
+/// keeps the whole of it four centimetres under at that depth, and a pool
+/// light is a small fitting anyway: 0.44 across was always generous for
+/// one.
+///
+/// **0.12 and not 0.16.** Clearing the still surface is not enough: the
+/// surface moves, and `tests::every_pool_light_is_under_the_water` asks
+/// for [`FREEBOARD`] of margin because that is the one number here saying
+/// how far it stands from where it is held. At 0.16 the lens was four
+/// centimetres under and an ordinary trough uncovered it.
+pub const POOL_LENS: f32 = 0.12;
 pub const POOL_BEZEL: f32 = 0.11;
 
 /// How bright one is, how far it carries, and how many to a side.
@@ -1831,6 +1856,51 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0082: every pool light is wholly under the water, and far
+    /// enough under to still be under it when the water moves.
+    ///
+    /// **Because the lens is given a radius and sunk by a depth, and
+    /// nothing made the two agree.** Raising the lights from 0.40 to 0.20
+    /// put the top of a dome 0.44 across two centimetres above the still
+    /// surface: a pool light standing out of the water. The fix was to
+    /// narrow the lens, and this is what stops the next change to either
+    /// number doing it again.
+    ///
+    /// **Under by a margin, not merely under.** The surface moves: the
+    /// pool was measured reaching 0.082 above still before engine spec
+    /// 0103 held it at the coping, and it drops about as far the other
+    /// way. A lens four centimetres under is uncovered by an ordinary
+    /// trough. `FREEBOARD` is the one number in this file that says how
+    /// far the surface stands from where it is held, so it is the margin
+    /// here too, and the engine bounds the rise rather than the fall so
+    /// there is nothing tighter to ask.
+    #[test]
+    fn every_pool_light_is_under_the_water() {
+        let (middle, _, _) = pool(REACHES);
+
+        for (at, _) in pool_lights(REACHES) {
+            let top = at.y + POOL_LENS;
+
+            assert!(
+                top < middle.y,
+                "a pool light's lens reaches {:.3} and the still surface is at {:.3}, \
+                 so it stands out of the water",
+                top,
+                middle.y
+            );
+            assert!(
+                top < middle.y - FREEBOARD,
+                "a pool light's lens reaches {:.3} and the still surface is at {:.3}, \
+                 which is under it by {:.3} against a surface that moves {:.3}, so a \
+                 trough uncovers it",
+                top,
+                middle.y,
+                middle.y - top,
+                FREEBOARD
+            );
+        }
+    }
 
     /// A reaches the room is laid out for, which is what the arcade runs with.
     const REACHES: f32 = 8.3;

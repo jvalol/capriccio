@@ -40,13 +40,28 @@ The water is translucent, so what the room sees is the basin lit from
 within, through the surface. That is most of the effect and it was there as
 soon as the lamps were.
 
-**The lens itself is only legible near the surface.** Seen from across the
-pool the sight line runs two and a half metres through water and Beer's law
-takes the disc out entirely, while the pool of light it throws on the wall
-still reads because it is large and the lens is small. Drawn at five
-heights thirteen centimetres apart, it is bright above the water line and
-gone about twenty centimetres under. Nothing is wrong with it; that is what
-a small bright thing under water looks like from a distance.
+**At 0.40 the lens itself was only legible near the surface.** Seen from
+across the pool the sight line ran two and a half metres through water and
+Beer's law took the disc out entirely, while the pool of light it threw on
+the wall still read because it is large and the lens is small. Drawn at
+five heights thirteen centimetres apart, it was bright above the water line
+and gone about twenty centimetres under.
+
+**So it is at 0.20, and the lens is 0.12 across the radius.** Jake,
+2026-11-15, once the surface was lit over each one. Half as far down is a
+quarter of the water in the way at the angle anybody looks from, and from
+the room the lights now read as points along both long edges rather than as
+a wash.
+
+The two numbers had to be settled together, which is what
+`spa::tests::every_pool_light_is_under_the_water` is for. At 0.20 the lens as it
+was stood two centimetres out of the water, because `POOL_LENS` is a radius
+and the dome was 0.44 across. Narrowed to 0.16 it cleared the still surface
+by four centimetres and an ordinary trough uncovered it; the surface was
+measured reaching 0.082 above still before engine spec 0103 held it at the
+coping, and it drops about as far the other way. 0.12 puts the top of it
+`FREEBOARD` under, which is the one number in this file saying how far the
+surface stands from where it is held.
 
 ## What it does not do
 
@@ -62,6 +77,7 @@ a small bright thing under water looks like from a distance.
 ## Acceptance criteria
 
 - The baths are drawn with the pool lit from inside it. — `tests::the_baths_are_drawn`
+- And every lens is under the water by the margin the surface moves. — `spa::tests::every_pool_light_is_under_the_water`
 - Nothing in the room moved but the water and the basin. — the same reference, which is the only picture that changed.
 
 ### Verified by hand
