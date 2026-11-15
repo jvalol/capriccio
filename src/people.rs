@@ -313,6 +313,35 @@ pub const NECK_FROM: f32 = TORSO_FROM + TORSO_TALL;
 pub const NECK_TALL: f32 = HEAD_FROM - NECK_FROM;
 pub const NECK_WIDE: f32 = HEAD_WIDE * 0.58;
 
+/// How far the neck runs into the shoulders below it and the head above,
+/// so there is no seam at either end. Spec 0076.
+pub const NECK_SUNK: f32 = 0.025;
+
+/// A neck: a column, a little wider where it meets the shoulders.
+///
+/// **Its own profile, because the torso's is not one.** Spec 0076. The
+/// neck was the torso's mesh scaled down, and the torso closes to nothing
+/// at its foot, so every neck in this building tapered to a point at the
+/// base and sat in the hole in the shoulders like a peg in a socket two
+/// sizes too big. What showed through round it was the inside of the far
+/// wall of the torso.
+///
+/// Closed at both ends, like everything else off this lathe, and the
+/// widths are multiples of `NECK_WIDE` rather than metres, because the
+/// drawing scales by that.
+pub fn neck_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    let waist = if v < 0.06 {
+        (v / 0.06) * 1.18
+    } else if v > 0.94 {
+        (1.0 - v) / 0.06
+    } else {
+        1.18 - (v - 0.06) / 0.88 * 0.18
+    };
+
+    (v, waist)
+}
+
 /// How far from the middle a leg and an arm hang.
 pub const LEGS_APART: f32 = 0.1;
 /// **Wide enough to clear the shoulders**, which the first build was not.
@@ -329,7 +358,7 @@ pub const ARMS_APART: f32 = 0.245;
 ///
 /// The widest point of the torso is at 0.92 of its height, which is what
 /// this is now, and the shoulder sits against the body there.
-pub const ARM_FROM: f32 = TORSO_FROM + TORSO_TALL * 0.92;
+pub const ARM_FROM: f32 = TORSO_FROM + TORSO_TALL * 0.88;
 pub const ARM_TALL: f32 = 0.74;
 
 /// Where a limb bends, as a fraction of its length down from the joint it
@@ -420,7 +449,7 @@ pub const TORSO_DEEP: f32 = 0.70;
 /// the far side, and the point it closes to is at `TORSO_FROM`, between the
 /// tops of the legs and out of sight. Open at the neck, which the head caps.
 pub fn torso_profile(v: f32) -> (f32, f32) {
-    const SHAPE: [(f32, f32); 9] = [
+    const SHAPE: [(f32, f32); 10] = [
         (0.00, 0.00),
         // **Shut in a thirtieth and not a tenth.** Spec 0075. The line
         // above said the point it closes to is out of sight between the
@@ -445,9 +474,26 @@ pub fn torso_profile(v: f32) -> (f32, f32) {
         // the opening has to come back in to 0.21 or the collar is a wide
         // dark ring with a head floating over it. Four shapes were drawn
         // and looked at; this is the one Jake picked.
-        (0.92, 0.45),
-        (0.98, 0.40),
-        (1.00, 0.21),
+        (0.88, 0.45),
+        (0.94, 0.40),
+        // **And in to under the neck, over a slope rather than a step.**
+        // Spec 0076. It went 0.40 at 0.98 and 0.21 at 1.00, which is a
+        // flat shelf a fiftieth of the torso's height deep with a neck of
+        // 0.116 standing in the middle of it: from arm's length in the
+        // mirrors, a pale ring round the throat and the inside of the far
+        // wall showing through what the neck did not fill.
+        //
+        // Shut to 0.10, which is narrower than the neck, so the neck
+        // passes through and there is no rim to see. The widest point
+        // stays at 0.92, because that is where the arms hang.
+        (0.97, 0.26),
+        // **And it shuts to under the neck.** Spec 0076. The top of a
+        // lathe is a hole, and this one was 0.21 across with a neck of
+        // 0.052 standing in it: what the pale disc on every shoulder in
+        // this building was is the inside of the far wall, seen through
+        // the gap. Narrower than the neck, there is no gap to see
+        // through.
+        (1.00, 0.10),
     ];
 
     (v * TORSO_TALL, through(&SHAPE, v))
@@ -1384,6 +1430,55 @@ mod tests {
             "the body is {:.3} at the shoulder and {:.3} at its widest",
             torso_profile(v).1,
             widest
+        );
+    }
+
+    /// Spec 0076: a neck fills the hole in the top of the shoulders.
+    ///
+    /// **The hole is what a lathe's open end is**, and what shows through
+    /// it is the inside of the far wall of the torso. Every figure in this
+    /// building wore a pale disc on its shoulders for want of this.
+    #[test]
+    fn a_neck_fills_the_hole_in_the_shoulders() {
+        let hole = torso_profile(1.0).1;
+        let base = (0..=100)
+            .map(|step| neck_profile(step as f32 / 100.0).1)
+            .fold(0.0f32, f32::max)
+            * NECK_WIDE;
+
+        assert!(
+            base > hole,
+            "the shoulders open {:.3} across and the neck is {:.3} at its \
+             widest, so you see into the body round it",
+            hole,
+            base
+        );
+    }
+
+    /// Spec 0076: and it runs into both of the things it joins.
+    ///
+    /// **Which it did not, by four centimetres.** Its height was handed to
+    /// a scale, which multiplied it by the `TORSO_TALL` the mesh already
+    /// was, so the neck came out 0.08 instead of 0.13 and started above
+    /// the shoulders rather than inside them.
+    #[test]
+    fn a_neck_reaches_the_shoulders_and_the_head() {
+        let foot = NECK_FROM - NECK_SUNK;
+        let head = foot + NECK_TALL + NECK_SUNK * 2.0;
+
+        assert!(
+            foot < NECK_FROM,
+            "the neck starts at {:.3} and the shoulders end at {:.3}",
+            foot,
+            NECK_FROM
+        );
+        assert!(
+            head > HEAD_FROM,
+            "the neck ends at {:.3} and the head starts at {:.3}, so there \
+             is {:.3} of nothing between them",
+            head,
+            HEAD_FROM,
+            HEAD_FROM - head
         );
     }
 

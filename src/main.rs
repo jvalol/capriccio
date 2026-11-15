@@ -845,6 +845,8 @@ struct Arcade {
     /// What somebody on a round carries, per spec 0073.
     pail: Option<MeshId>,
     log: Option<MeshId>,
+    /// A neck, which is not the torso scaled down. Spec 0076.
+    neck: Option<MeshId>,
     /// The verge down either side of the ramp, per `bridge::KERB_UP`.
     kerbs: [Option<MeshId>; 2],
     dome: Option<MeshId>,
@@ -1390,6 +1392,7 @@ impl Arcade {
             horn: None,
             pail: None,
             log: None,
+            neck: None,
             kerbs: [None; 2],
             dome: None,
             moon: None,
@@ -4338,6 +4341,7 @@ impl Arcade {
         let (carved_head, cloak, helm, horn) = (self.carved_head, self.cloak, self.helm, self.horn);
         // and what anybody on a round is carrying. Spec 0073.
         let (pail, log) = (self.pail, self.log);
+        let neck = self.neck;
         let mut stand = |at: Vec3,
                          up: glam::Quat,
                          facing: f32,
@@ -4520,13 +4524,26 @@ impl Arcade {
             // centimetres of nothing between them, and a head floating over
             // a torso is worse than one sunk into it. It runs a little into
             // both ends so there is no seam at either.
+            //
+            // **Both of its numbers are widths and heights, not scales.**
+            // Spec 0076. They were handed straight to `with_scale`, which
+            // multiplied them by what the lathe already was: 0.45 across
+            // and `TORSO_TALL` up. Every neck came out 0.052 wide instead
+            // of 0.116 and 0.08 tall instead of 0.13, starting four
+            // centimetres above the shoulders it was meant to run into.
+            // The pale disc on every shoulder in this building was the
+            // inside of the torso, seen through the gap between the two.
+            //
+            // It runs from a little under the torso's top so there is no
+            // seam, and the mesh's own extents are what the sizes are
+            // divided by, so neither can drift from the lathe.
             scene.push_material(
-                body,
-                &Transform::at(up_to(people::NECK_FROM + people::NECK_TALL * 0.5))
+                neck.unwrap_or(body),
+                &Transform::at(up_to(people::NECK_FROM - people::NECK_SUNK))
                     .with_rotation(held)
                     .with_scale(vec3(
                         people::NECK_WIDE * built.wide,
-                        (people::NECK_TALL + 0.05) * built.tall,
+                        (people::NECK_TALL + people::NECK_SUNK * 2.0) * built.tall,
                         people::NECK_WIDE * built.wide,
                     )),
                 skin,
@@ -7573,6 +7590,8 @@ impl Game for Arcade {
         self.helm =
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 10, people::helm_profile)));
         self.horn = Some(renderer.add_mesh(&bridge::horn_mesh()));
+        self.neck =
+            Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 8, people::neck_profile)));
         // what anybody on a round is carrying. Spec 0073.
         self.pail =
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 12, people::pail_profile)));
