@@ -454,23 +454,49 @@ struct Ground {
 }
 
 impl Ground {
-    fn blank() -> Self {
-        Ground {
-            albedo: vec![0.0; PICTURE_WIDE * PICTURE_TALL],
-            height: vec![0.0; PICTURE_WIDE * PICTURE_TALL],
-        }
-    }
-
     fn at(&self, column: usize, row: usize) -> usize {
         row.min(PICTURE_TALL - 1) * PICTURE_WIDE + column % PICTURE_WIDE
     }
+}
 
-    /// Where a step of the picture is on the ball.
-    fn point(&self, column: usize, row: usize) -> Vec3 {
-        dir(
-            (column as f32 + 0.5) / PICTURE_WIDE as f32,
-            (row as f32 + 0.5) / PICTURE_TALL as f32,
-        )
+/// Where a step of the picture is on the ball.
+///
+/// **Free of the ground, because it never read one.** A band of rows works
+/// out the same point for the same step as the whole picture does, and a
+/// method would have made that a question. Spec 0081.
+fn point(column: usize, row: usize) -> Vec3 {
+    dir(
+        (column as f32 + 0.5) / PICTURE_WIDE as f32,
+        (row as f32 + 0.5) / PICTURE_TALL as f32,
+    )
+}
+
+/// A run of rows of the ground, which is what one thread builds. Spec 0081.
+///
+/// **Rows and not craters.** Forty-five thousand craters are laid in the
+/// order they fell and each one blends with what is under it, so dealing
+/// them out to threads would change the picture. A band owns its rows
+/// outright: every thread walks the same craters in the same order and
+/// writes only inside its own, so what comes out is what one thread wrote,
+/// to the bit.
+struct Band<'a> {
+    from: usize,
+    albedo: &'a mut [f32],
+    height: &'a mut [f32],
+}
+
+impl Band<'_> {
+    fn rows(&self) -> usize {
+        self.height.len() / PICTURE_WIDE
+    }
+
+    /// The first row past this band.
+    fn until(&self) -> usize {
+        self.from + self.rows()
+    }
+
+    fn at(&self, column: usize, row: usize) -> usize {
+        (row - self.from) * PICTURE_WIDE + column % PICTURE_WIDE
     }
 }
 
@@ -482,7 +508,7 @@ impl Ground {
 /// `age` is nought for one that fell this morning and one for one that has
 /// been hit a hundred times since. Without it every crater is the same age and
 /// the ground reads as a golf ball.
-fn crater(ground: &mut Ground, lon: f32, lat: f32, radius: f32, young: bool, rays: bool, age: f32) {
+fn crater(ground: &mut Band, lon: f32, lat: f32, radius: f32, young: bool, rays: bool, age: f32) {
     let middle = place(lon, lat);
 
     // one that cannot reach the drawn part of the picture, which is most of
@@ -512,11 +538,19 @@ fn crater(ground: &mut Ground, lon: f32, lat: f32, radius: f32, young: bool, ray
     let columns = (span / TAU * PICTURE_WIDE as f32).ceil() as i32 + 2;
     let column0 = (u * PICTURE_WIDE as f32) as i32;
 
-    for row in (row0 - rows).max(0)..(row0 + rows).min(PICTURE_TALL as i32) {
+    // **And only the rows this band owns.** Spec 0081: the clip is here
+    // rather than on the write, so a crater that misses the band walks none
+    // of its own picture.
+    let first = (row0 - rows).max(0).max(ground.from as i32);
+    let last = (row0 + rows)
+        .min(PICTURE_TALL as i32)
+        .min(ground.until() as i32);
+
+    for row in first..last {
         for step_over in -columns..=columns {
             let column = (column0 + step_over).rem_euclid(PICTURE_WIDE as i32) as usize;
             let row = row as usize;
-            let here = ground.point(column, row);
+            let here = point(column, row);
             let angle = here.dot(middle).clamp(-1.0, 1.0).acos();
             let at = ground.at(column, row);
             // a rim that is not a circle
@@ -587,20 +621,19 @@ fn ray_at(here: Vec3, middle: Vec3, east: Vec3, north: Vec3, r: f32, reach: f32)
 /// The ground, built in the order it happened: highlands, what fell on them,
 /// the seas flooding over that, and what has fallen since.
 fn ground() -> Ground {
-    let mut ground = Ground::blank();
+    // **One band a core, in whole rows.** Spec 0081. Fewer and the longest
+    // one sets the clock; many more and every band walks all forty-five
+    // thousand craters for a handful of rows of its own.
+    ground_in(
+        std::thread::available_parallelism()
+            .map(|many| many.get())
+            .unwrap_or(1),
+    )
+}
 
-    let (near, far) = drawn_columns();
-
-    for row in 0..PICTURE_TALL {
-        for column in (0..PICTURE_WIDE).filter(|c| *c < near || *c > far) {
-            let here = ground.point(column, row);
-            let at = row * PICTURE_WIDE + column;
-
-            ground.height[at] = 0.004 * fractal(here, 4, 3.0);
-            ground.albedo[at] = 0.90 + 0.05 * fractal(here, 3, 22.0);
-        }
-    }
-
+/// The same, divided a given number of ways, which is what lets a test ask
+/// whether the division shows. Spec 0081.
+fn ground_in(bands: usize) -> Ground {
     let mut which = 0u32;
     let mut pull = || {
         which = which.wrapping_add(1);
@@ -620,32 +653,83 @@ fn ground() -> Ground {
     }
 
     let drowned = (CRATERS as f32 * DROWNED) as usize;
+    let basins = basins();
+    let mut albedo = vec![0.0f32; PICTURE_WIDE * PICTURE_TALL];
+    let mut height = vec![0.0f32; PICTURE_WIDE * PICTURE_TALL];
+    let rows = PICTURE_TALL.div_ceil(bands.clamp(1, PICTURE_TALL));
+
+    std::thread::scope(|scope| {
+        for (n, (albedo, height)) in albedo
+            .chunks_mut(rows * PICTURE_WIDE)
+            .zip(height.chunks_mut(rows * PICTURE_WIDE))
+            .enumerate()
+        {
+            let basins = &basins;
+            let fell = &fell;
+
+            scope.spawn(move || {
+                let mut band = Band {
+                    from: n * rows,
+                    albedo,
+                    height,
+                };
+
+                laid(&mut band, fell, drowned, basins);
+            });
+        }
+    });
+
+    Ground { albedo, height }
+}
+
+/// Everything that ever happened to one band of the ground, in the order it
+/// happened: highlands, what fell on them, the seas flooding over that, and
+/// what has fallen since.
+///
+/// **One account for every band.** Spec 0081. Written out at the call site
+/// instead, a band would be four loops that have to stay in step with the
+/// other bands' four, and the order is the whole of what makes the picture.
+fn laid(
+    band: &mut Band,
+    fell: &[(f32, f32, f32, bool, f32)],
+    drowned: usize,
+    basins: &[(Vec3, f32)],
+) {
+    let (near, far) = drawn_columns();
+
+    for row in band.from..band.until() {
+        for column in (0..PICTURE_WIDE).filter(|c| *c < near || *c > far) {
+            let here = point(column, row);
+            let at = band.at(column, row);
+
+            band.height[at] = 0.004 * fractal(here, 4, 3.0);
+            band.albedo[at] = 0.90 + 0.05 * fractal(here, 3, 22.0);
+        }
+    }
 
     // the old ground is saturated and worn: everything on it has been hit
     // again since, so little of it still has a rim
     for (lon, lat, size, young, age) in fell[..drowned].iter().copied() {
-        crater(&mut ground, lon, lat, size, young, false, 0.15 + 0.85 * age);
+        crater(band, lon, lat, size, young, false, 0.15 + 0.85 * age);
     }
 
-    flood(&mut ground);
+    flood(band, basins);
 
     // and what has fallen since, which is thin on the seas because they are
     // the youngest ground there is
-    let basins = basins();
-
     for (lon, lat, size, young, age) in fell[drowned..].iter().copied() {
-        let on_a_sea = sea_among(&basins, place(lon, lat)) > 0.4;
+        let on_a_sea = sea_among(basins, place(lon, lat)) > 0.4;
 
         if on_a_sea && hashed((lon * 1000.0) as i32, (lat * 1000.0) as i32, 3) < 0.55 {
             continue;
         }
 
-        crater(&mut ground, lon, lat, size, young, false, age * 0.55);
+        crater(band, lon, lat, size, young, false, age * 0.55);
     }
 
     for (lon, lat, km, young) in NAMED.iter().copied() {
         crater(
-            &mut ground,
+            band,
             lon.to_radians(),
             lat.to_radians(),
             across(km),
@@ -654,20 +738,17 @@ fn ground() -> Ground {
             if young { 0.05 } else { 0.45 },
         );
     }
-
-    ground
 }
 
 /// The seas coming up over whatever was there.
-fn flood(ground: &mut Ground) {
-    let basins = basins();
+fn flood(ground: &mut Band, basins: &[(Vec3, f32)]) {
     let (near, far) = drawn_columns();
 
-    for row in 0..PICTURE_TALL {
+    for row in ground.from..ground.until() {
         for column in (0..PICTURE_WIDE).filter(|c| *c < near || *c > far) {
-            let here = ground.point(column, row);
-            let at = row * PICTURE_WIDE + column;
-            let flooded = sea_among(&basins, here);
+            let here = point(column, row);
+            let at = ground.at(column, row);
+            let flooded = sea_among(basins, here);
 
             if flooded <= 0.001 {
                 continue;
@@ -761,6 +842,11 @@ pub fn face() -> blitzkit::texture::TextureData {
 
     let (near, far) = drawn_columns();
 
+    // **Not banded, though the building above it is.** Spec 0081. It was,
+    // and it bought five milliseconds of a picture test that takes one and
+    // a half seconds, because the slope and the light are a fraction of
+    // what laying forty-five thousand craters is. Threading pays where the
+    // work is.
     for row in 0..PICTURE_TALL {
         for column in 0..PICTURE_WIDE {
             if column >= near && column <= far {
@@ -770,7 +856,7 @@ pub fn face() -> blitzkit::texture::TextureData {
             }
 
             let at = row * PICTURE_WIDE + column;
-            let here = ground.point(column, row);
+            let here = point(column, row);
             let shade = how_lit(tilt(&ground, column, row, here), ground.albedo[at]);
             // the picture is read back out as it was written, so what is
             // stored is what is shown and the bend belongs here
@@ -816,6 +902,26 @@ mod tests {
     /// every test below wants the same one.
     fn baked() -> blitzkit::texture::TextureData {
         face()
+    }
+
+    /// Spec 0081: dividing the picture between threads does not show in it.
+    ///
+    /// **Seven, because it does not divide 1024.** Every band but the last
+    /// is 147 rows and the last is 142, so the ragged end is under test
+    /// rather than assumed, and a crater that straddles a seam is laid by
+    /// both of the bands it reaches into.
+    ///
+    /// This is the whole of what the threading has to earn: the moon is
+    /// forty-five thousand craters laid in the order they fell, each one
+    /// blending with what is under it, and a band that wrote one row too
+    /// many or one too few would say so here and nowhere else.
+    #[test]
+    fn the_moon_is_the_same_however_it_is_divided() {
+        let one = ground_in(1);
+        let seven = ground_in(7);
+
+        assert_eq!(one.height, seven.height, "the ground is a different shape");
+        assert_eq!(one.albedo, seven.albedo, "the ground is a different colour");
     }
 
     /// How bright the face is at a place on the ball, as the picture holds it.
