@@ -1742,21 +1742,6 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 mod tests {
     use super::*;
 
-    /// How far off still a pool's own surface is.
-    ///
-    /// Its own surface and not its mesh. The mesh carries a skirt hanging from
-    /// the rim down to the basin floor, per spec 0043, so asking the whole of
-    /// it how far it is off still answers with the depth of the pool and every
-    /// one of these fails the moment it is still.
-    fn off_still(water: &blitzkit::water::Water) -> f32 {
-        let (across, along) = water.nodes();
-        let level = water.at.y;
-
-        water.surface().vertices[..across * along]
-            .iter()
-            .fold(0.0f32, |most, v| most.max((v.position[1] - level).abs()))
-    }
-
     /// A reaches the room is laid out for, which is what the arcade runs with.
     const REACHES: f32 = 8.3;
 
@@ -2975,7 +2960,7 @@ mod tests {
             }
             water.step(step);
 
-            let high = off_still(&water);
+            let high = water.off_still();
             most = most.max(high);
 
             assert!(
@@ -3045,7 +3030,7 @@ mod tests {
             );
             water.step(step);
 
-            let high = off_still(&water);
+            let high = water.off_still();
 
             assert!(
                 high < 0.5,
@@ -3082,7 +3067,7 @@ mod tests {
             }
             water.step(step);
 
-            let high = off_still(&water);
+            let high = water.off_still();
 
             assert!(
                 high < 0.4,
