@@ -802,6 +802,8 @@ struct Arcade {
     /// The turned pieces in the baths. Spec 0008.
     urn: Option<MeshId>,
     sconce: Option<MeshId>,
+    /// The lens of a light set into the pool's wall. Spec 0082.
+    pool_lens: Option<MeshId>,
     basin: Option<MeshId>,
     stream: Option<MeshId>,
     dish: Option<MeshId>,
@@ -1255,15 +1257,25 @@ impl Arcade {
         let mut pool = blitzkit::water::Water::new(pool_at, pool_size, pool_deep, spa::CELLS);
         pool.damping = spa::SETTLES;
         pool.speed = spa::RUNS;
+        // **And it stops at the coping.** Engine spec 0103. A reflecting
+        // wall makes an antinode of the rim, so the highest part of the
+        // pool is the part lying against the side, and left alone it
+        // stands over the coping with a gap under it. Jake, 2026-11-15:
+        // water should be bounded by its container.
+        pool.rises_to = spa::FREEBOARD;
+
+        let mut tub = blitzkit::water::Water::new(
+            tub_at,
+            glam::vec2(tub_wide, tub_wide),
+            tub_deep,
+            spa::TUB_CELLS,
+        );
+        // the tub's own lip is its rim, which is what the water sits below
+        tub.rises_to = spa::TUB_RIM;
 
         Self {
             pool,
-            tub: blitzkit::water::Water::new(
-                tub_at,
-                glam::vec2(tub_wide, tub_wide),
-                tub_deep,
-                spa::TUB_CELLS,
-            ),
+            tub,
             steps: Vec::new(),
             claps: Vec::new(),
             climbs: 0.0,
@@ -1370,6 +1382,7 @@ impl Arcade {
             column: None,
             urn: None,
             sconce: None,
+            pool_lens: None,
             basin: None,
             stream: None,
             dish: None,
@@ -1409,6 +1422,9 @@ impl Arcade {
                 let mut water = blitzkit::water::Water::new(at, size, deep, garden::POND_CELLS);
                 water.damping = garden::SETTLES;
                 water.speed = garden::RUNS;
+                // and its own kerb, per engine spec 0103: the water sits
+                // `garden::BRIM` under the stone round it
+                water.rises_to = garden::BRIM;
 
                 water
             },
@@ -7621,6 +7637,7 @@ impl Game for Arcade {
         self.column = Some(renderer.add_mesh(&glass::column_mesh()));
         self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
         self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
+        self.pool_lens = Some(renderer.add_mesh(&spa::pool_lens_mesh()));
         self.basin = Some(renderer.add_mesh(&spa::basin_mesh()));
         self.stream = Some(renderer.add_mesh(&spa::stream_mesh(0.0)));
         self.dish = Some(renderer.add_mesh(&spa::dish_mesh()));
@@ -10318,6 +10335,29 @@ impl Game for Arcade {
                 );
             }
 
+            // and the lights down in the pool's own walls. Spec 0082. The
+            // mesh is turned about its own y, so each is laid on its side
+            // to face across the water, which way round depending on the
+            // wall it is in.
+            if let Some(lens) = self.pool_lens {
+                for (at, side) in spa::pool_lights(self.room.reaches) {
+                    scene.push_material(
+                        lens,
+                        &Transform::at(at)
+                            .with_rotation(glam::Quat::from_rotation_x(
+                                side * std::f32::consts::FRAC_PI_2,
+                            ))
+                            .with_scale(vec3(
+                                spa::POOL_LENS,
+                                spa::POOL_BEZEL * 2.0,
+                                spa::POOL_LENS,
+                            )),
+                        aim::POOL_LENS,
+                        aim::NO_SHINE,
+                    );
+                }
+            }
+
             // the stream, and the water standing in the basin it falls into.
             // A fountain that does not run is a stone shelf.
             if let Some(pour) = self.stream {
@@ -12255,6 +12295,17 @@ impl Game for Arcade {
                 aim::SPA_LAMP,
                 spa::LAMP_LIT,
                 spa::LAMP_RANGE,
+            ));
+        }
+
+        // and the pool's own, down in its walls under the water. Spec 0082.
+        for lamp in spa::pool_lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::SPA_LAMP,
+                spa::POOL_LIT,
+                spa::POOL_RANGE,
             ));
         }
 

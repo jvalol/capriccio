@@ -850,6 +850,71 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
         .collect()
 }
 
+/// The lights set into the pool's own walls, under the water. Spec 0082.
+///
+/// **How far down.** Far enough that the surface is between you and the
+/// lens from anywhere in the room, which is what makes it light coming up
+/// through the water rather than a lamp at the waterline.
+pub const POOL_LIGHT_DOWN: f32 = 0.40;
+
+/// How wide the lens is and how far it stands proud of the wall.
+///
+/// **Proud, and not flush.** A lens level with the lining is two surfaces
+/// in one plane, which is the fault this room has already had twice: the
+/// stripes round the pool and the chequerboard down its wall.
+pub const POOL_LENS: f32 = 0.22;
+pub const POOL_BEZEL: f32 = 0.11;
+
+/// How bright one is, how far it carries, and how many to a side.
+///
+/// **Short and bright rather than long and soft.** The first build gave
+/// each of them three metres, which over a pool eight by five is six lamps
+/// washing the whole basin evenly: the water came up a shade paler and
+/// nothing in the room read as a light.
+pub const POOL_LIT: f32 = 1.5;
+pub const POOL_RANGE: f32 = 2.1;
+pub const POOL_LIGHTS: usize = 3;
+
+/// Where the lights sit: in the two long walls of the basin, facing each
+/// other across the water, with which wall each is in.
+///
+/// The long walls and not the short ones, because the short ones are two
+/// and a half metres apart and one of them is the flight of steps.
+pub fn pool_lights(reaches: f32) -> Vec<(Vec3, f32)> {
+    let (middle, size, _) = pool(reaches);
+    let mut out = Vec::new();
+
+    for side in [-1.0f32, 1.0] {
+        for n in 0..POOL_LIGHTS {
+            let along = (n as f32 + 0.5) / POOL_LIGHTS as f32 - 0.5;
+
+            out.push((
+                vec3(
+                    middle.x + along * size.x,
+                    middle.y - POOL_LIGHT_DOWN,
+                    middle.z + side * (size.y * 0.5 - POOL_BEZEL),
+                ),
+                side,
+            ));
+        }
+    }
+
+    out
+}
+
+/// Where the lamp inside each one burns, which is in a lens and nowhere
+/// else.
+///
+/// Derived rather than listed, the same as [`lamps`] is from [`sconces`]
+/// and for the same reason: this room has already had its lamps on the
+/// ceiling and its fittings on the wall.
+pub fn pool_lamps(reaches: f32) -> Vec<Vec3> {
+    pool_lights(reaches)
+        .into_iter()
+        .map(|(at, side)| vec3(at.x, at.y, at.z - side * POOL_BEZEL))
+        .collect()
+}
+
 /// Where the fountain's stream leaves the spout, and how far it falls.
 ///
 /// A fountain that does not run is a stone shelf. The water is drawn and not
@@ -1453,6 +1518,31 @@ pub fn urn_mesh() -> blitzkit::mesh::MeshData {
 }
 
 /// A sconce: a bowl that opens upward, which is what throws light at a ceiling.
+/// A pool light: a short bezel with a lens doming out of it. Spec 0082.
+///
+/// **Turned, like everything else round in this building.** A disc stood on
+/// a wall is a sticker; what says a light is set into something is the ring
+/// of shadow round the rim of the thing it is set into.
+///
+/// Built along its own y like every profile here and stood on its side
+/// where it is drawn, because the wall it goes in is vertical. Two-sided
+/// for the reason the sconce is: it is an open shell, and the far wall of
+/// one is a triangle wound away from you.
+pub fn pool_lens_mesh() -> blitzkit::mesh::MeshData {
+    cellar::turned(18, 10, |v| {
+        let out = if v < 0.34 {
+            1.0
+        } else {
+            let t = (v - 0.34) / 0.66;
+
+            (1.0 - t * t).max(0.0).sqrt()
+        };
+
+        (v - 0.5, out)
+    })
+    .two_sided()
+}
+
 pub fn sconce_mesh() -> blitzkit::mesh::MeshData {
     cellar::turned(20, 12, |v| {
         let wide = 0.3 + (v * std::f32::consts::FRAC_PI_2).sin() * 0.7;

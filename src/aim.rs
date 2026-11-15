@@ -631,6 +631,16 @@ pub const SPA_CUT: Vec4 = vec4(0.78, 0.75, 0.70, 1.0);
 pub const SPA_URN: Vec4 = vec4(0.56, 0.32, 0.22, 1.0);
 
 pub const SPA_LAMP: Vec3 = glam::vec3(0.86, 0.94, 1.0);
+
+/// And the lens of a light set into the pool's wall, under the water. Spec
+/// 0082.
+///
+/// **Past one, because it is the source and not a thing lit by one.** The
+/// colour is an unclamped multiplier, so this glows with no light on it,
+/// which is what the neon sign at 3.2 is for. Lower than the neon: a pool
+/// light seen through a metre of water is bright and not blinding, and the
+/// water takes its own share on the way out.
+pub const POOL_LENS: Vec4 = vec4(4.60, 5.40, 6.00, 1.0);
 pub const SAUNA_LAMP: Vec3 = glam::vec3(1.0, 0.68, 0.34);
 
 pub const SIGN_BOARD: Vec4 = vec4(0.20, 0.09, 0.07, 1.0);
