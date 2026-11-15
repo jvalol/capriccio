@@ -787,11 +787,16 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // twenty-six metre drop. South is fourteen metres of slab and
             // the walk from the pile is one straight leg, so the corner
             // that used to swing round the ring is gone with it.
+            // **And they bend to it, because what they are carrying goes
+            // on the ground.** Spec 0077. `Stir` is a hand over a pot and
+            // there is no pot here: this one arrives with a log off the
+            // pile, per spec 0073, and a log goes onto a fire of eleven
+            // stones at ankle height.
             looking_at(
                 vec3(fire.x, door.y, fire.z - clear_of_the_fire),
                 fire,
                 6.5,
-                Errand::Stir,
+                Errand::Stoop,
             ),
         ],
         // **And one round the back**, past the gable to the third store and

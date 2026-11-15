@@ -4394,6 +4394,28 @@ impl Arcade {
                 }
                 _ => gesture::Stance::default(),
             };
+            // **And what they are carrying, on top of whichever of those
+            // it is.** Spec 0077. A weight in one hand leans a body away
+            // from it whether that body is walking, standing or sitting,
+            // and the gait knows only how far it has gone.
+            let stance = match holding {
+                Some(load) => {
+                    let laden = gesture::laden(0, load.how_heavy());
+                    let mut out = stance;
+
+                    out.turn += laden.turn;
+                    out.rise += laden.rise;
+                    out.lean += laden.lean;
+
+                    for n in 0..2 {
+                        out.shoulder[n] += laden.shoulder[n];
+                        out.elbow[n] += laden.elbow[n];
+                    }
+
+                    out
+                }
+                None => stance,
+            };
             let facing = facing + stance.turn;
             // **Minus the facing, which is not a typo.** A turn of `facing`
             // about y sends a body's own forward of `-Z` to
@@ -4448,7 +4470,8 @@ impl Arcade {
             // height while the feet move is a glide, and that is most of
             // what reads as a machine.
             let rise = match walked {
-                Some(walked) => people::hips(walked) - people::LEG_TALL,
+                // and the same for the rise, which a load also takes down
+                Some(walked) => people::hips(walked) - people::LEG_TALL + stance.rise,
                 // **And down onto the bench, if there is one.** Spec 0074.
                 // The hips normally ride at `LEG_TALL` off the floor for a
                 // body of this height; sitting, they ride at the seat. The
@@ -4673,11 +4696,16 @@ impl Arcade {
             for leg in 0..2 {
                 let out = if leg == 0 { 1.0 } else { -1.0 };
                 let (hip, knee, shoulder, elbow) = match walked {
+                    // **The arms take the stance on top of the gait.**
+                    // Spec 0077: while walking the gait owns the legs,
+                    // which is what it is for, but the stance is where a
+                    // load's lean lives and that has to reach the arms.
+                    // It is nought for anybody carrying nothing.
                     Some(walked) => (
                         people::hip(walked, leg),
                         people::knee(walked, leg),
-                        people::shoulder(walked, leg),
-                        people::elbow(walked, leg),
+                        people::shoulder(walked, leg) + stance.shoulder[leg],
+                        people::elbow(walked, leg) + stance.elbow[leg],
                     ),
                     // **Not nought.** Spec 0067: every joint at nought is
                     // where a figure that read as a person while it walked
@@ -4841,11 +4869,35 @@ impl Arcade {
                         if let Some(held) = held {
                             let (wide, long) = load.size();
                             let fist = wrist + hangs(arm_lower, people::HAND_WIDE);
+                            // **Set down, if they are sitting.** Spec
+                            // 0077. A seated hand is at the height of the
+                            // seat, so a thing hanging from it hangs
+                            // inside the bench. What anybody does with a
+                            // pail when they sit down is put it on the
+                            // floor beside them, which is where the hand
+                            // already is in plan.
+                            let fist = match seated {
+                                Some(_) => {
+                                    let down = (fist - at).dot(over);
 
+                                    fist - over * down + over * long
+                                }
+                                None => fist,
+                            };
+
+                            // **Hung from the fist and plumb, not along
+                            // the forearm.** Spec 0073 took the arm's
+                            // rotation for both, on the argument that it
+                            // should swing with the arm rather than float
+                            // beside it. That argument is about where it
+                            // is, which the fist still says; which way it
+                            // points is gravity's, and a log on an arm
+                            // reaching down to a fire came out level,
+                            // held like a lance. Spec 0077.
                             scene.push_material(
                                 held,
                                 &Transform::at(fist)
-                                    .with_rotation(arm_lower)
+                                    .with_rotation(up)
                                     .with_scale(vec3(wide, long, wide)),
                                 // **The pile's own colour for the log**,
                                 // because it came off that pile, and the

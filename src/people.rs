@@ -780,6 +780,19 @@ impl Load {
             Load::Log => (LOG_WIDE, LOG_LONG),
         }
     }
+
+    /// How much of a body's business carrying one is, nought to one.
+    /// Spec 0077.
+    ///
+    /// **A pail of water is heavy and a billet is not.** What this moves
+    /// is the lean and the swing of the other arm, so one number for both
+    /// would say a stick of firewood bends somebody sideways.
+    pub fn how_heavy(self) -> f32 {
+        match self {
+            Load::Pail => 1.0,
+            Load::Log => 0.45,
+        }
+    }
 }
 
 /// A pail: straight-sided, a little wider at the rim than at the foot.

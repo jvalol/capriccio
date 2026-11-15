@@ -51,6 +51,9 @@ pub enum Errand {
     Tend,
     /// At a door: reach, and in.
     Knock,
+    /// Down to the ground and up again: putting something on a fire, or
+    /// taking it off the floor. Spec 0077.
+    Stoop,
 }
 
 /// Every joint this building can actually move on a standing figure, which
@@ -201,6 +204,43 @@ pub fn standing(errand: Errand, who: f32, stood: f32, stays: f32) -> Stance {
 
     match errand {
         Errand::Wait => {}
+        Errand::Stoop => {
+            let (n, through) = turn_of(who, stood, 4.6);
+            let deep = 1.0 + wiggle(who, n * 3.1) * 0.18;
+
+            // **Down and up inside the first third, and the rest of the
+            // turn upright.** Somebody who is bent over most of the time
+            // is a machine folding; somebody putting a log on a fire goes
+            // down once, does the thing, and straightens.
+            //
+            // The shape the rest of this module uses, `eased(t * k)` against
+            // `1 - eased(t * k - (k - 1))`, holds its middle for `(k - 2) / k`
+            // of the turn, which is the wrong way round for this: a bigger
+            // `k` is a longer plateau. So the pulse runs on a clock of its
+            // own that finishes a third of the way through.
+            let dip = (through / 0.34).min(1.0);
+            let down = eased(dip * 2.0) * (1.0 - eased(dip * 2.0 - 1.0));
+
+            // **The knees take a third of it and the hips the rest.** A
+            // body that folds at the hips alone with straight legs is a
+            // bow rather than a stoop, which is what the first build of
+            // this looked like: `lean` is the only fold this rig has and
+            // reaching the floor with it needs about 1.2 radians, which
+            // puts a head where its own knees are.
+            out.lean += 0.42 * deep * down * settled;
+            out.rise -= 0.20 * deep * down * settled;
+
+            for leg in 0..2 {
+                out.knee[leg] += (0.46 + wiggle(who, n + leg as f32) * 0.06) * down * settled;
+                out.hip[leg] += 0.16 * down * settled;
+            }
+
+            // the working arm goes down with the body, and the other goes
+            // back a little for balance
+            out.shoulder[0] += (0.14 + 0.26 * down) * settled;
+            out.elbow[0] += (0.26 - 0.18 * down) * settled;
+            out.shoulder[1] += (0.05 - 0.20 * down) * settled;
+        }
         Errand::Stir => {
             let (n, through) = turn_of(who, stood, 1.9);
             let (shoulder, elbow) = swing(through, 0.12);
@@ -317,6 +357,33 @@ fn waiting(out: &mut Stance, who: f32, stood: f32, settled: f32) {
 
     out.turn += away * 0.33 * held * settled;
     out.shoulder[0] += 0.05 * held;
+}
+
+/// What carrying something does to a body that is not standing still, per
+/// spec 0077.
+///
+/// **A weight in one hand is not a thing the hand does.** Somebody with a
+/// full pail leans away from it, lets that arm hang long and straight, and
+/// puts the other one out a little for the counterweight. None of that is
+/// in the gait, which knows how far they have walked and nothing else, so
+/// it is added on top of whatever the walking gives.
+///
+/// `side` is the hand it is in, as the drawing counts them.
+pub fn laden(side: usize, how_heavy: f32) -> Stance {
+    let mut out = Stance::default();
+    let away = if side == 0 { -1.0 } else { 1.0 };
+
+    // the body tips away from the load, which is what carrying one looks
+    // like from across a street
+    out.turn += away * 0.035 * how_heavy;
+    out.rise -= 0.012 * how_heavy;
+    // the loaded arm hangs long, and the other comes out to balance it
+    out.shoulder[side] -= 0.10 * how_heavy;
+    out.elbow[side] -= 0.16 * how_heavy;
+    out.shoulder[1 - side] += 0.14 * how_heavy;
+    out.elbow[1 - side] += 0.10 * how_heavy;
+
+    out
 }
 
 /// What somebody sitting on a bench is doing, per spec 0074.
@@ -510,6 +577,73 @@ mod tests {
             .max((one.rests[0] - two.rests[0]).abs())
             .max((one.rests[1] - two.rests[1]).abs())
             .max((one.rise - two.rise).abs() * 10.0)
+    }
+
+    /// Spec 0077: a stoop goes down once a turn and spends most of the
+    /// turn upright.
+    ///
+    /// **Which is what makes it a stoop and not a machine folding.**
+    /// Somebody putting a log on a fire goes down, does the thing, and
+    /// straightens; the first build of this bent far enough to put a head
+    /// past its own toes and did it every few seconds.
+    #[test]
+    fn a_stoop_is_a_thing_you_do_once_and_get_up_from() {
+        for who in [0.3f32, 2.4, 5.1] {
+            let mut down = 0;
+            let mut deepest: f32 = 0.0;
+
+            for step in 0..2_000 {
+                let stood = 1.5 + step as f32 * 0.05;
+                let pose = standing(Errand::Stoop, who, stood, 110.0);
+
+                if pose.lean > 0.12 {
+                    down += 1;
+                }
+
+                deepest = deepest.max(pose.lean);
+            }
+
+            let share = down as f32 / 2_000.0;
+
+            assert!(
+                share < 0.5,
+                "they are bent over {:.0}% of the time, which is not a stoop",
+                share * 100.0
+            );
+            assert!(
+                (0.3..0.7).contains(&deepest),
+                "the deepest they bend is {:.2} radians, which is either a \
+                 nod or a dive",
+                deepest
+            );
+        }
+    }
+
+    /// Spec 0077: and a load leans a body away from itself.
+    #[test]
+    fn a_load_leans_a_body_away_from_it() {
+        for side in 0..2 {
+            let laden = laden(side, 1.0);
+            let away = if side == 0 { -1.0 } else { 1.0 };
+
+            assert!(
+                laden.turn * away > 0.0,
+                "a load in hand {} turns the body {:+.3}, which is toward it",
+                side,
+                laden.turn
+            );
+            // the loaded arm hangs longer than the free one, which is what
+            // says which hand it is in
+            assert!(
+                laden.shoulder[side] < laden.shoulder[1 - side],
+                "the loaded arm is raised {:+.3} and the free one {:+.3}",
+                laden.shoulder[side],
+                laden.shoulder[1 - side]
+            );
+        }
+
+        // and nothing of it for somebody carrying nothing
+        assert_eq!(laden(0, 0.0), Stance::default(), "an empty hand leans");
     }
 
     /// Spec 0074: a seated leg is a thigh forward and a shin straight down
