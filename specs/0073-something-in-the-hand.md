@@ -67,11 +67,37 @@ the woodpile's own colour, because it came off that pile.
 - **The wagon, the store and the cook fire are still empty-handed**, for the
   reason above.
 
+## 2026-11-14: the store has firewood
+
+Jake, asked what was in it. So the door-keeper's round carries a log from
+the north store, through the yard, in at the door and onto the hall's long
+fire, which is what the comment at the head of that round has promised since
+spec 0067: back with whatever was in it.
+
+**It needed the yard to say so too.** A load is put down at the first stop
+with a stay that does not name one, and the yard is a stop with a stay
+between the store and the door. Without `carries` on it as well the log is
+set down out in the lane, which is what
+`valhalla::tests::the_firewood_gets_from_the_store_to_the_hall` catches when
+the line is taken out.
+
+That is the cost of saying a load on the stop it comes from rather than
+naming a journey, and it is the right cost: a journey would be a second
+account of the round's own order.
+
+**And the stop it ends at is a stoop**, per spec 0077, because the trench is
+a bed of coals at ankle height and what was there was `Stir`, which is a hand
+over a pot.
+
+The wagon at the east end of the village street and what the cook brings out
+of her cabin are still nobody's decision.
+
 ## Acceptance criteria
 
 - What is in the hand is what the last stop with a stay said, through all four moments of a round. — `people::tests::a_load_is_carried_from_the_stop_that_gives_it`
 - The pail leaves the well, goes somewhere, and comes back put down. — `village::tests::the_pail_leaves_the_well_and_comes_back_empty`
 - The wood gets from the pile to the fire. — `valhalla::tests::the_wood_gets_from_the_pile_to_the_fire`
+- And the firewood gets from the store all the way into the hall. — `valhalla::tests::the_firewood_gets_from_the_store_to_the_hall`
 
 ### Verified by hand
 

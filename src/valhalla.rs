@@ -613,7 +613,14 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // above has always said and what the facing did not: a minus
             // here points at the hall's door, with the whole of Bifrost
             // behind them
-            stop(vec3(yard, door.y, door.z + 2.4), FRAC_PI_2, 7.0),
+            // **Still holding the wood when they go in.** Spec 0073's
+            // rule is that a stop says what you leave it holding, and the
+            // yard is a stop with a stay between the store and the door,
+            // so without this the log is put down out here.
+            Stop {
+                carries: Some(crate::people::Load::Log),
+                ..stop(vec3(yard, door.y, door.z + 2.4), FRAC_PI_2, 7.0)
+            },
             // **And in through it, which is spec 0072.** Every round
             // here was outside until then, so the one who keeps the door
             // was the one person in this building who never went through
@@ -650,11 +657,16 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // the coals. `FIRE_KERB` is there so you cannot ride over one.
             // On the line there is no corner to cut, because the way in
             // and the fire are the same straight run.
+            // **And it goes on this fire**, which is why they carried it
+            // in. `Stir` is a hand over a pot and the trench is a bed of
+            // coals at ankle height, so this is a stoop like the one at
+            // the ring outside. Spec 0077. They leave empty, which is what
+            // `carries` being unset here says.
             looking_at(
                 vec3(trench.max.x + CLEAR_OF, door.y + FLOOR_UP, door.z),
                 vec3(trench.center().x, door.y, door.z),
                 9.0,
-                Errand::Stir,
+                Errand::Stoop,
             ),
             // **And then they sit down.** Spec 0074. Spec 0060 put a
             // bench down both flanks of this hall, and until now the only
@@ -749,11 +761,17 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 0.0,
                 0.0,
             ),
-            looking_at(
+            // **And what is in the store is firewood.** Jake, 2026-11-14.
+            // Spec 0073 left this stop empty-handed because what a store
+            // holds is not a thing arithmetic can answer, and the comment
+            // at the head of this round has promised since spec 0067 that
+            // they come back with whatever was in it.
+            carrying(
                 vec3(north.at.x, door.y, north.at.z - north.long * 0.5 - CLEAR_OF),
                 north.at,
                 4.5,
                 Errand::Lift,
+                crate::people::Load::Log,
             ),
             stop(
                 vec3(yard + 1.2, door.y, north.at.z - north.long * 0.5 - 2.0),
@@ -2420,6 +2438,42 @@ mod tests {
         }
 
         assert!(sat > 0, "nobody ever sits down");
+    }
+
+    /// Jake, 2026-11-14: the store has firewood. So it gets from there to
+    /// the hall's own fire, which is what the comment at the head of that
+    /// round has promised since spec 0067.
+    ///
+    /// **The whole way, which is the part that can fail.** A load is put
+    /// down at the first stop with a stay that does not say otherwise, and
+    /// there is one of those between the store and the door.
+    #[test]
+    fn the_firewood_gets_from_the_store_to_the_hall() {
+        let round = &rounds(REACHES)[0];
+        let air = inside(REACHES);
+        let store = built(REACHES)[2];
+        let mut at_the_store = false;
+        let mut indoors = false;
+
+        for step in 0..4_000 {
+            let doing = crate::people::doing(round, step as f32 * 0.05);
+
+            if doing.holding != Some(crate::people::Load::Log) {
+                continue;
+            }
+
+            at_the_store |= doing.at.distance(vec3(store.at.x, doing.at.y, store.at.z)) < 5.0;
+            indoors |= doing.at.x > air.min.x
+                && doing.at.x < air.max.x
+                && doing.at.z > air.min.z
+                && doing.at.z < air.max.z;
+        }
+
+        assert!(at_the_store, "the wood is never picked up at the store");
+        assert!(
+            indoors,
+            "the wood never gets inside, so it is put down in the yard"
+        );
     }
 
     /// Spec 0073: and the wood gets from the pile to the fire.
