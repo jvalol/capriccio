@@ -86,10 +86,24 @@ The knob's own word, because a depth and a thickness are not the same thing
 and a plate saying depth over a tube that has none is the fault this is
 fixing.
 
-**The copy is drafted and not his**, so every line of it carries
-`[COPY - Jake]` and the marker audit holds the gate until he strikes it. The
-half sentence `knob_says` returns has no marker of its own: it is never drawn
-alone, and two markers in one line of copy is the mistake of 2026-11-09.
+**The copy was drafted and not his**, so every line of it carried
+`[COPY - Jake]` and the marker audit held the gate. The half sentence
+`knob_says` returns had no marker of its own: it is never drawn alone, and
+two markers in one line of copy is the mistake of 2026-11-09.
+
+He took them later the same day and wrote the lines himself. The draft said
+"Arrows turn it. Shift and up or down: {}. Enter lets go"; the plate says
+"Use arrow keys to rotate it. Hold Shift and press up or down: {}. Press
+Enter to let go". One word of that is not his: he wrote hold against the
+arrows, and holding an arrow does nothing after the first step, because the
+key repeat is swallowed on purpose so that one press is one step of depth.
+Hold moved to Shift, which is the key you do hold.
+
+**And the arm for a shape with no knob went with them.** It could not fire:
+every shape you can take hold of has one, and the one that does not is the
+tesseract, which Return takes you inside of rather than holding. What stands
+there now is `unwrap_or_default`, so the impossible case is a gap in the line
+rather than a panic.
 
 ## Acceptance criteria
 

@@ -8879,15 +8879,21 @@ impl Game for Arcade {
                 Some(if n == display::tesseract() {
                     String::from("Click or press enter to enter it")
                 } else if self.spin.holding() == Some(n) {
-                    match display::knob_says(n, self.knobs.get(n).copied().unwrap_or(0)) {
-                        Some(knob) => format!(
-                            "[COPY - Jake] Arrows turn it. Shift and up or down: {}. Enter lets go",
-                            knob
-                        ),
-                        None => String::from("[COPY - Jake] Arrows turn it. Enter lets go"),
-                    }
+                    // every shape you can take hold of has a knob, and the
+                    // one without is the tesseract, which Return takes you
+                    // inside of rather than holding, so it never reaches
+                    // here. An empty one would read as a gap in the line
+                    // rather than panic, which is the right way round for
+                    // something that cannot happen.
+                    let knob = display::knob_says(n, self.knobs.get(n).copied().unwrap_or(0))
+                        .unwrap_or_default();
+
+                    format!(
+                        "Use arrow keys to rotate it. Hold Shift and press up or down: {}. Press Enter to let go",
+                        knob
+                    )
                 } else {
-                    String::from("[COPY - Jake] Click or press enter to take hold")
+                    String::from("Click or press enter to take hold")
                 }),
             ),
             (None, Some(room::Seen::Bench(n))) => {
