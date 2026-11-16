@@ -8687,13 +8687,7 @@ impl Game for Arcade {
         // not change how it swings. Spec 0006.
         self.owed = (self.owed + dt).min(0.2);
         while self.owed >= cradle::STEP {
-            self.solver.step_linked(
-                &mut self.cradle,
-                &self.ropes,
-                &cradle::NO_WORLD,
-                GRAVITY,
-                cradle::STEP,
-            );
+            cradle::step(&mut self.solver, &mut self.cradle, &self.ropes, GRAVITY);
             self.owed -= cradle::STEP;
         }
         self.the_doors_moved(dt);

@@ -49,9 +49,22 @@ pub fn upright_at() -> f32 {
 /// How much of a blow a ball gives back.
 ///
 /// High, because the whole point is that the row passes it along rather than
-/// swallowing it. Not one: at one the thing never stops and the row drifts,
-/// which is a perpetual motion machine and a bug.
-pub const BOUNCE: f32 = 0.92;
+/// swallowing it.
+///
+/// **0.92 was the brake, and it should not have been.** Spec 0100. Nothing
+/// else here took any speed off a ball, so the only way to stop a row that
+/// would otherwise drift for ever was to make every blow lossy, and that is
+/// the note this constant used to carry: not one, or the thing never stops.
+/// What it cost is the thing itself. Measured from a lift at `LIFTED`, the
+/// row was down to four per cent of its energy in six seconds, where a real
+/// cradle runs for minutes and a steel ball gives back 0.95 to 0.99 of a
+/// blow.
+///
+/// `KEEPS` is the brake now, which is where the loss belongs: a swing dies
+/// to the air over its whole arc, not to the one instant it touches the
+/// next ball. At 0.99 with that drag the row still has 45 per cent at six
+/// seconds and a swing you can see at eleven, and it is quiet by sixteen.
+pub const BOUNCE: f32 = 0.99;
 
 /// How far the end ball is lifted when it is set going, as an angle.
 ///
@@ -184,6 +197,47 @@ pub fn stirring(bodies: &[Body]) -> f32 {
 /// The bench is below them and they never reach it.
 pub const NO_WORLD: [Aabb; 0] = [];
 
+/// How much of its speed a ball keeps each second, to air and to the rope.
+///
+/// **Because nothing here was taking any.** Spec 0100. Measured over twenty
+/// seconds from a lift at `LIFTED`, the row kept 98 per cent of the energy
+/// it started with and never gave the rest up: the swing stopped looking
+/// like a swing within three seconds, not because it was dying but because
+/// it had spread across all five balls as a buzz of a few centimetres each,
+/// and there it stayed. Jake, playing: gravity doesn't slow things like the
+/// cradle down realistically.
+///
+/// A real one is quiet in under a minute. This is a drag on velocity rather
+/// than a floor on it, so it takes the buzz out faster than the swing: a
+/// jitter at a tenth of the amplitude is a tenth of the speed and loses the
+/// same share of it every step, which is what makes a row of five settle
+/// into a row of five hanging still.
+pub const KEEPS: f32 = 0.955;
+
+/// One step of a cradle: the solver, and then what the air takes.
+///
+/// **Both halves or neither.** Spec 0100. The drag went into the game's
+/// loop first and the toy's own tests stepped it without, so the row they
+/// were watching was not the row the building draws: one of them put the
+/// bounce back up and failed, which is how this was found. A thing that
+/// knows how it is strung should know what it loses.
+pub fn step(solver: &mut Solver, bodies: &mut [Body], links: &[Link], gravity: Vec3) {
+    solver.step_linked(bodies, links, &NO_WORLD, gravity, STEP);
+    drags(bodies, STEP);
+}
+
+/// Takes that much off every ball, once per step.
+fn drags(bodies: &mut [Body], dt: f32) {
+    let keeps = KEEPS.powf(dt);
+
+    for ball in 0..BALLS {
+        let body = &mut bodies[ball_at(ball)];
+
+        body.velocity *= keeps;
+        body.spin *= keeps;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,7 +247,7 @@ mod tests {
     fn run(bodies: &mut [Body], links: &[Link], seconds: f32) {
         let mut solver = solver();
         for _ in 0..(seconds / STEP) as u32 {
-            solver.step_linked(bodies, links, &NO_WORLD, GRAVITY, STEP);
+            step(&mut solver, bodies, links, GRAVITY);
         }
     }
 
@@ -298,6 +352,58 @@ mod tests {
     #[test]
     fn a_swinging_ball_never_reaches_an_upright() {
         let upright = upright_at();
+    /// Spec 0100: it is still swinging to watch after six seconds, and the
+    /// swing keeps falling rather than settling on a buzz.
+    ///
+    /// **The second half is the fault and the first half is the cost of
+    /// the old fix for it.** With nothing taking speed off a ball, the only
+    /// brake was a lossy blow, so `BOUNCE` was 0.92 and the row went from a
+    /// 0.294 metre swing to 0.061 in six seconds. It then sat at 0.061 for
+    /// ever: at ten seconds, at sixteen, at twenty four, the same number.
+    /// Not a cradle running down, a cradle buzzing.
+    ///
+    /// Measured as the widest any ball gets over a second and a half, which
+    /// is what the eye reads as "still going". `stirring` is one instant and
+    /// says 0.048 at three seconds and 0.405 at ten, because it depends on
+    /// where in the swing it was asked.
+    #[test]
+    fn it_still_swings_and_keeps_running_down() {
+        let widest_after = |seconds: f32| {
+            let (mut bodies, links) = strung();
+            set_going(&mut bodies, 0);
+            let mut solver = solver();
+
+            for _ in 0..(seconds / STEP) as u32 {
+                step(&mut solver, &mut bodies, &links, GRAVITY);
+            }
+
+            let mut widest = 0.0f32;
+            for _ in 0..(1.5 / STEP) as u32 {
+                step(&mut solver, &mut bodies, &links, GRAVITY);
+                for ball in 0..BALLS {
+                    let off = bodies[ball_at(ball)].position.z - hook(ball).z;
+                    widest = widest.max(off.abs());
+                }
+            }
+
+            widest
+        };
+
+        let (six, sixteen) = (widest_after(6.0), widest_after(16.0));
+
+        assert!(
+            six > 0.15,
+            "six seconds in, the widest swing is {:.3} m of a 0.294 start",
+            six
+        );
+        assert!(
+            sixteen < six * 0.5,
+            "it swings {:.3} at six seconds and {:.3} at sixteen, which is a buzz and not a run down",
+            six,
+            sixteen
+        );
+    }
+
 
         for end in [0, BALLS - 1] {
             let (mut bodies, links) = strung();
