@@ -419,6 +419,35 @@ impl Wrecker {
     /// Both ways about, not just at the wall. Pulling along the swing alone
     /// means the ball only ever meets the wall head on in the middle, and the
     /// whole of what a wrecking ball asks of you is where to put it.
+    /// A hand on the ball, which stops it where it hangs. Spec 0103.
+    pub fn catch(&mut self) {
+        self.bodies[BALL_AT].velocity = Vec3::ZERO;
+        self.bodies[BALL_AT].spin = Vec3::ZERO;
+        self.bodies[BALL_AT].wake();
+    }
+
+    /// Everything back as it was found: the wall standing, the ball still
+    /// and the chain at the length it came on. Spec 0103.
+    ///
+    /// **Which `rebuild_wall` is not**, and that is the whole reason this
+    /// exists. It returns at once if the wall is whole, so a ball swung
+    /// through nothing and a chain wound out to 1.25 stay exactly where
+    /// you left them, and nothing in the building put either back.
+    pub fn home(&mut self) {
+        self.wound = 1.0;
+        self.catch();
+
+        for n in 1..WALL_FROM {
+            self.bodies[n].velocity = Vec3::ZERO;
+            self.bodies[n].spin = Vec3::ZERO;
+        }
+
+        self.bodies.truncate(WALL_FROM);
+        self.built_at.clear();
+        self.solver.forget();
+        self.lay_the_wall();
+    }
+
     pub fn haul(&mut self, way: Vec3) {
         self.bodies[BALL_AT].velocity += way.normalize_or_zero() * HAUL;
         for n in 1..WALL_FROM {

@@ -1686,6 +1686,11 @@ impl Arcade {
             // a hand on the ball, which is the other thing you do to one
             // and what its bench has always done. Spec 0102.
             Some(room::Seen::Globe) => self.globe.spin = 0.0,
+            // a hand on the ball, which stops it where it hangs. Its bench
+            // rebuilds the wall instead, and both are worth having: one is
+            // what you do to the ball and one is what you do to the wall.
+            // Spec 0103.
+            Some(room::Seen::Wrecker) => self.wrecker.catch(),
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
             Some(room::Seen::Mandel) => self.view = mandel::View::default(),
@@ -1866,9 +1871,10 @@ impl Arcade {
         // found by name rather than copied.
         let n = match self.seen {
             Some(room::Seen::Bench(n)) => n,
-            Some(room::Seen::Rotor) | Some(room::Seen::Globe) => {
+            Some(room::Seen::Rotor) | Some(room::Seen::Globe) | Some(room::Seen::Wrecker) => {
                 let name = match self.seen {
                     Some(room::Seen::Globe) => globe::NAME,
+                    Some(room::Seen::Wrecker) => wrecker::NAME,
                     _ => gyro::NAME,
                 };
 
@@ -1993,6 +1999,7 @@ impl Arcade {
             .ball_i_see()
             .or_else(|| self.rotor_i_see())
             .or_else(|| self.globe_i_see())
+            .or_else(|| self.wrecker_ball_i_see())
         {
             return Some(part);
         }
@@ -2027,6 +2034,14 @@ impl Arcade {
             {
                 self.globe = globe::Globe::new()
             }
+            // the wall standing, the ball still and the chain back at the
+            // length it came on, which `rebuild_wall` is not: it returns at
+            // once if the wall is whole. Spec 0103.
+            Some(room::Seen::Wrecker) | Some(room::Seen::Bench(_))
+                if self.toy_i_see() == Some(wrecker::NAME) =>
+            {
+                self.wrecker.home()
+            }
             Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(gyro::NAME) => self.gyro.stop(),
             Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(metronome::NAME) => {
                 self.metronome.stop()
@@ -2051,6 +2066,7 @@ impl Arcade {
             Some(room::Seen::Ball(_)) => Some(cradle::NAME),
             Some(room::Seen::Rotor) => Some(gyro::NAME),
             Some(room::Seen::Globe) => Some(globe::NAME),
+            Some(room::Seen::Wrecker) => Some(wrecker::NAME),
             _ => None,
         }
     }
@@ -2073,6 +2089,22 @@ impl Arcade {
                 .position(|bench| bench.name == gyro::NAME),
             _ => None,
         }
+    }
+
+    /// Whether the sight is on the wrecker's ball. Spec 0103.
+    fn wrecker_ball_i_see(&self) -> Option<room::Seen> {
+        let bench = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == wrecker::NAME)?;
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let at = top + self.wrecker.bodies[wrecker::BALL_AT].position;
+        let box_ = Aabb::from_center_size(at, Vec3::splat(wrecker::BALL * 2.0));
+
+        room::slab(self.looking_from(), self.facing(), &box_)
+            .filter(|far| *far <= room::BENCH_REACH)
+            .map(|_| room::Seen::Wrecker)
     }
 
     /// Whether the sight is on the globe. Spec 0102.
@@ -9087,6 +9119,11 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // the ball, which says what its bench says. Spec 0103.
+            (None, Some(room::Seen::Wrecker)) => (
+                Some(String::from(wrecker::NAME)),
+                Some(self.about(wrecker::NAME)),
+            ),
             // the globe, which says what its bench says. Spec 0102.
             (None, Some(room::Seen::Globe)) => (
                 Some(String::from(globe::NAME)),
@@ -15026,6 +15063,76 @@ mod tests {
         one.yaw = std::f32::consts::FRAC_PI_2;
         assert!(
             !matches!(one.what_i_see(), Some(room::Seen::Globe)),
+            "turned away the sight still found {:?}",
+            one.what_i_see()
+        );
+    }
+
+    /// Spec 0103: the sight finds the wrecker's ball, Return catches it,
+    /// and R puts back what rebuilding the wall does not.
+    ///
+    /// **`rebuild_wall` returns at once if the wall is whole**, so a ball
+    /// swung through nothing and a chain wound out stayed exactly where
+    /// they were left and nothing in the building put either back. That is
+    /// the gap R fills here, and it is the same gap the globe had.
+    ///
+    /// The control is the last line: turned away, no ball answers.
+    #[test]
+    fn the_sight_finds_the_wreckers_ball_and_r_puts_the_rest_back() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == wrecker::NAME)
+            .copied()
+            .expect("the ball and chain is on a bench");
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let at = top + one.wrecker.bodies[wrecker::BALL_AT].position;
+
+        one.at = vec3(at.x + 0.7, 0.0, at.z);
+        one.eye = at.y - EYE;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        assert_eq!(
+            one.what_i_see(),
+            Some(room::Seen::Wrecker),
+            "pointing at the ball finds {:?}",
+            one.what_i_see()
+        );
+
+        // swung, and caught by a hand on it
+        one.seen = one.what_i_see();
+        one.wrecker.haul(Vec3::X);
+        assert!(
+            one.wrecker.bodies[wrecker::BALL_AT].velocity.length() > 0.1,
+            "the haul did not move it"
+        );
+
+        one.use_what_i_see();
+        assert!(
+            one.wrecker.bodies[wrecker::BALL_AT].velocity.length() < 1e-5,
+            "a hand on the ball left it moving at {:.3}",
+            one.wrecker.bodies[wrecker::BALL_AT].velocity.length()
+        );
+
+        // and the chain wound out, which rebuilding the wall never touches
+        one.wrecker.wound = wrecker::WOUND_OUT;
+        one.wrecker.rebuild_wall();
+        assert_eq!(
+            one.wrecker.wound,
+            wrecker::WOUND_OUT,
+            "rebuilding the wall wound the chain back, so this test checks nothing"
+        );
+
+        assert!(one.put_it_back(), "the ball had nothing to put back");
+        assert_eq!(one.wrecker.wound, 1.0, "R left the chain wound out");
+
+        // the control
+        one.yaw = std::f32::consts::FRAC_PI_2;
+        assert!(
+            !matches!(one.what_i_see(), Some(room::Seen::Wrecker)),
             "turned away the sight still found {:?}",
             one.what_i_see()
         );

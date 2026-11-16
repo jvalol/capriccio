@@ -30,13 +30,26 @@ ways to say one thing. What is left is four:
 - A needle still ticking.
 - A shape somebody turned and walked away from, squared to the row again by `Spin::let_it_go`. The row's own slow turn goes on; what comes off is the hand.
 
-**The globe was wrong and spec 0102 took it back.** Its Return stills the
-spin and leaves the ball showing whatever longitude it had got to, so "no
-other way home" was the one thing it did not have: nothing in the building
-could put the Atlantic back in front of you. Return is a hand on it and R is
-the stand it came on, which is two verbs and not one said twice. The test
-this clause was reasoned from was never written; what found it was pointing
-at the thing.
+**Both of those were wrong, and specs 0102 and 0103 took them back.**
+
+The globe's Return stills the spin and leaves the ball showing whatever
+longitude it had got to, so "no other way home" was the one thing it did not
+have: nothing in the building could put the Atlantic back in front of you.
+The wrecker's `rebuild_wall` returns at once if the wall is whole, so a ball
+swung through nothing and a chain wound out to 1.25 stay exactly where they
+were left.
+
+The fault is the same both times and it is in the reasoning rather than in
+either toy. A Return that does one of the things a hand can change looks like
+a reset while you are reading it, and is not one. Return is a hand on the
+thing; R is where it came from; two verbs and not one said twice. Neither
+clause above was reasoned from a test, because no test was written for a toy
+being ruled out. What found both was pointing at the thing.
+
+So the rule the four bullets are really stating is narrower than "it has no
+other way home": it is that nothing already puts back *everything* a hand
+changed. The wrecker's wall is still not on the list for its own sake, and
+the globe's spin still is not. What they needed was the rest.
 
 And the panel, which is not a toy and whose Return already goes back to the
 top of the dive. It gets R as well because that is the one place a second key

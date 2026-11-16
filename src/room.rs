@@ -1028,6 +1028,8 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// The wrecker's ball on the end of its chain. Spec 0103.
+    Wrecker,
     /// The globe itself, rather than the bench it stands on. Spec 0102.
     ///
     /// **The one part here that does not move**, which is why it is worth
