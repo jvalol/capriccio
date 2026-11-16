@@ -1028,6 +1028,8 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// The weight on the metronome's needle. Spec 0104.
+    Weight,
     /// The wrecker's ball on the end of its chain. Spec 0103.
     Wrecker,
     /// The globe itself, rather than the bench it stands on. Spec 0102.

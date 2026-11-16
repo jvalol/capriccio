@@ -369,6 +369,19 @@ impl Metronome {
         self.was = 0.0;
     }
 
+    /// Stopped, levelled, and the weight back at the notch it came on.
+    /// Spec 0104.
+    ///
+    /// **Which `stop` is not.** That levels the arm and clears `going` and
+    /// leaves `notch` exactly where a hand slid it, so a metronome set to
+    /// its slowest stays at its slowest and nothing in the building put the
+    /// weight back. The third toy in a row where the obvious Return did one
+    /// of the things and the rest had no way home.
+    pub fn home(&mut self) {
+        self.slide(STARTS_AT as i32 - self.notch as i32);
+        self.stop();
+    }
+
     /// Puts the arm at a lean and takes all the speed out of it.
     fn place(&mut self, lean: f32) {
         let (arm, turn, slider) = posed(self.notch, lean);

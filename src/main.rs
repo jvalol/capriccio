@@ -1691,6 +1691,11 @@ impl Arcade {
             // what you do to the ball and one is what you do to the wall.
             // Spec 0103.
             Some(room::Seen::Wrecker) => self.wrecker.catch(),
+            // the weight has no verb of its own that Return could be: what
+            // you do to it is slide it, and the arrows already do that. So
+            // it starts and stops the thing, which is its bench's. Spec
+            // 0104.
+            Some(room::Seen::Weight) => self.metronome.press(),
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
             Some(room::Seen::Mandel) => self.view = mandel::View::default(),
@@ -1871,10 +1876,14 @@ impl Arcade {
         // found by name rather than copied.
         let n = match self.seen {
             Some(room::Seen::Bench(n)) => n,
-            Some(room::Seen::Rotor) | Some(room::Seen::Globe) | Some(room::Seen::Wrecker) => {
+            Some(room::Seen::Rotor)
+            | Some(room::Seen::Globe)
+            | Some(room::Seen::Wrecker)
+            | Some(room::Seen::Weight) => {
                 let name = match self.seen {
                     Some(room::Seen::Globe) => globe::NAME,
                     Some(room::Seen::Wrecker) => wrecker::NAME,
+                    Some(room::Seen::Weight) => metronome::NAME,
                     _ => gyro::NAME,
                 };
 
@@ -2000,6 +2009,7 @@ impl Arcade {
             .or_else(|| self.rotor_i_see())
             .or_else(|| self.globe_i_see())
             .or_else(|| self.wrecker_ball_i_see())
+            .or_else(|| self.weight_i_see())
         {
             return Some(part);
         }
@@ -2043,8 +2053,13 @@ impl Arcade {
                 self.wrecker.home()
             }
             Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(gyro::NAME) => self.gyro.stop(),
-            Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(metronome::NAME) => {
-                self.metronome.stop()
+            // stopped, levelled, and the weight back at the notch it came
+            // on, which `stop` alone leaves wherever a hand slid it. Spec
+            // 0104.
+            Some(room::Seen::Weight) | Some(room::Seen::Bench(_))
+                if self.toy_i_see() == Some(metronome::NAME) =>
+            {
+                self.metronome.home()
             }
             // a shape you turned and left turned, squared up again. The
             // row's own slow turn goes on; what comes off is the hand.
@@ -2067,6 +2082,7 @@ impl Arcade {
             Some(room::Seen::Rotor) => Some(gyro::NAME),
             Some(room::Seen::Globe) => Some(globe::NAME),
             Some(room::Seen::Wrecker) => Some(wrecker::NAME),
+            Some(room::Seen::Weight) => Some(metronome::NAME),
             _ => None,
         }
     }
@@ -2089,6 +2105,28 @@ impl Arcade {
                 .position(|bench| bench.name == gyro::NAME),
             _ => None,
         }
+    }
+
+    /// Whether the sight is on the weight on the metronome's needle.
+    /// Spec 0104.
+    ///
+    /// **It moves two ways**, which is why it is here with the others and
+    /// not a place in `Room`: it slides up and down the needle when a hand
+    /// sets the tempo, and it swings with the needle while the thing is
+    /// going.
+    fn weight_i_see(&self) -> Option<room::Seen> {
+        let bench = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == metronome::NAME)?;
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let at = top + self.metronome.bodies[metronome::SLIDER].position;
+        let box_ = Aabb::from_center_size(at, Vec3::splat(metronome::WEIGHT * 2.0));
+
+        room::slab(self.looking_from(), self.facing(), &box_)
+            .filter(|far| *far <= room::BENCH_REACH)
+            .map(|_| room::Seen::Weight)
     }
 
     /// Whether the sight is on the wrecker's ball. Spec 0103.
@@ -9119,6 +9157,11 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // the weight, which says what its bench says. Spec 0104.
+            (None, Some(room::Seen::Weight)) => (
+                Some(String::from(metronome::NAME)),
+                Some(self.about(metronome::NAME)),
+            ),
             // the ball, which says what its bench says. Spec 0103.
             (None, Some(room::Seen::Wrecker)) => (
                 Some(String::from(wrecker::NAME)),
@@ -15133,6 +15176,76 @@ mod tests {
         one.yaw = std::f32::consts::FRAC_PI_2;
         assert!(
             !matches!(one.what_i_see(), Some(room::Seen::Wrecker)),
+            "turned away the sight still found {:?}",
+            one.what_i_see()
+        );
+    }
+
+    /// Spec 0104: the sight finds the weight on the needle, and R puts it
+    /// back at the notch it came on where stopping never did.
+    ///
+    /// **The third toy with this same gap**, after the globe and the
+    /// wrecker's ball: `stop` levels the arm and clears `going` and leaves
+    /// `notch` exactly where a hand slid it. The test says so out loud
+    /// before it asks R, so a `stop` that quietly grew that job would fail
+    /// here rather than make the rest meaningless.
+    ///
+    /// The control is the last line: turned away, no weight answers.
+    #[test]
+    fn the_sight_finds_the_weight_and_r_puts_it_back() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == metronome::NAME)
+            .copied()
+            .expect("the metronome is on a bench");
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let at = top + one.metronome.bodies[metronome::SLIDER].position;
+
+        one.at = vec3(at.x + 0.7, 0.0, at.z);
+        one.eye = at.y - EYE;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        assert_eq!(
+            one.what_i_see(),
+            Some(room::Seen::Weight),
+            "pointing at the weight finds {:?}",
+            one.what_i_see()
+        );
+
+        // slid away from where it was found, and started
+        one.seen = one.what_i_see();
+        one.metronome.slide(3);
+        let slid = one.metronome.notch;
+        assert_ne!(slid, metronome::STARTS_AT, "the slide did not move it");
+
+        one.use_what_i_see();
+        assert!(one.metronome.going, "Return did not start it");
+
+        // stopping levels it and leaves the weight alone, which is the gap
+        one.metronome.stop();
+        assert_eq!(
+            one.metronome.notch,
+            slid,
+            "stopping put the weight back, so this test checks nothing"
+        );
+
+        assert!(one.put_it_back(), "the weight had nothing to put back");
+        assert_eq!(
+            one.metronome.notch,
+            metronome::STARTS_AT,
+            "R left the weight at {} of {}",
+            one.metronome.notch,
+            metronome::NOTCHES
+        );
+
+        // the control
+        one.yaw = std::f32::consts::FRAC_PI_2;
+        assert!(
+            !matches!(one.what_i_see(), Some(room::Seen::Weight)),
             "turned away the sight still found {:?}",
             one.what_i_see()
         );
