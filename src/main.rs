@@ -8958,7 +8958,7 @@ impl Game for Arcade {
             (None, Some(room::Seen::Ball(_))) => (
                 Some(String::from(cradle::NAME)),
                 Some(String::from(
-                    "[COPY - Jake] Click or press enter to pull it back. Arrows to shove it along",
+                    "Click or press enter to pull it back. Arrows to shove it along",
                 )),
             ),
             // the panel: how far in you are, and nothing else. Spec 0039.
