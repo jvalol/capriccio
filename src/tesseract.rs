@@ -910,12 +910,19 @@ pub fn shape() -> blitzkit::mesh::MeshData {
     shape_turned(0.0)
 }
 
-/// How fast a held arrow turns it in the fourth, in radians a second.
+/// How fast it turns itself in the fourth, in radians a second. Spec 0090.
 ///
-/// A whole turn in about nine seconds, which is slow enough that the swell
-/// through the middle can be watched and fast enough that nobody holds the
-/// key wondering whether it is doing anything.
-pub const TURNS_BY: f32 = 0.7;
+/// A whole turn in about twenty four seconds. Slower than the nine seconds
+/// a held arrow gave it, because nobody is waiting on it now: it has to
+/// read as something the object is doing rather than a machine running, and
+/// the swell through the middle is the part worth standing still for.
+///
+/// **Not a multiple of `display::TURNS`.** The plinth turns it about the
+/// upright at 0.35 and this turns it in the fourth, and at 0.7 the two were
+/// exactly two to one, so the pair came back to the same pose every
+/// eighteen seconds and read as one coupled motion. Off that ratio they are
+/// two things happening to the same object, which is what they are.
+pub const TURNS_BY: f32 = 0.26;
 
 /// The same object, turned in the fourth by `phase`. Spec 0089.
 ///

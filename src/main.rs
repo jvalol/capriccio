@@ -1157,18 +1157,17 @@ struct Arcade {
     /// and the curve is the speed, so a turn leans into itself and out again.
     turning: f32,
     tilting: f32,
-    /// How far the tesseract on its plinth is turned in the fourth, and
-    /// which way the hand is turning it. Spec 0089.
+    /// How far the tesseract on its plinth is turned in the fourth.
+    /// Spec 0089, and spec 0090 for why nothing here says which way.
     ///
-    /// **Turning and not a target.** The shape has no phases to step
-    /// between: a quarter turn is as good a place to stop as nought, so
-    /// what the arrows give is a direction to go while they are held, the
-    /// way leaning on the gyro walks its axis.
+    /// **It turns itself, so there is no hand to hold.** Spec 0089 gave the
+    /// arrows a direction to wind while they were held. Jake stood in front
+    /// of it: the thing a person wants from this object is to watch the
+    /// inner cube swell out through the outer one, and making them hold a
+    /// key for that put a chore in front of the one trick it has. So the
+    /// phase is time, like every other display in the row, and the arrows
+    /// went back to turning the person.
     tesseract_phase: f32,
-    tesseract_turning: f32,
-    /// What phase the mesh on the plinth was last written at, so a frame
-    /// nobody is turning it writes nothing.
-    shown_phase: Option<f32>,
     /// Whether this run is flying rather than walking, per spec 0041.
     ///
     /// **State and not a flag read where it is wanted.** `--fly` says what
@@ -1580,8 +1579,6 @@ impl Arcade {
             turning: 0.0,
             tilting: 0.0,
             tesseract_phase: 0.0,
-            tesseract_turning: 0.0,
-            shown_phase: None,
             flying: flying(),
             showing_solid: false,
             showing_cost: false,
@@ -1725,33 +1722,6 @@ impl Arcade {
         let Some(which) = arrow_at(input.key) else {
             return false;
         };
-
-        // **The tesseract on its plinth, which is a toy and not a bench.**
-        // Spec 0089. Every other worked thing in this building stands on a
-        // bench and is found by name; this one is the sixth display in the
-        // gallery's row, and Return at it is already spoken for by the way
-        // in. So the arrows are what it answers to, which is what the help
-        // text has promised all along about the toy you are looking at.
-        //
-        // Left and right only. Up and down would be a second plane of the
-        // same rotation and `corners_at` turns in one on purpose.
-        if self.seen == Some(room::Seen::Display(display::tesseract())) {
-            if !matches!(input.key, KeyboardKey::Left | KeyboardKey::Right) {
-                return false;
-            }
-
-            self.looking[which] = false;
-            self.leaning[which] = false;
-            self.tesseract_turning = if !held {
-                0.0
-            } else if input.key == KeyboardKey::Left {
-                -1.0
-            } else {
-                1.0
-            };
-
-            return true;
-        }
 
         let Some(room::Seen::Bench(n)) = self.seen else {
             return false;
@@ -7399,8 +7369,12 @@ impl Game for Arcade {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
 
-        // the tesseract's own shape, rebuilt whenever the hand has turned it
-        // in the fourth. Spec 0089.
+        // the tesseract's own shape, rebuilt every frame because it is
+        // always turning in the fourth. Spec 0089, and spec 0090 for the
+        // turning. Measured at 7.6 microseconds a build, which is a
+        // twentieth of a percent of a frame, so the guard that used to ask
+        // whether the phase had moved was asking a question whose answer is
+        // now always yes.
         //
         // **Written again rather than drawn from parts.** Turning in the
         // fourth moves all sixteen corners and changes how long every one
@@ -7409,14 +7383,9 @@ impl Game for Arcade {
         // alternative was thirty-two bars pushed as instances, which costs
         // nothing to turn and would have made them boxes rather than the
         // tubes every other shape in this row is drawn with. This is the
-        // engine's spec 0074 answer again, one mesh written over, and it
-        // only happens on the frames somebody is turning it.
-        if let (Some(mesh), true) = (
-            self.shown.get(display::tesseract()).copied(),
-            self.shown_phase != Some(self.tesseract_phase),
-        ) {
+        // engine's spec 0074 answer again: one mesh, written over.
+        if let Some(mesh) = self.shown.get(display::tesseract()).copied() {
             renderer.update_mesh(mesh, &tesseract::shape_turned(self.tesseract_phase));
-            self.shown_phase = Some(self.tesseract_phase);
         }
 
         // the gallery's panel. One texture, written again whenever the view
@@ -8474,14 +8443,12 @@ impl Game for Arcade {
         };
         self.gyro.advance(dt);
 
-        // and the tesseract on its plinth, while an arrow is held at it.
-        // Spec 0089. Wrapped rather than clamped: it is a turn, and a turn
-        // that stops at its own start is a thing that jams once.
-        if self.tesseract_turning != 0.0 {
-            self.tesseract_phase = (self.tesseract_phase
-                + self.tesseract_turning * tesseract::TURNS_BY * dt)
-                .rem_euclid(std::f32::consts::TAU);
-        }
+        // and the tesseract on its plinth, which turns in the fourth for as
+        // long as the building is open. Spec 0090. Wrapped rather than
+        // clamped: it is a turn, and a turn that stops at its own start is a
+        // thing that jams once.
+        self.tesseract_phase =
+            (self.tesseract_phase + tesseract::TURNS_BY * dt).rem_euclid(std::f32::consts::TAU);
         self.globe.advance(dt);
         self.puzzle.advance(dt);
 
@@ -8800,7 +8767,14 @@ impl Game for Arcade {
             // button would do, as a cabinet does
             (None, Some(room::Seen::Display(n))) => (
                 Some(self.room.displays[n].name.to_string()),
-                Some(String::from(if self.spin.holding() == Some(n) {
+                // the sixth is the way into spec 0021's room rather than a
+                // thing you take hold of, so it says so. Spec 0090. It read
+                // "to turn it" before, which was wrong for this one from the
+                // day it went in and misleading from the day it started
+                // turning itself.
+                Some(String::from(if n == display::tesseract() {
+                    "Click or press enter to enter it"
+                } else if self.spin.holding() == Some(n) {
                     "Click or press enter to let go"
                 } else {
                     "Click or press enter to turn it"

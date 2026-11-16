@@ -1,6 +1,9 @@
 # 0089 Turning the tesseract in the fourth
 
-**Status:** implemented
+**Status:** implemented, with its input half replaced by spec 0090 on
+2026-11-16. The shape is all still here: `corners_at`, the plane it turns in,
+the scaling that holds it to the row's width, and the mesh written over. What
+went is the pair of arrows below, which became time.
 **Date:** 2026-11-15
 
 ## Goal
