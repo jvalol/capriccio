@@ -1028,6 +1028,12 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// The gyroscope's rotor, which is the thing that spins. Spec 0099.
+    ///
+    /// The second moving part this building lets you point at, and sighted
+    /// the same way as the first, for the same reason: it is a body and not
+    /// a place.
+    Rotor,
     /// One of the cradle's balls, by its place in the row. Spec 0098.
     ///
     /// **Not in the building's list and it cannot be**, which is the

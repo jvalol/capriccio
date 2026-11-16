@@ -1679,6 +1679,10 @@ impl Arcade {
             // at the bench still lifts the end one, so the toy answers the
             // same from a step back as it always did.
             Some(room::Seen::Ball(n)) => cradle::set_going(&mut self.cradle, n),
+            // the rotor: spun up, or stopped and let fall, which is what
+            // its bench has always done. Spec 0099. Pointing at the wheel
+            // is the change; what the wheel does is not.
+            Some(room::Seen::Rotor) => self.gyro.press(),
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
             Some(room::Seen::Mandel) => self.view = mandel::View::default(),
@@ -1853,8 +1857,22 @@ impl Arcade {
             return true;
         }
 
-        let Some(room::Seen::Bench(n)) = self.seen else {
-            return false;
+        // **The rotor answers as its own bench.** Spec 0099. Pointing at the
+        // wheel rather than at the table it stands on is the whole of what
+        // changed, so the keys it wants and what they do are the bench's,
+        // found by name rather than copied.
+        let n = match self.seen {
+            Some(room::Seen::Bench(n)) => n,
+            Some(room::Seen::Rotor) => match self
+                .room
+                .benches
+                .iter()
+                .position(|bench| bench.name == gyro::NAME)
+            {
+                Some(n) => n,
+                None => return false,
+            },
+            _ => return false,
         };
         let name = self.room.benches[n].name;
         if !wanted_by(name, input.key, self.shifted) {
@@ -1964,13 +1982,56 @@ impl Arcade {
             return Some(room::Seen::Watchman);
         }
 
-        // and a ball on the cradle, which is in front of the bench it
-        // stands on and has to be asked about first. Spec 0098.
-        if let Some(ball) = self.ball_i_see() {
-            return Some(ball);
+        // and the moving parts, which stand in front of the benches they
+        // are on and have to be asked about first. Spec 0098 and 0099.
+        if let Some(part) = self.ball_i_see().or_else(|| self.rotor_i_see()) {
+            return Some(part);
         }
 
         self.room.looking_at(self.looking_from(), self.facing())
+    }
+
+    /// Which bench a held arrow is leaning on, if any.
+    ///
+    /// **Its own function because two things answer to one bench.** Spec
+    /// 0099: the rotor leans the same way the bench it stands on does, and
+    /// has to be looked up by name to find which that is. Up and down are
+    /// up and down whichever side of a bench you stand; left and right are
+    /// not, and moving the benches to the other wall turned them round,
+    /// which is why the lean is taken off the bench at all.
+    fn leaning_on(&self) -> Option<usize> {
+        match self.seen {
+            Some(room::Seen::Bench(n)) => Some(n),
+            Some(room::Seen::Rotor) => self
+                .room
+                .benches
+                .iter()
+                .position(|bench| bench.name == gyro::NAME),
+            _ => None,
+        }
+    }
+
+    /// Whether the sight is on the gyroscope's rotor. Spec 0099.
+    ///
+    /// **Boxed on its sweep and not on the disc.** The rotor is a disc that
+    /// turns about an axle the whole frame walks round, so the face it
+    /// shows you depends on where the demonstration has got to. A box of
+    /// its own diameter is the ball it sweeps and is the same answer
+    /// whichever way it is pointing, which is what a thing you reach for
+    /// wants.
+    fn rotor_i_see(&self) -> Option<room::Seen> {
+        let bench = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == gyro::NAME)?;
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let at = top + self.gyro.bodies[gyro::WHEEL].position;
+        let box_ = Aabb::from_center_size(at, Vec3::splat(gyro::RADIUS * 2.0));
+
+        room::slab(self.looking_from(), self.facing(), &box_)
+            .filter(|far| *far <= room::BENCH_REACH)
+            .map(|_| room::Seen::Rotor)
     }
 
     /// Which of the cradle's balls the sight is on, if any.
@@ -8643,7 +8704,7 @@ impl Game for Arcade {
         // bench rather than written down as the nook's axes. Up and down are up
         // and down whichever side of it you are on; left and right are not, and
         // moving the benches to the other wall turned them round.
-        self.gyro.leaning = if let Some(room::Seen::Bench(n)) = self.seen {
+        self.gyro.leaning = if let Some(n) = self.leaning_on() {
             let bench = &self.room.benches[n];
             let lean = [Vec3::Y, Vec3::NEG_Y, -bench.right(), bench.right()];
 
@@ -8953,6 +9014,12 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // the rotor, which says what its bench says: the dial it is set
+            // to and what that does. Spec 0099. No copy of its own, because
+            // pointing at the wheel does not change what the wheel is.
+            (None, Some(room::Seen::Rotor)) => {
+                (Some(String::from(gyro::NAME)), Some(self.about(gyro::NAME)))
+            }
             // a ball, which is a thing on a toy and the first of those this
             // building has let you point at. Spec 0098.
             (None, Some(room::Seen::Ball(_))) => (
@@ -14663,6 +14730,94 @@ mod tests {
         assert!(
             !matches!(one.what_i_see(), Some(room::Seen::Ball(_))),
             "turned away from the cradle the sight still found {:?}",
+            one.what_i_see()
+        );
+    }
+
+    /// Spec 0099: the sight finds the gyroscope's rotor, and it answers as
+    /// its bench does.
+    ///
+    /// **What changed is where you point and nothing else**, which is the
+    /// claim worth holding: pressing the rotor spins it up and stops it
+    /// the way pressing the bench always has, and a held arrow leans on
+    /// the spindle from either. A rotor arm that forgot to find the bench
+    /// would take the keys and do nothing with them, which is the quiet
+    /// way this fails.
+    ///
+    /// The control is the last line: turned away, no rotor answers.
+    #[test]
+    fn the_sight_finds_the_rotor_and_it_answers_as_its_bench() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == gyro::NAME)
+            .copied()
+            .expect("the gyroscope is on a bench");
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let at = top + one.gyro.bodies[gyro::WHEEL].position;
+
+        one.at = vec3(at.x + 0.8, 0.0, at.z);
+        one.eye = at.y - EYE;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        assert_eq!(
+            one.what_i_see(),
+            Some(room::Seen::Rotor),
+            "pointing at the wheel finds {:?}",
+            one.what_i_see()
+        );
+
+        // pressing it is the bench's own press
+        one.seen = one.what_i_see();
+        let was = one.gyro.going;
+        one.use_what_i_see();
+        assert!(
+            one.gyro.going != was,
+            "pressing the rotor left it going at {}",
+            one.gyro.going
+        );
+
+        // and a held arrow leans on the spindle, which means finding the
+        // bench the rotor stands on rather than nothing at all
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .position(|bench| bench.name == gyro::NAME);
+
+        assert_eq!(
+            one.leaning_on(),
+            bench,
+            "an arrow at the rotor leans on {:?} rather than its own bench",
+            one.leaning_on()
+        );
+
+        // and the arrows go to the toy rather than to turning you
+        one.looking = [false; 4];
+        let yaw = one.yaw;
+        assert!(
+            one.work_a_toy(
+                &KeyboardInput::new(KeyboardKey::Up, KeyboardKeyState::Pressed, false),
+                true
+            ),
+            "the rotor did not want the up arrow"
+        );
+        one.aimed_and_moved(1.0 / 60.0);
+        assert!(
+            (one.yaw - yaw).abs() < 1e-4,
+            "an arrow at the rotor turned you by {:.3}",
+            one.yaw - yaw
+        );
+
+        // the control: turned away, nothing of the gyroscope answers
+        one.yaw = std::f32::consts::FRAC_PI_2;
+
+        assert!(
+            !matches!(one.what_i_see(), Some(room::Seen::Rotor)),
+            "turned away the sight still found {:?}",
             one.what_i_see()
         );
     }
