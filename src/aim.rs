@@ -2185,13 +2185,27 @@ pub fn look_of(built: bool, lit: bool) -> Look {
 ///
 /// Not none, though. Five of them stand 0.72 apart and the name under the
 /// sight belongs to one of them. Enough to say which, not enough to say press.
-pub fn shape_colour(lit: bool) -> Vec4 {
-    if lit {
+pub fn shape_colour(lit: bool, see_through: bool) -> Vec4 {
+    let colour = if lit {
         vec4(0.58, 0.56, 0.66, 1.0)
     } else {
         vec4(0.44, 0.42, 0.52, 1.0)
+    };
+
+    if see_through {
+        colour.with_w(SHAPE_SEE_THROUGH)
+    } else {
+        colour
     }
 }
+
+/// How much of a see-through shape you can see through, per spec 0092.
+///
+/// Further over than the sauna's glass at 0.26, because what is worth
+/// seeing here is the shape's own far side rather than the room behind it,
+/// and at a quarter the near face of a teapot was a smear with the handle
+/// lost in it.
+pub const SHAPE_SEE_THROUGH: f32 = 0.38;
 
 #[cfg(test)]
 mod tests {
@@ -2678,7 +2692,7 @@ mod tests {
     /// cabinet is kept dark to avoid making.
     #[test]
     fn a_shape_answers_more_quietly_than_a_cabinet() {
-        let shapes = shape_colour(true).x - shape_colour(false).x;
+        let shapes = shape_colour(true, false).x - shape_colour(false, false).x;
         let cabinets = look_of(true, true).screen.x - look_of(true, false).screen.x;
 
         assert!(

@@ -1168,6 +1168,15 @@ struct Arcade {
     /// phase is time, like every other display in the row, and the arrows
     /// went back to turning the person.
     tesseract_phase: f32,
+    /// Where each shape's own knob stands, and where the mesh on its plinth
+    /// was last built. Spec 0092.
+    ///
+    /// Two lists rather than a dirty flag, because what a rebuild has to
+    /// know is not that something changed but what it was built at: a knob
+    /// wound up and straight back down again inside one frame has changed
+    /// twice and wants no rebuild at all.
+    knobs: Vec<i32>,
+    shown_knobs: Vec<i32>,
     /// Whether this run is flying rather than walking, per spec 0041.
     ///
     /// **State and not a flag read where it is wanted.** `--fly` says what
@@ -1579,6 +1588,8 @@ impl Arcade {
             turning: 0.0,
             tilting: 0.0,
             tesseract_phase: 0.0,
+            knobs: (0..display::count()).map(display::knob_rests).collect(),
+            shown_knobs: (0..display::count()).map(display::knob_rests).collect(),
             flying: flying(),
             showing_solid: false,
             showing_cost: false,
@@ -1713,6 +1724,49 @@ impl Arcade {
         }
     }
 
+    /// The shapes whose knob has moved since their mesh was built, each
+    /// re-measured against the mesh it now wants. Spec 0092.
+    ///
+    /// **A depth is a different object and not a transform**, the same as
+    /// the tesseract's phase, so the mesh has to be written again. And the
+    /// display has to be measured against it: a hilbert tube wound thicker
+    /// is a wider thing, and a scale left at what it was would draw it over
+    /// its neighbour while a `half` left at what it was would sink it into
+    /// its plinth.
+    ///
+    /// **Separate from the writing so that it can be checked.**
+    /// `update_mesh` wants a renderer and there is none in a test, and what
+    /// is worth checking is not that a buffer was written but that the
+    /// right shapes come back, measured, once each.
+    fn rebuilt_shapes(&mut self) -> Vec<(usize, blitzkit::mesh::MeshData)> {
+        let mut out = Vec::new();
+
+        for n in 0..self.knobs.len().min(self.room.displays.len()) {
+            if self.shown_knobs.get(n).copied() == Some(self.knobs[n]) {
+                continue;
+            }
+
+            let built = display::mesh_at(n, self.knobs[n]);
+            self.room.displays[n].fitted(&built);
+            self.shown_knobs[n] = self.knobs[n];
+            out.push((n, built));
+        }
+
+        out
+    }
+
+    /// Wind one shape's knob a step, as far as that shape's run allows.
+    /// Spec 0092.
+    fn wind_the_knob(&mut self, n: usize, step: i32) {
+        let Some((least, most)) = display::knob_runs(n) else {
+            return;
+        };
+
+        if let Some(knob) = self.knobs.get_mut(n) {
+            *knob = (*knob + step).clamp(least, most);
+        }
+    }
+
     /// The arrows, on the toy the sight is on. Says whether the key was one the
     /// toy wanted, which is what decides whether it also walks you.
     ///
@@ -1722,6 +1776,28 @@ impl Arcade {
         let Some(which) = arrow_at(input.key) else {
             return false;
         };
+
+        // **Shift and up or down is the shape's own knob.** Spec 0092, and
+        // the gesture is spec 0039's: at the panel, shift and up or down
+        // changes the scale while the plain arrows move about the plane.
+        // Here the plain arrows turn the shape, per spec 0091, so the same
+        // pair with shift on is what was left and is what the building
+        // already means by it.
+        //
+        // A step a press rather than a wind. A depth is a whole number and
+        // three of them is the whole run, so there is nothing between two
+        // positions to ease through, and a repeat held down would walk the
+        // menger sponge to its most expensive depth before you let go.
+        if self.shifted && matches!(input.key, KeyboardKey::Up | KeyboardKey::Down) {
+            if let Some(shape) = self.spin.holding() {
+                self.looking[which] = false;
+                if held && !input.repeat {
+                    self.wind_the_knob(shape, if input.key == KeyboardKey::Up { 1 } else { -1 });
+                }
+
+                return true;
+            }
+        }
 
         let Some(room::Seen::Bench(n)) = self.seen else {
             return false;
@@ -7405,6 +7481,14 @@ impl Game for Arcade {
             renderer.update_mesh(mesh, &tesseract::shape_turned(self.tesseract_phase));
         }
 
+        // and any shape whose knob has moved since its mesh was built.
+        // Spec 0092.
+        for (n, built) in self.rebuilt_shapes() {
+            if let Some(mesh) = self.shown.get(n).copied() {
+                renderer.update_mesh(mesh, &built);
+            }
+        }
+
         // the gallery's panel. One texture, written again whenever the view
         // has moved, per the engine's spec 0074. It was a ladder of fixed
         // views before that, because adding a texture was the only way to
@@ -12206,8 +12290,13 @@ impl Game for Arcade {
                 &Transform::at(sits)
                     .with_rotation(facing)
                     .with_scale(Vec3::splat(one.scale)),
+                // see-through is an alpha short of full and nothing else:
+                // the engine puts anything under one into the translucent
+                // runs, which draw the far side before the near one. Spec
+                // 0092.
                 aim::shape_colour(
                     self.seen == Some(room::Seen::Display(n)) || self.spin.holding() == Some(n),
+                    display::see_through(n, self.knobs.get(n).copied().unwrap_or(0)),
                 ),
             );
         }
@@ -12232,7 +12321,7 @@ impl Game for Arcade {
                 // lit rather than painted, because it is a screen: colour
                 // here is an unclamped multiplier and a surface at one is
                 // only as bright as the room, which in this one is dim
-                aim::MANDEL_LIT * aim::shape_colour(self.seen == Some(room::Seen::Mandel)),
+                aim::MANDEL_LIT * aim::shape_colour(self.seen == Some(room::Seen::Mandel), false),
                 aim::DULL,
             );
         }
@@ -14169,6 +14258,133 @@ mod tests {
             "half a second of right arrow with empty hands turned you by {:.3}",
             one.yaw
         );
+    }
+
+    /// Spec 0092: shift and an arrow wind the shape's own knob, and the
+    /// mesh under it is built again and measured again.
+    ///
+    /// **One test for the whole chain**, because every link of it has a
+    /// way of doing nothing visible. The key can fall through to the
+    /// tilt, the knob can wind past its own run, the mesh can be left at
+    /// what it was, and the display can be left measured against the mesh
+    /// it used to have, which is the one that draws a thicker tube over
+    /// its neighbour.
+    ///
+    /// The control is the plain arrow at the end: no shift, and the knob
+    /// does not move, so a branch that swallowed every arrow at a plinth
+    /// fails here.
+    #[test]
+    fn shift_and_an_arrow_wind_the_shapes_own_knob() {
+        let shape = 4;
+        let (least, most) = display::knob_runs(shape).expect("the tube has a knob");
+
+        let mut one = Arcade::new();
+        one.at = vec3(one.room.displays[shape].at.x, 0.0, -13.0);
+        one.yaw = 0.0;
+        one.seen = one.what_i_see();
+        one.use_what_i_see();
+        assert_eq!(one.spin.holding(), Some(shape), "it is not in your hands");
+
+        let rest = one.knobs[shape];
+        let was = one.room.displays[shape].scale;
+
+        one.shifted = true;
+        one.process_keyboard(KeyboardInput::new(
+            KeyboardKey::Up,
+            KeyboardKeyState::Pressed,
+            false,
+        ));
+
+        assert_eq!(one.knobs[shape], rest + 1, "shift and up did not wind it");
+        assert!(
+            !one.looking[0],
+            "shift and up wound the knob and tilted the shape as well"
+        );
+
+        let built = one.rebuilt_shapes();
+        assert_eq!(built.len(), 1, "{} shapes wanted rebuilding", built.len());
+        assert_eq!(built[0].0, shape, "the wrong shape was rebuilt");
+        // a thicker tube is a wider object, so holding it to the row's own
+        // width takes a smaller scale. That is the whole of what `fitted`
+        // is for, and it is the link that fails silently.
+        assert!(
+            one.room.displays[shape].scale < was,
+            "a thicker tube was not measured again: scale {:.4} to {:.4}",
+            was,
+            one.room.displays[shape].scale
+        );
+        assert!(
+            one.rebuilt_shapes().is_empty(),
+            "the same shape wanted rebuilding twice"
+        );
+
+        // the run holds at both ends
+        for _ in 0..8 {
+            one.wind_the_knob(shape, 1);
+        }
+        assert_eq!(one.knobs[shape], most, "it wound past the top of its run");
+        for _ in 0..8 {
+            one.wind_the_knob(shape, -1);
+        }
+        assert_eq!(one.knobs[shape], least, "it wound past the foot of its run");
+
+        // and the plain arrow is still the turn
+        let knob = one.knobs[shape];
+        one.shifted = false;
+        one.process_keyboard(KeyboardInput::new(
+            KeyboardKey::Up,
+            KeyboardKeyState::Pressed,
+            false,
+        ));
+        assert_eq!(one.knobs[shape], knob, "a plain up wound the knob");
+        assert!(one.looking[0], "a plain up did not go to the turn");
+    }
+
+    /// Spec 0092: every step of every knob builds a shape there is
+    /// something to see.
+    ///
+    /// **Because a step that collapses the mesh is the fault this family
+    /// of things has.** A turned profile with one step drew two points and
+    /// no skin, which is why the candles, the clock dial and the fire's
+    /// coals were all invisible at once. A knob is a run of parameters
+    /// nobody has looked at, and the foot of each run is where that
+    /// happens: a tube of no radius, a fractal of no depth.
+    ///
+    /// **Measured as area and not as a count of triangles**, which is the
+    /// first thing this asked and which could not fail. A tube of no
+    /// radius keeps every ring and every index it had and puts them all
+    /// on the curve, so it has its full count, its full box, and no
+    /// surface at all. Found by putting that radius back.
+    #[test]
+    fn every_step_of_every_knob_builds_something() {
+        for n in 0..display::count() {
+            let Some((least, most)) = display::knob_runs(n) else {
+                continue;
+            };
+
+            for knob in least..=most {
+                let mesh = display::mesh_at(n, knob);
+                let area: f32 = mesh
+                    .indices
+                    .chunks_exact(3)
+                    .map(|one| {
+                        let at = |n: u32| Vec3::from(mesh.vertices[n as usize].position);
+                        (at(one[1]) - at(one[0]))
+                            .cross(at(one[2]) - at(one[0]))
+                            .length()
+                            * 0.5
+                    })
+                    .sum();
+
+                assert!(
+                    area > 0.05,
+                    "shape {} at knob {} has {:.4} of surface, which is nothing to look at",
+                    n,
+                    knob,
+                    area
+                );
+            }
+        }
     }
 
     /// Spec 0051: the two rooms that answer by being reached.

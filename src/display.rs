@@ -142,15 +142,20 @@ pub struct Display {
 
 /// What each one is, in the order they are laid out along the wall.
 const SHAPES: [&str; 6] = [
-    "teapot",
-    "klein",
-    "sierpinski",
-    "menger",
-    "hilbert",
+    TEAPOT, KLEIN, SIERPINSKI, MENGER, HILBERT,
     // the sixth, which is a door. Spec 0021: the five before it are what
     // teach the verb, and this is the one that spends it on you.
     TESSERACT,
 ];
+
+/// Each of them by name, because the row's order is one list and what a
+/// shape is is another question, and matching on a string written twice is
+/// two lists of one thing.
+pub const TEAPOT: &str = "teapot";
+pub const KLEIN: &str = "klein";
+pub const SIERPINSKI: &str = "sierpinski";
+pub const MENGER: &str = "menger";
+pub const HILBERT: &str = "hilbert";
 
 /// The one on the end, named because what happens when you press enter at it
 /// is not what happens at the other five.
@@ -159,6 +164,64 @@ pub const TESSERACT: &str = "tesseract";
 /// Which place in the row that is.
 pub fn tesseract() -> usize {
     SHAPES.len() - 1
+}
+
+/// How many stand in the row.
+pub fn count() -> usize {
+    SHAPES.len()
+}
+
+/// Which shape stands in a given place.
+fn shape(n: usize) -> &'static str {
+    SHAPES.get(n).copied().unwrap_or("")
+}
+
+/// How far a shape's own knob can be wound, if it has one. Spec 0092.
+///
+/// **One number per shape and not one kind of knob per shape.** Three of
+/// these are built at a depth or a thickness, so for those it is that. The
+/// teapot and the Klein bottle are one mesh each however you ask for them
+/// and the only thing left to change about them is whether you can see
+/// through them, so for those it is nought or one. The tesseract has
+/// neither: it is a door.
+pub fn knob_runs(n: usize) -> Option<(i32, i32)> {
+    match shape(n) {
+        TEAPOT | KLEIN => Some((0, 1)),
+        // six was tried and is speckle: sixteen thousand tetrahedra across
+        // half a metre is a few pixels apiece, so the shape stops reading
+        // as a solid and reads as grey noise on a sheet. Five is the last
+        // one that is still an object
+        SIERPINSKI => Some((1, 5)),
+        // three is 36 thousand triangles and a millisecond and a half to
+        // build; four is 673 thousand and twenty nine milliseconds, which
+        // is a frame and three quarters gone on one keypress
+        MENGER => Some((1, 3)),
+        HILBERT => Some((1, 4)),
+        _ => None,
+    }
+}
+
+/// Where each knob rests, which is what the row has been drawn at since it
+/// went in. The row looks the same as it did until a hand moves one.
+pub fn knob_rests(n: usize) -> i32 {
+    match shape(n) {
+        SIERPINSKI => 4,
+        MENGER => 2,
+        HILBERT => 2,
+        _ => 0,
+    }
+}
+
+/// How much thicker each step makes the hilbert tube.
+///
+/// The curve runs on a lattice of 0.125 at order three, so the holes close
+/// at half of that: the fourth step is 0.06 and is the last one with
+/// anything left to see through.
+pub const HILBERT_STEP: f32 = 0.015;
+
+/// Whether this one is drawn see-through at that knob.
+pub fn see_through(n: usize, knob: i32) -> bool {
+    matches!(shape(n), TEAPOT | KLEIN) && knob > 0
 }
 
 /// Everything the engine's shape library carries, in the order it is laid out.
@@ -178,8 +241,6 @@ pub fn all_of_them(wall: f32) -> Vec<Display> {
         .zip(meshes())
         .enumerate()
         .map(|(n, (name, mesh))| {
-            let size = mesh.bounds().size();
-            let scale = ACROSS / size.max_element().max(1e-4);
             // out from the picture a step at a time, each half its own way
             let (side, out) = if n < each {
                 (-1.0, (each - 1 - n) as f32)
@@ -187,30 +248,63 @@ pub fn all_of_them(wall: f32) -> Vec<Display> {
                 (1.0, (n - each) as f32)
             };
 
-            Display {
+            let mut one = Display {
                 name,
                 at: vec3(side * (inside() + out * APART), HIGH, wall + OFF_THE_WALL),
-                scale,
-                half: size * scale * 0.5,
-            }
+                scale: 1.0,
+                half: Vec3::ZERO,
+            };
+            one.fitted(&mesh);
+
+            one
         })
         .collect()
 }
 
-/// The meshes, in the same order.
+impl Display {
+    /// Measure one against its mesh: how much to scale it so it is the
+    /// row's width, and how big it then is.
+    ///
+    /// **Not written down once at the start.** A knob rebuilds the mesh
+    /// under a shape, and a hilbert tube wound thicker is a wider object,
+    /// so a scale measured at the rest would draw it over its neighbour and
+    /// a `half` measured there would sink it into its plinth. Spec 0092.
+    pub fn fitted(&mut self, mesh: &MeshData) {
+        let size = mesh.bounds().size();
+        self.scale = ACROSS / size.max_element().max(1e-4);
+        self.half = size * self.scale * 0.5;
+    }
+}
+
+/// The meshes, in the same order, each at where its own knob rests.
 ///
 /// The depths and step counts are the ones the examples open at. Deeper is
 /// prettier and slower, and a room with five of them turning at once pays for
 /// all of them every frame.
 pub fn meshes() -> Vec<MeshData> {
-    vec![
-        blitzkit_shapes::teapot::teapot(6),
-        blitzkit_shapes::klein::klein_bottle(48, 24),
-        blitzkit_shapes::sierpinski::sierpinski(4),
-        blitzkit_shapes::menger::menger(2),
-        blitzkit_shapes::hilbert::hilbert_tube(3, 8, 0.03),
-        crate::tesseract::shape(),
-    ]
+    (0..count()).map(|n| mesh_at(n, knob_rests(n))).collect()
+}
+
+/// One shape, built at its knob. Spec 0092.
+///
+/// **The one place a shape in this row is built.** The list used to be six
+/// calls written out, and a knob turning three of them would have been a
+/// second list saying the same thing differently, which this building has
+/// learnt what happens to.
+pub fn mesh_at(n: usize, knob: i32) -> MeshData {
+    let knob = match knob_runs(n) {
+        Some((least, most)) => knob.clamp(least, most),
+        None => knob,
+    };
+
+    match shape(n) {
+        TEAPOT => blitzkit_shapes::teapot::teapot(6),
+        KLEIN => blitzkit_shapes::klein::klein_bottle(48, 24),
+        SIERPINSKI => blitzkit_shapes::sierpinski::sierpinski(knob as u32),
+        MENGER => blitzkit_shapes::menger::menger(knob as u32),
+        HILBERT => blitzkit_shapes::hilbert::hilbert_tube(3, 8, knob as f32 * HILBERT_STEP),
+        _ => crate::tesseract::shape(),
+    }
 }
 
 /// Where a shape's lowest point is, which is where its plinth has to reach.
