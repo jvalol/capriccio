@@ -1015,6 +1015,85 @@ pub fn face_at(middle: Vec3, at: Vec3) -> Face {
     Face::ALL[best.0]
 }
 
+/// Which layer a hand rolls when it pushes up at this point on the cube,
+/// and the quarters that roll it upward. Spec 0107.
+///
+/// **Because pointing at a face only ever gave you that face.** `face_at`
+/// answers one face and the arrows turned it in its own plane, so from
+/// where you stand the cube had one axis and Jake said so: i can only
+/// rotate a face left or right, not a slice forward or backward.
+///
+/// The layer is the one the point stands in along the cube axis nearest
+/// your own right hand, which is the gesture every cube on a screen uses:
+/// push up on a column and that column rolls away from you. Taken off the
+/// camera rather than off the cube, because which way is right depends on
+/// where you are standing and not on which face this is.
+///
+/// **None in the middle layer, because this cube cannot turn one.** A
+/// `Cube` is corner and edge places with the centres implied, and the
+/// eighteen in `TURNS` are the whole vocabulary; a middle slice moves four
+/// centres and is not among them. It is not merely missing either: a slice
+/// turns four edges and no corners, where every face turn is a four cycle
+/// of each, so the state it would leave has a parity no sequence of face
+/// turns can reach. `the_middle_layer_has_no_face_to_turn` is that half.
+pub fn roll_at(middle: Vec3, at: Vec3, way: Vec3) -> Option<(Face, u8)> {
+    let sighted = face_way(face_at(middle, at) as usize);
+
+    // your right hand, flat, whichever way you are facing
+    let right = way.cross(Vec3::Y);
+    let right = if right.length_squared() < 1e-6 {
+        Vec3::X
+    } else {
+        right.normalize()
+    };
+
+    // the cube axis nearest it, among the four that are not the face you
+    // are looking at
+    let mut best = (0usize, f32::MIN);
+
+    for n in 0..6 {
+        let axis = face_way(n);
+
+        if axis.dot(sighted).abs() > 0.5 {
+            continue;
+        }
+
+        let along = axis.dot(right);
+
+        if along > best.1 {
+            best = (n, along);
+        }
+    }
+
+    let axis = face_way(best.0);
+    let step = cubie() + GAP;
+    let layer = ((at - middle).dot(axis) / step).round();
+
+    if layer.abs() < 0.5 {
+        return None;
+    }
+
+    let rolled = if layer > 0.0 {
+        best.0
+    } else {
+        (best.0 + 3) % 6
+    };
+
+    // **Which way is up, worked out rather than tabulated.** A quarter of
+    // a face is clockwise seen from outside it, which is minus ninety
+    // about that face's own way out, so a point in the layer sets off
+    // along the reverse of the cross product. Pushing up wants that to
+    // have some of the sky in it.
+    let out = face_way(rolled);
+    let quarters = if out.cross(sighted).dot(Vec3::Y) < 0.0 {
+        1
+    } else {
+        3
+    };
+
+    Some((Face::ALL[rolled], quarters))
+}
+
 /// Every cubie of a cube standing with its middle here: twenty-six boxes,
 /// the core left out because nobody can see it.
 pub fn cubies(middle: Vec3) -> Vec<Aabb> {
@@ -2300,6 +2379,95 @@ mod tests {
 
             assert_eq!(corners, Cube::SOLVED.corner_at, "a corner is doubled");
             assert_eq!(edges, Cube::SOLVED.edge_at, "an edge is doubled");
+        }
+    }
+
+    /// Spec 0107: pushing up on a column rolls that column away from you.
+    ///
+    /// **Checked by where a colour went, not by the move it named.** The
+    /// quarters come out of a cross product and a sign, so asserting the
+    /// move is `R` is asserting the formula against itself. What is
+    /// checkable is the cube: stand in front of it, push up on the right
+    /// hand column, and the colour that was facing you is on top.
+    ///
+    /// Reading the slots: a quarter of the right face sends front to up,
+    /// so the cubie standing at the up face's right hand edge afterwards
+    /// came from the front face's right hand edge, and the sticker it now
+    /// shows upward was the one it used to show you.
+    #[test]
+    fn pushing_up_on_a_column_rolls_it_away_from_you() {
+        let step = cubie() + GAP;
+        let middle = Vec3::ZERO;
+
+        // stood in front of it, looking at the front face, crosshair on
+        // the middle of the right hand column
+        let way = -Vec3::Z;
+        let at = vec3(step, 0.0, ACROSS * 0.5);
+
+        let (face, quarters) = roll_at(middle, at, way).expect("a column rolls");
+
+        assert_eq!(
+            face,
+            Face::Right,
+            "the right hand column is not the right face"
+        );
+
+        let up = Cube::SOLVED.turned(face, quarters);
+
+        assert_eq!(
+            facelets(&up)[facelet_of((1, 1, 0), 0)],
+            Face::Front as usize,
+            "pushing up did not put the front face's colour on top"
+        );
+
+        // and the other way puts the top in front of you
+        let down = Cube::SOLVED.turned(face, 4 - quarters);
+
+        assert_eq!(
+            facelets(&down)[facelet_of((1, 0, 1), 2)],
+            Face::Up as usize,
+            "pushing down did not bring the up face's colour round to the front"
+        );
+    }
+
+    /// Spec 0107: the middle layer has no face, so nothing rolls it.
+    ///
+    /// Not a gap to be filled later. A `Cube` is corner and edge places
+    /// with the centres implied, so a middle slice is not one of the
+    /// eighteen in `TURNS`, and it could not be added as a permutation
+    /// either: it is a four cycle of edges and nothing of corners, where
+    /// every face turn is a four cycle of both, so its parity is one no
+    /// sequence of face turns can reach. The second half is what this
+    /// asserts, because it is the half that says why rather than that.
+    #[test]
+    fn the_middle_layer_has_no_face_to_turn() {
+        let middle = Vec3::ZERO;
+        let way = -Vec3::Z;
+
+        // the middle of the front face, which is the middle column of it
+        assert_eq!(
+            roll_at(middle, vec3(0.0, 0.0, ACROSS * 0.5), way),
+            None,
+            "the middle column of a face offered a layer to roll"
+        );
+
+        // every face turn moves four corners and four edges, which is why
+        // the slice that moves four edges and no corners is out of reach
+        for face in Face::ALL {
+            let turned = Cube::SOLVED.turned(face, 1);
+            let corners = (0..CORNERS)
+                .filter(|n| turned.corner_at[*n] != Cube::SOLVED.corner_at[*n])
+                .count();
+            let edges = (0..EDGES)
+                .filter(|n| turned.edge_at[*n] != Cube::SOLVED.edge_at[*n])
+                .count();
+
+            assert_eq!(
+                (corners, edges),
+                (4, 4),
+                "{:?} does not move four of each",
+                face
+            );
         }
     }
 }

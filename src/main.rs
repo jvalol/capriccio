@@ -1836,10 +1836,16 @@ impl Arcade {
         // Up and down alone are nothing here: a cube has no knob.
         if let Some(room::Seen::Cubie(face)) = self.seen {
             let face = kociemba::Face::ALL[face.min(kociemba::Face::ALL.len() - 1)];
+            // and which layer up and down roll, which is nothing at all in
+            // the middle column: those two keys walk you there, as they
+            // always did, rather than being taken for a turn that cannot
+            // happen. Spec 0107.
+            let roll = self.rolling();
             let wanted = if self.shifted {
                 matches!(input.key, KeyboardKey::Up)
             } else {
                 matches!(input.key, KeyboardKey::Left | KeyboardKey::Right)
+                    || (roll.is_some() && matches!(input.key, KeyboardKey::Up | KeyboardKey::Down))
             };
 
             if !wanted {
@@ -1852,10 +1858,22 @@ impl Arcade {
             if held && !input.repeat {
                 if self.shifted {
                     self.puzzle.step();
-                } else if input.key == KeyboardKey::Right {
-                    self.puzzle.turn(face, 1);
                 } else {
-                    self.puzzle.turn(face, 3);
+                    match (input.key, roll) {
+                        (KeyboardKey::Right, _) => self.puzzle.turn(face, 1),
+                        (KeyboardKey::Left, _) => self.puzzle.turn(face, 3),
+                        // `rolled` and not `face`: the layer up and down
+                        // move is not the face left and right turn, and
+                        // binding it as `face` here shadows the one the
+                        // sight is on with no warning from anywhere.
+                        (KeyboardKey::Up, Some((rolled, quarters))) => {
+                            self.puzzle.turn(rolled, quarters)
+                        }
+                        (KeyboardKey::Down, Some((rolled, quarters))) => {
+                            self.puzzle.turn(rolled, 4 - quarters)
+                        }
+                        _ => {}
+                    }
                 }
             }
 
@@ -2164,6 +2182,17 @@ impl Arcade {
     /// on, and `face_at` reads that off the point itself. The cube is
     /// 0.3 across and sits where it is drawn, so the box is the thing.
     fn cubie_i_see(&self) -> Option<room::Seen> {
+        self.cube_hit()
+            .map(|(middle, at)| room::Seen::Cubie(kociemba::face_at(middle, at) as usize))
+    }
+
+    /// The puzzle's middle and where the sight lands on it, which is the
+    /// one ray two questions are asked of. Spec 0107.
+    ///
+    /// Which face you have your hand on and which layer the up arrow
+    /// rolls are both read off the same hit, so they cannot disagree about
+    /// where you are pointing.
+    fn cube_hit(&self) -> Option<(Vec3, Vec3)> {
         let bench = self
             .room
             .benches
@@ -2175,7 +2204,20 @@ impl Arcade {
 
         room::slab(from, way, &box_)
             .filter(|far| *far <= room::PART_REACH)
-            .map(|far| room::Seen::Cubie(kociemba::face_at(middle, from + way * far) as usize))
+            .map(|far| (middle, from + way * far))
+    }
+
+    /// Which layer the up and down arrows roll, and the quarters that roll
+    /// it upward. Spec 0107.
+    ///
+    /// **Asked at the keypress rather than kept in `Seen`.** Which way is
+    /// your right hand is a fact about where you are standing, not about
+    /// the cube, so turning your head without moving the crosshair off a
+    /// facelet changes the answer. One ray costs nothing.
+    fn rolling(&self) -> Option<(kociemba::Face, u8)> {
+        let (middle, at) = self.cube_hit()?;
+
+        kociemba::roll_at(middle, at, self.facing())
     }
 
     /// Whether the sight is on the weight on the metronome's needle.
@@ -9236,16 +9278,24 @@ impl Game for Arcade {
                 let face = kociemba::Face::ALL[face.min(kociemba::Face::ALL.len() - 1)];
                 let next = self.puzzle.hint().map(kociemba::says);
 
+                // what the keys do here, and in the middle column the roll
+                // is left out because there is no layer to roll. Spec 0107
+                // and the same rule the reach went in under: a key is named
+                // where it works.
+                let keys = if self.rolling().is_some() {
+                    "Left and right turn this face, up and down roll the column"
+                } else {
+                    "Left and right turn this face"
+                };
+
                 (
                     Some(format!("{:?}", face).to_lowercase()),
                     Some(match next {
                         Some(next) => format!(
-                            "[COPY - Jake] Arrows turn this face. Shift and up plays {}, the next move of the solution",
-                            next
+                            "[COPY - Jake] {}. Shift and up plays {}, the next move of the solution",
+                            keys, next
                         ),
-                        None => String::from(
-                            "[COPY - Jake] Arrows turn this face. Enter scrambles it",
-                        ),
+                        None => format!("[COPY - Jake] {}. Enter scrambles it", keys),
                     }),
                 )
             }
@@ -15339,6 +15389,92 @@ mod tests {
             !matches!(one.what_i_see(), Some(room::Seen::Weight)),
             "turned away the sight still found {:?}",
             one.what_i_see()
+        );
+    }
+
+    /// Spec 0107: up rolls the column you are pointing at, which is a
+    /// different face from the one left and right turn, and in the middle
+    /// column it still walks you.
+    ///
+    /// **Both halves are the complaint.** Jake: i can only rotate a face
+    /// left or right, not a slice forward or backward. The first half is
+    /// that a second axis exists at all; the second is that where it
+    /// cannot exist the keys are left alone, which is the rule spec 0106
+    /// went in under.
+    ///
+    /// The face is checked by rebuilding it rather than by reading the
+    /// move off the queue: a solved cube turned once is one of three
+    /// states for the face that moved, so matching any of the back face's
+    /// three and none of the right face's says which layer rolled without
+    /// borrowing `roll_at`'s own arithmetic for the quarters.
+    #[test]
+    fn up_rolls_the_column_and_the_middle_of_a_face_does_not() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == kociemba::NAME)
+            .copied()
+            .expect("the puzzle is on a bench");
+        let middle = bench.at + Vec3::Y * (bench.size.y + kociemba::ACROSS * 0.5 + 0.01);
+        let step = kociemba::cubie() + kociemba::GAP;
+
+        one.eye = middle.y - EYE;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        // dead level with the middle of the right face, where there is no
+        // layer to roll
+        one.at = vec3(middle.x + 0.6, 0.0, middle.z);
+        one.seen = one.what_i_see();
+
+        assert!(
+            matches!(one.seen, Some(room::Seen::Cubie(_))),
+            "pointing at the cube finds {:?}",
+            one.seen
+        );
+        assert_eq!(one.rolling(), None, "the middle of a face offered a roll");
+        assert!(
+            !one.work_a_toy(
+                &KeyboardInput::new(KeyboardKey::Up, KeyboardKeyState::Pressed, false),
+                true
+            ),
+            "the middle of a face took the up arrow, which is what walks you"
+        );
+
+        // and one column over, toward the hand that is on the arrows:
+        // looking along -x your right is -z, so this is the back layer
+        one.at = vec3(middle.x + 0.6, 0.0, middle.z - step);
+        one.seen = one.what_i_see();
+
+        let (rolled, _) = one.rolling().expect("a column rolls");
+        assert_eq!(
+            rolled,
+            kociemba::Face::Back,
+            "the column one to the right is {:?}",
+            rolled
+        );
+        assert!(
+            one.work_a_toy(
+                &KeyboardInput::new(KeyboardKey::Up, KeyboardKeyState::Pressed, false),
+                true
+            ),
+            "a column did not want the up arrow"
+        );
+
+        for _ in 0..(60 * 3) {
+            one.puzzle.advance(1.0 / 60.0);
+        }
+
+        let solved = kociemba::Cube::SOLVED;
+        assert!(
+            (1..4).any(|q| one.puzzle.cube == solved.turned(kociemba::Face::Back, q)),
+            "up did not roll the back layer"
+        );
+        assert!(
+            !(1..4).any(|q| one.puzzle.cube == solved.turned(kociemba::Face::Right, q)),
+            "up turned the face the sight is on, which left and right already do"
         );
     }
 
