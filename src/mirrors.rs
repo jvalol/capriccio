@@ -186,6 +186,15 @@ pub const PITCH: f32 = 1.80;
 
 /// How hard one lamp over a panel burns, and how far it carries.
 pub const LAMP_LIT: f32 = 0.35;
+
+/// What colour its lamps burn. Spec 0097.
+///
+/// **Its own, because it was borrowing a fitting's.** The lamp here was
+/// pushed with `aim::SHADE` for a colour, which is the glass of a shade and
+/// not the light in one, so the corridor was lit by whatever colour the
+/// building happened to be drawing its pendants. That is the relationship
+/// the wrong way round.
+pub const LAMP_COLOUR: glam::Vec3 = glam::vec3(1.0, 0.88, 0.68);
 pub const LAMP_RANGE: f32 = 4.5;
 
 /// Where the first panel's middle is, so the run is centred on the corridor.

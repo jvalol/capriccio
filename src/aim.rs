@@ -366,7 +366,42 @@ pub const CUBIE: Vec4 = vec4(0.055, 0.055, 0.065, 1.0);
 /// what reads as an eye is something slightly warmer than the shadow the
 /// brow would throw.
 pub const EYE: Vec4 = vec4(0.10, 0.09, 0.11, 1.0);
-pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
+/// How bright a fitting's own glass burns, for the lamp it holds.
+/// Spec 0097.
+///
+/// **Was one colour for every fitting in the building.** `SHADE` was
+/// (2.6, 1.9, 1.1) and the gallery's pendants, the nook's, the baths'
+/// sconces, the cellar's table lamp, the sign's and the mirrors' all glowed
+/// it alike, whether the lamp inside was 1.45 or 0.35. Jake: the lamps and
+/// sconces themselves should all glow commensurate with the highlighting
+/// and shadowing they give off.
+///
+/// The garden's lantern already did this and is where the shape comes from:
+/// `LANTERN_LIT * (0.35 + lit * 2.2)`, with its own comment saying the
+/// window burns by the same number the lamp inside it uses rather than a
+/// second one. This is that line for every other fitting.
+///
+/// **A floor and not a plain multiple.** The weakest lamp here is the
+/// mirrors' at 0.35, and a fitting scaled straight by that lands under one
+/// in every channel, which in this engine is a thing with no light of its
+/// own: a grey box screwed to the wall. The floor is what keeps the dimmest
+/// one glass and the scale is what keeps it dimmer than the gallery's.
+pub fn fitting(colour: Vec3, lit: f32) -> Vec4 {
+    (colour * (GLOWS_FROM + lit * GLOWS_BY)).extend(1.0)
+}
+
+/// How much of its own colour a fitting gives off, with nothing shining on
+/// it. Spec 0097.
+///
+/// One, which is the colour `fitting` worked out and nothing more: that
+/// colour is already past one in its brightest channel for every lamp in
+/// the building, and a channel past one on an eight bit canvas is the whole
+/// of what a glow is. The ambient and whatever else lands on the shade go
+/// on top, so a fitting in a bright room is brighter still.
+pub const GLOWS: f32 = 1.0;
+
+pub const GLOWS_FROM: f32 = 1.15;
+pub const GLOWS_BY: f32 = 1.05;
 
 /// A lit ceiling panel in the hall's grid, which is the same idea at the cold
 /// end: past white, so it reads as a thing giving light rather than a pale
@@ -758,9 +793,18 @@ pub const NO_SHINE: f32 = 0.0;
 /// to say so, and the four constants above are what to say.
 pub trait Plain {
     fn push_plain(&mut self, mesh: MeshId, transform: &Transform, colour: Vec4);
+
+    /// A fitting: a thing with light of its own, drawn as one. Spec 0105 of
+    /// the engine gave instances a `glow`, and this is the building's way of
+    /// saying a shade is the lamp and not a pale box near it.
+    fn push_fitting(&mut self, mesh: MeshId, transform: &Transform, colour: Vec4);
 }
 
 impl Plain for Scene {
+    fn push_fitting(&mut self, mesh: MeshId, transform: &Transform, colour: Vec4) {
+        self.push_glowing(mesh, transform, colour, NO_SHINE, GLOWS);
+    }
+
     fn push_plain(&mut self, mesh: MeshId, transform: &Transform, colour: Vec4) {
         self.push_material(mesh, transform, colour, NO_SHINE);
     }
@@ -2209,6 +2253,43 @@ pub const SHAPE_SEE_THROUGH: f32 = 0.38;
 
 #[cfg(test)]
 mod tests {
+
+    /// Spec 0097: a fitting glows by the lamp it holds, and the dimmest one
+    /// still glows.
+    ///
+    /// **Both halves, because either alone is met by something wrong.** One
+    /// colour for every fitting is what this replaced, and it passes any
+    /// test that only asks whether a shade is past one. A plain multiple of
+    /// the lamp is commensurate and puts the mirrors' 0.35 under one in
+    /// every channel, which in this engine is a fitting with no light in it.
+    #[test]
+    fn a_fitting_glows_by_the_lamp_it_holds() {
+        let bright = fitting(GALLERY_LAMP, GALLERY_LIT);
+        let dim = fitting(crate::mirrors::LAMP_COLOUR, crate::mirrors::LAMP_LIT);
+
+        assert!(
+            bright.x > dim.x,
+            "the gallery's lamp is {:.2} against the mirrors' {:.2} and its fitting is not brighter",
+            GALLERY_LIT,
+            crate::mirrors::LAMP_LIT
+        );
+
+        // and the dimmest in the building is still glass and not a grey box
+        for one in [
+            fitting(crate::mirrors::LAMP_COLOUR, crate::mirrors::LAMP_LIT),
+            fitting(crate::study::SCONCE_COLOUR, crate::study::PENDANT_LIT),
+            fitting(crate::study::SCONCE_COLOUR, crate::study::SCONCE_LIT),
+            fitting(crate::sign::LAMP_COLOUR, crate::sign::LAMP_LIT),
+            fitting(crate::cellar::LAMP_COLOUR, crate::cellar::LAMP_LIT),
+            bright,
+        ] {
+            assert!(
+                one.x > 1.0,
+                "a fitting at {:.2} in its brightest channel has no light of its own",
+                one.x
+            );
+        }
+    }
     use super::*;
 
     /// Spec 0020: the wear lifts the carpet's dark ground far enough to see

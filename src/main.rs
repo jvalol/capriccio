@@ -9916,10 +9916,10 @@ impl Game for Arcade {
 
             // and the pendant over it, which is why you can read it
             let shade = at + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP);
-            scene.push_plain(
+            scene.push_fitting(
                 cube,
                 &Transform::at(shade).with_scale(sign::SHADE),
-                aim::SHADE,
+                aim::fitting(sign::LAMP_COLOUR, sign::LAMP_LIT),
             );
             let stem = (room::soffit() + shade.y + sign::SHADE.y * 0.5) * 0.5;
             scene.push_plain(
@@ -11790,10 +11790,10 @@ impl Game for Arcade {
                     aim::SCONCE,
                 );
             }
-            scene.push_plain(
+            scene.push_fitting(
                 cube,
                 &Transform::at(at + Vec3::X * out * study::SCONCE_OUT).with_scale(study::SHADE),
-                aim::SHADE,
+                aim::fitting(study::SCONCE_COLOUR, study::SCONCE_LIT),
             );
         };
 
@@ -11823,10 +11823,10 @@ impl Game for Arcade {
         // and the rod runs to `soffit` rather than to `TALL` because the
         // ceiling in here is a grid with tiles under it.
         for shade in room::pendant_shades(self.room.reaches) {
-            scene.push_plain(
+            scene.push_fitting(
                 cube,
                 &Transform::at(shade).with_scale(study::PENDANT_SHADE),
-                aim::SHADE,
+                aim::fitting(study::SCONCE_COLOUR, study::PENDANT_LIT),
             );
 
             let hung = study::PENDANT_DROP - study::PENDANT_SHADE.y * 0.5;
@@ -12261,10 +12261,10 @@ impl Game for Arcade {
 
                 // and the lamp over it, which is what a pool room is lit by
                 let shade = bench.at + Vec3::Y * (top + cellar::LAMP_UP);
-                scene.push_plain(
+                scene.push_fitting(
                     cube,
                     &Transform::at(shade).with_scale(cellar::SHADE),
-                    aim::SHADE,
+                    aim::fitting(cellar::LAMP_COLOUR, cellar::LAMP_LIT),
                 );
                 let lid = -cellar::DOWN + cellar::TALL;
                 scene.push_plain(
@@ -12331,10 +12331,10 @@ impl Game for Arcade {
         for at in room::gallery_lamps(self.room.reaches) {
             let shade = room::GALLERY_SHADE;
 
-            scene.push_plain(
+            scene.push_fitting(
                 cube,
                 &Transform::at(at + Vec3::Y * shade.y * 0.5).with_scale(shade),
-                aim::SHADE,
+                aim::fitting(aim::GALLERY_LAMP, aim::GALLERY_LIT),
             );
             // and the stem up to the ceiling
             let stem = (at.y + shade.y + room::soffit()) * 0.5;
@@ -12516,7 +12516,7 @@ impl Game for Arcade {
             shades.push((
                 eye.distance_squared(at),
                 at,
-                aim::SHADE.truncate(),
+                mirrors::LAMP_COLOUR,
                 mirrors::LAMP_LIT,
                 mirrors::LAMP_RANGE,
             ));
