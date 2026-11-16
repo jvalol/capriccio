@@ -522,14 +522,23 @@ pub fn inside(reaches: f32, at: Vec3) -> bool {
 /// `inside`, the garden and this room both said yes, and gating on it
 /// instead took the garden's sky away.
 ///
-/// **The backdrop does not ask this any more and nothing in the game
-/// does.** Gating on it covered this room and left the solar system out
-/// past its footprint uncovered, so every staged shot of a planet came
-/// back under a cloudy daylight sky. The sky is drawn on `sees_outdoors`
-/// now, which is the question the field and the building's outside are
-/// already drawn by. What is left here is a region these tests ask about,
-/// so it is theirs.
-#[cfg(test)]
+/// **The backdrop does not ask this any more.** Gating the sky on it
+/// covered this room and left the solar system out past its footprint
+/// uncovered, so every staged shot of a planet came back under a cloudy
+/// daylight sky. The sky is drawn on `sees_outdoors` now, which is the
+/// question the field and the building's outside are already drawn by.
+///
+/// **The near wall and the way out do ask it.** Spec 0085. They asked a
+/// bare `at.z < reaches` instead, a half space with no top and no sides,
+/// so the lit portal hung on an exterior wall and the near wall showed in
+/// its collider's pieces from anywhere past that plane: the lawn, the
+/// garden, and the open air over the roof. Both halves of this function
+/// earn their place there. The footprint is what keeps the garden out,
+/// which is what the half space could never do, and `inside`'s lid is
+/// what keeps out a flight at head height over the roof. Hand it the eye
+/// and not the feet: flying at 1.99 puts the eye at 3.54 against a lid at
+/// 3.5, and those four centimetres are the whole of the difference
+/// between standing in this room and hovering above it.
 pub fn in_the_room(reaches: f32, stood: Vec3) -> bool {
     let middle = at(reaches);
     let half = half();
@@ -998,6 +1007,54 @@ mod tests {
         assert!(
             !in_the_room(REACHES, in_the_garden),
             "and the footprint does not"
+        );
+    }
+
+    /// Spec 0085: and the way out is lit for this room and nowhere else.
+    ///
+    /// **Four places, because the fault needed three of them to show.**
+    /// The near wall and the lit portal are drawn on one question, and it
+    /// used to be `at.z < reaches`, which is a plane with no top and no
+    /// sides. Standing in the room it is right; it is the other three that
+    /// it gets wrong, and each is wrong for its own reason. The garden is
+    /// past the plane and under the same lid, so only the footprint turns
+    /// it away. The flight is inside the footprint and over the roof, so
+    /// only the lid does. Jake found the second one by flying out and
+    /// seeing the portal hanging on an exterior wall.
+    ///
+    /// **The eye, not the feet.** The flight below is the pose Jake sent,
+    /// `5.85 1.99 24.93`, with the eye at the 3.54 his own plate printed
+    /// beside it. At the feet's 1.99 this says he is in the room and the
+    /// portal is right to be there, which is the four centimetres the
+    /// whole thing turns on.
+    #[test]
+    fn the_way_out_is_lit_for_this_room_and_nowhere_else() {
+        const REACHES: f32 = 9.5;
+        let middle = at(REACHES);
+
+        for (what, eye, want) in [
+            ("standing in the room", vec3(middle.x, 1.55, middle.z), true),
+            (
+                "standing in the hall",
+                vec3(0.0, 1.55, REACHES - 2.0),
+                false,
+            ),
+            ("standing in the garden", vec3(-10.85, 1.55, 15.15), false),
+            ("flying over the roof", vec3(5.85, 3.54, 24.93), false),
+        ] {
+            assert_eq!(
+                in_the_room(REACHES, eye),
+                want,
+                "{what}: the way out shows when it should not, or does not when it should"
+            );
+        }
+
+        // and the four centimetres, said on its own so a lid that moves
+        // cannot pass this by accident
+        assert!(
+            in_the_room(REACHES, vec3(5.85, 1.99, 24.93)),
+            "the same flight read at the feet is in the room, which is what \
+             makes handing this the eye the whole of the fix"
         );
     }
 

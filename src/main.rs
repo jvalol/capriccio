@@ -9211,8 +9211,29 @@ impl Game for Arcade {
         //
         // Which side you are on and not a second account of the geometry: the
         // same wall, drawn whole or drawn in its own collider's pieces.
+        //
+        // **Being in the room, and not merely past the wall.** Spec 0085.
+        // This asked `self.at.z < self.room.reaches`, a half space with no
+        // top and no sides, so everything beyond that plane got the room's
+        // treatment: the lawn, the garden, and the open air over the
+        // building. Jake flew out and found the portal hanging on an
+        // exterior wall with the near wall in pieces behind it.
+        //
+        // `behind::in_the_room` is the question, and both halves of it
+        // earn their place. `inside` alone is not enough and its own test
+        // says why: the garden sits past the hall's reaches under the same
+        // lid, so a half space bounded only above hands the portal to
+        // anybody standing among the trees. The footprint is what keeps
+        // the garden out. The lid is what keeps out a flight over the
+        // roof.
+        //
+        // The eye and not the feet, because what this decides is what you
+        // can see, and the two part company by exactly the amount that
+        // matters: flying at 1.99 puts the eye at 3.54 against a lid at
+        // 3.5, and those four centimetres are the whole of the difference
+        // between standing in that room and hovering above it.
         {
-            let in_the_hall = self.at.z < self.room.reaches;
+            let in_the_room = behind::in_the_room(self.room.reaches, self.looking_from());
             let side = room::WALL + room::CABINET.x;
             let whole = vec![
                 Transform::at(vec3(0.0, room::TALL * 0.5, self.room.reaches)).with_scale(vec3(
@@ -9226,7 +9247,7 @@ impl Game for Arcade {
                 .map(|box_| Transform::at(box_.center()).with_scale(box_.size()))
                 .collect();
 
-            for stood in if in_the_hall { whole } else { pieces } {
+            for stood in if in_the_room { pieces } else { whole } {
                 match self.wall_grain {
                     Some(grain) => scene.push_textured(cube, grain, &stood, aim::WALL, aim::MATTE),
                     None => scene.push_plain(cube, &stood, aim::WALL),
@@ -9236,7 +9257,7 @@ impl Game for Arcade {
             // and the way out lit, on the dark side only. The secret is the
             // hall's: from in here the way out has no reason to be hidden,
             // and hiding it is what had Jake walk at the sign and hit wall.
-            if !in_the_hall {
+            if in_the_room {
                 if let (Some(lit), Some(mesh)) = (self.portal, self.portal_mesh) {
                     let (at, size) = behind::portal(self.room.reaches);
 
