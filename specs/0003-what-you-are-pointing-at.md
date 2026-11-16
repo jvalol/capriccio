@@ -109,7 +109,9 @@ the overlap showed as a band through the middle of the help.
 
 - The sight is in the middle of the window. — `aim::tests::the_sight_is_in_the_middle`
 - And stays there when the window changes size. — `aim::tests::the_sight_follows_a_resize`
-- What to press is under the sight rather than over it. — `aim::tests::the_prompt_sits_under_the_sight`
+- What to press is clear of the sight rather than over it. — `aim::tests::the_prompt_sits_at_the_foot_and_clear_of_the_sight`
+
+**Under the sight until spec 0109**, which moved it to the foot of the window and renamed the test with it. What is under the sight is also what the sight is on, so this spec's own placement covered the thing this spec is about.
 - The sight is brighter on something than on nothing. — `aim::tests::the_sight_brightens_on_something`
 - A cabinet you are pointing at is brighter than one you are not, body and screen both. — `aim::tests::the_one_you_point_at_is_brighter`
 - Far enough brighter to read across the room. — `aim::tests::the_difference_is_worth_seeing`

@@ -25,13 +25,30 @@ pub const DETAIL_SIZE: f32 = 15.0;
 /// tetrahedron did: ninety characters, centred, at twenty points.
 pub const PROMPT_WIDTH: f32 = 0.55;
 
-/// How far under the middle the first line of the prompt sits, and how far
-/// apart the lines are.
+/// How far the foot of the prompt sits off the foot of the window, how far
+/// apart its lines are, and the gap between the name and the line under it.
 ///
-/// Clear of the sight rather than touching it: the sight is what you are
-/// reading the room through and a word against it is a word in the way.
-pub const PROMPT_DROP: f32 = 34.0;
-pub const PROMPT_STEP: f32 = 26.0;
+/// **At the bottom, because under the sight is on top of the thing.** Spec
+/// 0109. It sat 34 under the middle, which is spec 0003's own wording, what
+/// to press under the sight; and what you are pointing at is also under the
+/// sight, so the plate covered the toy it was describing. Jake, playing: it
+/// covers the actual thing it describes, it could be at the bottom of the
+/// screen. The sight keeps the middle and the words go to the foot, which is
+/// where nothing in this building is drawn.
+pub const PROMPT_FOOT: f32 = 64.0;
+pub const PROMPT_STEP: f32 = 30.0;
+pub const PROMPT_GAP: f32 = 12.0;
+
+/// What the name is written in, and what the line under it is written in.
+///
+/// **Two colours, because they are two things.** Jake: more distinct
+/// colours. One is what you are pointing at and the other is what you can do
+/// to it, and at one colour and two sizes the pair read as one paragraph
+/// that happened to start big. Warm for the name, which is the marquee
+/// colour this building already uses on a lit sight, and cool white for the
+/// keys, which is the half you read every time rather than once.
+pub const PROMPT_INK: Vec4 = vec4(1.0, 0.84, 0.42, 1.0);
+pub const DETAIL_INK: Vec4 = vec4(0.90, 0.93, 1.0, 1.0);
 
 /// The middle of the window, where the sight goes.
 ///
@@ -41,21 +58,22 @@ pub fn sight_at(window: (f32, f32)) -> Vec2 {
     vec2(window.0 * 0.5, window.1 * 0.5 - SIGHT_SIZE * 0.5)
 }
 
-/// Where a line of the prompt goes, counted from the first.
-pub fn prompt_at(window: (f32, f32), line: usize) -> Vec2 {
-    vec2(
-        window.0 * 0.5,
-        window.1 * 0.5 + PROMPT_DROP + line as f32 * PROMPT_STEP,
-    )
-}
-
 /// How wide a line under the sight may be before it wraps.
 pub fn prompt_bounds(window: (f32, f32)) -> Vec2 {
     vec2(window.0 * PROMPT_WIDTH, crate::aim::UNBOUNDED)
 }
 
-/// The two lines under the sight, wrapped as they will be drawn and stacked
-/// so the second begins under the whole of the first.
+/// One line of the prompt, placed, wrapped and coloured.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Line {
+    pub at: Vec2,
+    pub say: String,
+    pub size: f32,
+    pub ink: Vec4,
+}
+
+/// The lines of the prompt, wrapped as they will be drawn and stacked at the
+/// foot of the window.
 ///
 /// **Wrapped here rather than left to the renderer.** The renderer wraps to
 /// its bounds and `text::room_for` measures whatever string it is handed, so
@@ -68,20 +86,42 @@ pub fn prompt_bounds(window: (f32, f32)) -> Vec2 {
 /// the wall, and this is the other place that draws over what you are
 /// looking at.
 ///
-/// Stacked off the first line's measured height rather than a step a line,
+/// Stacked off each line's measured height rather than a step a line,
 /// because a name that wraps would otherwise have the detail drawn through
 /// it.
-pub fn said(window: (f32, f32), lines: Vec<(String, f32)>) -> Vec<(Vec2, String, f32)> {
+///
+/// **Measured whole before any of it is placed.** Spec 0109. A block pinned
+/// at its foot cannot be laid out a line at a time, since where the first
+/// line goes depends on how many rows the last one wraps to, which is why
+/// `prompt_at` is gone: a per line answer and a block with a bottom edge are
+/// two accounts of where the words are, and this building has been bitten by
+/// two accounts of one thing often enough to stop writing them.
+pub fn said(window: (f32, f32), lines: Vec<(String, f32, Vec4)>) -> Vec<Line> {
     let wide = prompt_bounds(window).x;
-    let mut out: Vec<(Vec2, String, f32)> = Vec::with_capacity(lines.len());
-    let mut down = prompt_at(window, 0).y;
+    let wrapped: Vec<(String, f32, Vec4, f32)> = lines
+        .into_iter()
+        .map(|(say, size, ink)| {
+            let say = blitzkit::text::wrapped(&say, size, wide);
+            let tall = blitzkit::text::room_for(&say, size).y.max(PROMPT_STEP);
 
-    for (say, size) in lines {
-        let say = blitzkit::text::wrapped(&say, size, wide);
-        let tall = blitzkit::text::room_for(&say, size).y;
+            (say, size, ink, tall)
+        })
+        .collect();
 
-        out.push((vec2(window.0 * 0.5, down), say, size));
-        down += tall.max(PROMPT_STEP);
+    let tall: f32 = wrapped.iter().map(|one| one.3).sum::<f32>()
+        + PROMPT_GAP * wrapped.len().saturating_sub(1) as f32;
+    let mut down = window.1 - PROMPT_FOOT - tall;
+    let mut out = Vec::with_capacity(wrapped.len());
+
+    for (say, size, ink, step) in wrapped {
+        out.push(Line {
+            at: vec2(window.0 * 0.5, down),
+            say,
+            size,
+            ink,
+        });
+
+        down += step + PROMPT_GAP;
     }
 
     out
@@ -1400,7 +1440,12 @@ pub const ROCK: Vec4 = vec4(0.21, 0.20, 0.19, 1.0);
 pub const PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.90);
 
 /// How much wider and taller the plate is than the words on it.
-pub const PLATE_PAD: f32 = 7.0;
+///
+/// Spec 0109 took it from 7 to 14. Jake, playing: more distinct colours and
+/// spacing. At 7 the words sat against the edge of their own shade, which is
+/// the thing that makes a plate read as a box drawn round text rather than
+/// as something the text is sitting on.
+pub const PLATE_PAD: f32 = 14.0;
 
 pub const SAYS_AT: Vec2 = vec2(20.0, 20.0);
 pub const SAYS_SIZE: f32 = 14.0;
@@ -2390,16 +2435,24 @@ mod tests {
             inside(&laid, false, "the corner");
         }
 
-        let said = [
-            (prompt_at(window, 0), "ball and chain", PROMPT_SIZE),
-            (
-                prompt_at(window, 1),
-                "27 of 27 standing. Swing the ball with arrow keys.",
-                DETAIL_SIZE,
-            ),
-        ];
-        for many in 1..=said.len() {
-            inside(&said[..many], true, "the prompt");
+        let placed = said(
+            window,
+            vec![
+                (String::from("ball and chain"), PROMPT_SIZE, PROMPT_INK),
+                (
+                    String::from("27 of 27 standing. Swing the ball with arrow keys."),
+                    DETAIL_SIZE,
+                    DETAIL_INK,
+                ),
+            ],
+        );
+        let laid: Vec<(Vec2, &str, f32)> = placed
+            .iter()
+            .map(|line| (line.at, line.say.as_str(), line.size))
+            .collect();
+
+        for many in 1..=laid.len() {
+            inside(&laid[..many], true, "the prompt");
         }
     }
 
@@ -2454,6 +2507,7 @@ mod tests {
     /// The line here is the one he was reading, because a test written with
     /// a short line is a test that passes on a fault this size: the one above
     /// did.
+    ///
     #[test]
     fn a_wrapped_line_sits_on_its_plate() {
         let long = "13824 cubes, one mesh. Up and down change how many, enter \
@@ -2468,18 +2522,18 @@ mod tests {
             let said = said(
                 window,
                 vec![
-                    (String::from("test rig"), PROMPT_SIZE),
-                    (String::from(long), DETAIL_SIZE),
+                    (String::from("test rig"), PROMPT_SIZE, PROMPT_INK),
+                    (String::from(long), DETAIL_SIZE, DETAIL_INK),
                 ],
             );
             let laid: Vec<(Vec2, &str, f32)> = said
                 .iter()
-                .map(|(at, say, size)| (*at, say.as_str(), *size))
+                .map(|line| (line.at, line.say.as_str(), line.size))
                 .collect();
 
             // it does wrap at this size, or this test is checking nothing
             assert!(
-                said[1].1.contains('\n'),
+                said[1].say.contains('\n'),
                 "{:?} does not wrap the line at all",
                 window
             );
@@ -2500,10 +2554,10 @@ mod tests {
 
             // the detail begins under the whole of the name rather than a
             // fixed step down, which is what keeps a long name off it
-            let over = blitzkit::text::room_for(&said[0].1, PROMPT_SIZE).y;
+            let over = blitzkit::text::room_for(&said[0].say, PROMPT_SIZE).y;
 
             assert!(
-                said[1].0.y >= said[0].0.y + over.min(PROMPT_STEP) - 1e-4,
+                said[1].at.y >= said[0].at.y + over.min(PROMPT_STEP) - 1e-4,
                 "the detail is drawn through the name"
             );
 
@@ -2660,15 +2714,22 @@ mod tests {
     #[test]
     fn the_prompt_carries_its_own_background() {
         let window = (1280.0f32, 800.0f32);
-        let said = [
-            (prompt_at(window, 0), "a thing with a name", PROMPT_SIZE),
-            (
-                prompt_at(window, 1),
-                "and a line saying what to press",
-                DETAIL_SIZE,
-            ),
-        ];
-        let plate = plate_round(&said, true).expect("a plate");
+        let placed = said(
+            window,
+            vec![
+                (String::from("a thing with a name"), PROMPT_SIZE, PROMPT_INK),
+                (
+                    String::from("and a line saying what to press"),
+                    DETAIL_SIZE,
+                    DETAIL_INK,
+                ),
+            ],
+        );
+        let laid: Vec<(Vec2, &str, f32)> = placed
+            .iter()
+            .map(|line| (line.at, line.say.as_str(), line.size))
+            .collect();
+        let plate = plate_round(&laid, true).expect("a plate");
 
         assert!(
             plate.size.x > 0.0 && plate.size.y > 0.0,
@@ -2706,25 +2767,71 @@ mod tests {
         }
     }
 
-    /// Spec 0003: what to press is under the sight, not over it, and the lines
-    /// go downwards.
+    /// Spec 0109: the prompt sits at the foot of the window, and its plate
+    /// is clear of the sight rather than under it.
+    ///
+    /// **It was spec 0003's "under the sight" until Jake played it.** What
+    /// is under the sight is also the thing the sight is on, so the plate
+    /// covered the toy it was naming. His words: it covers the actual thing
+    /// it describes, it could be at the bottom of the screen.
+    ///
+    /// The gap is the claim and not the anchor. Pinning the foot alone
+    /// passes for a block that is also tall enough to reach the middle,
+    /// which is the way this would come back.
     #[test]
-    fn the_prompt_sits_under_the_sight() {
-        let sight = sight_at(WINDOW);
-        let first = prompt_at(WINDOW, 0);
-        let second = prompt_at(WINDOW, 1);
+    fn the_prompt_sits_at_the_foot_and_clear_of_the_sight() {
+        for window in [(640.0f32, 480.0f32), (1280.0, 800.0), (2560.0, 1440.0)] {
+            let placed = said(
+                window,
+                vec![
+                    (String::from("kociemba"), PROMPT_SIZE, PROMPT_INK),
+                    (
+                        String::from("Left or right turns this face."),
+                        DETAIL_SIZE,
+                        DETAIL_INK,
+                    ),
+                ],
+            );
+            let laid: Vec<(Vec2, &str, f32)> = placed
+                .iter()
+                .map(|line| (line.at, line.say.as_str(), line.size))
+                .collect();
+            let plate = plate_round(&laid, true).expect("a plate");
+            let sight = sight_at(window);
 
-        assert!(
-            first.y > sight.y + SIGHT_SIZE,
-            "the first line is at {} and the sight at {}",
-            first.y,
-            sight.y
-        );
-        assert!(second.y > first.y, "the second line is not under the first");
-        assert!(
-            (first.x - sight.x).abs() < 1e-3,
-            "the prompt is not under the sight"
-        );
+            assert!(
+                placed[1].at.y > placed[0].at.y,
+                "at {:?} the second line is not under the first",
+                window
+            );
+            assert!(
+                (placed[0].at.x - window.0 * 0.5).abs() < 1e-3,
+                "at {:?} the prompt is not down the middle",
+                window
+            );
+
+            // it ends near the foot, rather than wherever the middle left it
+            let foot = plate.at.y + plate.size.y * 0.5;
+
+            assert!(
+                foot < window.1 && window.1 - foot < PROMPT_FOOT * 2.0,
+                "at {:?} the plate ends at {:.0} of {:.0}",
+                window,
+                foot,
+                window.1
+            );
+
+            // and the sight, with the thing it is on, is left alone
+            let top = plate.at.y - plate.size.y * 0.5;
+
+            assert!(
+                top > sight.y + SIGHT_SIZE,
+                "at {:?} the plate reaches {:.0} and the sight is at {:.0}",
+                window,
+                top,
+                sight.y
+            );
+        }
     }
 
     /// Spec 0003: the sight answers you by brightening.

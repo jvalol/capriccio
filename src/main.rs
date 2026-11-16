@@ -9291,16 +9291,16 @@ impl Game for Arcade {
                 // and the same rule the reach went in under: a key is named
                 // where it works.
                 let keys = if self.rolling().is_some() {
-                    "Left and right turn this face, up and down roll the column"
+                    "Left or right turns this face. Up or down rolls the column"
                 } else {
-                    "Left and right turn this face"
+                    "Left or right turns this face"
                 };
 
                 (
                     Some(format!("{:?}", face).to_lowercase()),
                     Some(match next {
                         Some(next) => format!(
-                            "[COPY - Jake] {}. Shift and up plays {}, the next move of the solution",
+                            "[COPY - Jake] {}. Shift and up plays the next move, {}",
                             keys, next
                         ),
                         None => format!("[COPY - Jake] {}. Enter scrambles it", keys),
@@ -9573,13 +9573,16 @@ impl Game for Arcade {
             }
         }
 
-        let lines = vec![(name, aim::PROMPT_SIZE), (detail, aim::DETAIL_SIZE)];
+        let lines = vec![
+            (name, aim::PROMPT_SIZE, aim::PROMPT_INK),
+            (detail, aim::DETAIL_SIZE, aim::DETAIL_INK),
+        ];
 
         let said = aim::said(
             self.window,
             lines
                 .into_iter()
-                .filter_map(|(say, size)| say.map(|say| (say, size)))
+                .filter_map(|(say, size, ink)| say.map(|say| (say, size, ink)))
                 .collect(),
         );
 
@@ -9590,17 +9593,18 @@ impl Game for Arcade {
         // as well as over a dark one.
         let round: Vec<(Vec2, &str, f32)> = said
             .iter()
-            .map(|(at_, say, size)| (*at_, say.as_str(), *size))
+            .map(|line| (line.at, line.say.as_str(), line.size))
             .collect();
 
         plate(geometry, aim::plate_round(&round, true));
 
-        for (at_, say, size) in said {
+        for line in said {
             text.push_render_text(RenderText {
-                position: at_,
+                position: line.at,
                 bounds: aim::prompt_bounds(self.window),
-                text: say,
-                size,
+                text: line.say,
+                size: line.size,
+                color: line.ink,
                 centered: true,
                 ..Default::default()
             });
