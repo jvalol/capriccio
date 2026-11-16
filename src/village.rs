@@ -562,7 +562,7 @@ pub fn doors(reaches: f32) -> Vec<(Vec3, Vec3)> {
     built(reaches)
         .into_iter()
         .map(|one| {
-            let looks = vec3(one.faces.sin(), 0.0, -one.faces.cos());
+            let looks = looks(one.faces);
             // a stride off the middle, so the door and the window are not
             // stacked on one line
             let aside = vec3(-looks.z, 0.0, looks.x) * one.wide * 0.22;
@@ -740,7 +740,7 @@ pub fn windows(reaches: f32) -> Vec<(Vec3, Vec3)> {
     built(reaches)
         .into_iter()
         .map(|one| {
-            let looks = vec3(one.faces.sin(), 0.0, -one.faces.cos());
+            let looks = looks(one.faces);
             let out = if one.faces == FRAC_PI_2 {
                 vec3(one.wide * 0.5 - SET_BACK, 0.0, 0.0)
             } else {
@@ -776,11 +776,19 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 /// from a stoop without a stride.
 pub const SETS_DOWN: f32 = 0.52;
 
+/// Which way somebody facing `facing` is looking.
+///
+/// **Written out three times before this.** `doors` and `fronts` each said
+/// it and so did the sack in the wagon, which is three accounts of one
+/// convention and the fault this file already names for the stair's foot.
+pub fn looks(facing: f32) -> Vec3 {
+    vec3(facing.sin(), 0.0, -facing.cos())
+}
+
 /// A point `how_far` to one side of somebody standing at `at` and facing
 /// `facing`.
 ///
-/// Forward is `(sin, 0, -cos)` of a facing, which is the convention
-/// [`crate::people::facing`] is built on, so across it is `(cos, 0, sin)`.
+/// Forward is [`looks`], so across it is `(cos, 0, sin)`.
 pub fn aside(at: Vec3, facing: f32, how_far: f32) -> Vec3 {
     vec3(
         at.x + facing.cos() * how_far,
@@ -892,7 +900,27 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
                 // because what a wagon holds is not a thing arithmetic can
                 // answer, and this round has gone from a wagon to a rail
                 // of horses carrying nothing since spec 0068.
-                carrying(at, facing, 5.5, Errand::Lift, crate::people::Load::Feed)
+                //
+                // **The sack is in the bed up to the moment he has it.**
+                // Spec 0084. Spec 0078 said a load that vanishes when a
+                // foot leaves a stop is not a transfer and spec 0080 said
+                // the same of the other end, and this was the one stop
+                // neither converted: five and a half seconds of a
+                // two-handed heave with nothing in it, and the feed
+                // appearing as he walked off. It was in the picture before
+                // it was in a test.
+                //
+                // Taken from the cart and not from the man, though he is
+                // stood at it: a sack on a bed is in the bed's place, and
+                // the day the wagons move this moves with them. He is
+                // `CLEAR_OF` clear of the near side, so the bed starts
+                // that far ahead of him and the sack sits a little into it.
+                let bed = at + looks(facing) * (CLEAR_OF + WAGON_WIDE * 0.25) + Vec3::Y * WAGON_BED;
+
+                Stop {
+                    takes_at: Some(bed),
+                    ..carrying(at, facing, 5.5, Errand::Lift, crate::people::Load::Feed)
+                }
             },
             lane(rail_at.x - 2.0),
             // **Down at their feet before anybody is patted.** Spec 0078.
@@ -1310,17 +1338,31 @@ mod tests {
         let round = &rounds(REACHES)[1];
         let mut at_the_wagon = false;
         let mut laid = None;
+        let mut held = false;
 
         for step in 0..6_000 {
             let doing = crate::people::doing(round, step as f32 * 0.05);
+            let holding = doing.holding == Some(crate::people::Load::Feed);
 
-            if doing.holding == Some(crate::people::Load::Feed) {
+            if holding {
                 at_the_wagon |= doing.at.distance(carts[0].0) < 5.0;
             }
 
+            // **The step it leaves his hands, and not every step it is on
+            // the ground.** Spec 0084 gave the wagon stop a `takes_at`, so
+            // `left` now says "lying here" at both ends of the errand
+            // rather than only after one: read as it was, this took the
+            // sack waiting in the wagon bed for the sack laid at the rail
+            // and measured nine metres. What this is after is the moment
+            // the carrier lets go, which is the step after one he was
+            // holding it on.
             if let Some(put) = doing.left {
-                laid = Some((put, doing.at));
+                if held {
+                    laid = Some((put, doing.at));
+                }
             }
+
+            held = holding;
         }
 
         assert!(at_the_wagon, "the feed is never picked up at the wagon");
@@ -1437,6 +1479,68 @@ mod tests {
             lay.distance(water)
         );
         assert_eq!(lay.y, 0.0, "the pail is lying off the ground");
+    }
+
+    /// Spec 0084: and the feed is in the wagon up to the moment he has it.
+    ///
+    /// **The wellhead's test one errand along, asking a different thing.**
+    /// That one asks whether the pail is beside the body rather than under
+    /// it, because a pail on the ground is somewhere a stoop can reach and
+    /// the mistake worth guarding is putting it where nobody can see it.
+    /// A sack in a wagon has a height as well as a place, and a sack on the
+    /// ground beside a wagon is not what is in a wagon.
+    ///
+    /// **It does not ask whether he can reach it, and that is not an
+    /// oversight.** `CLEAR_OF` stands everybody 1.6 metres clear of the
+    /// thing their errand is at, and an arm is `people::ARM_TALL`, 0.74. So
+    /// nobody in this street touches what they work at: the drawer at the
+    /// well hauls a rope that is not there either. Asserting a reach here
+    /// would be asserting against the convention rather than against this
+    /// change.
+    ///
+    /// **Nor whether it is in front of him**, which was written and taken
+    /// out: the wagon is what he faces, so anything inside its footprint is
+    /// ahead of him by construction and the assertion could not fail. Its
+    /// negative control failed on the footprint instead, which is how it
+    /// was caught.
+    ///
+    /// Found by walking the rounds rather than by naming one. The wellhead's
+    /// test says `rounds(REACHES)[2]`, and the day an errand is added before
+    /// it that index is a different person.
+    #[test]
+    fn the_feed_is_in_the_wagon_until_it_is_lifted() {
+        let cart = wagons(REACHES)[0].0;
+        let mut lay: Option<Vec3> = None;
+
+        for round in rounds(REACHES).iter() {
+            for step in 0..4_000 {
+                let doing = crate::people::doing(round, step as f32 * 0.05);
+
+                if let Some((crate::people::Load::Feed, where_)) = doing.left {
+                    lay = Some(where_);
+                }
+            }
+        }
+
+        let lay = lay.expect("the feed is never lying anywhere at all");
+
+        assert!(
+            (lay.y - WAGON_BED).abs() < 1e-4,
+            "the feed lies at {:.2} and a wagon's bed is at {:.2}, so it is \
+             not in the wagon",
+            lay.y,
+            WAGON_BED
+        );
+
+        let across = vec3(lay.x - cart.x, 0.0, lay.z - cart.z).length();
+
+        assert!(
+            across < WAGON_LONG * 0.5,
+            "the feed lies {:.2} metres from the middle of a wagon {:.2} \
+             long, so it is beside one rather than in one",
+            across,
+            WAGON_LONG
+        );
     }
 
     /// Spec 0067: and being moved out of each other does not move anybody

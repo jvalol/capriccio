@@ -1335,17 +1335,32 @@ mod tests {
         assert_eq!(at(2, 0.1).left, None, "it is still there after they leave");
     }
 
-    /// Spec 0080: and it comes up off the ground the same way round.
+    /// Spec 0080: and it comes up the same way round.
     ///
     /// **Four moments, because the near miss is a pail that was always
     /// there.** A load drawn at `takes_at` for the whole loop would pass a
     /// test that only looked at the stop it comes up on, and would leave a
     /// pail lying at a wellhead that nobody is standing at.
+    ///
+    /// **Both errands that close a hand, not just the stoop.** Spec 0084
+    /// gave `Errand::Lift` its own moment for the sack in the wagon, and
+    /// this test had the stoop written into it, so it would have gone on
+    /// passing while the lift conjured feed out of nothing. The height is
+    /// the only thing that differs and it is the round's to say, so one
+    /// body over the two of them is the whole of it.
     #[test]
     fn a_load_comes_up_off_the_ground() {
-        let lies = glam::vec3(6.4, 0.0, 0.5);
+        for (errand, lies) in [
+            (crate::gesture::Errand::Stoop, glam::vec3(6.4, 0.0, 0.5)),
+            (crate::gesture::Errand::Lift, glam::vec3(6.4, 0.95, 0.5)),
+        ] {
+            a_load_comes_up(errand, lies);
+        }
+    }
+
+    fn a_load_comes_up(errand: crate::gesture::Errand, lies: glam::Vec3) {
         let mut round = a_round();
-        round[1].doing = crate::gesture::Errand::Stoop;
+        round[1].doing = errand;
         round[1].takes_at = Some(lies);
         round[1].carries = Some(Load::Pail);
 
@@ -1363,8 +1378,8 @@ mod tests {
 
             doing(&round, before + into)
         };
-        let when = crate::gesture::picks_up_at(crate::gesture::Errand::Stoop)
-            .expect("a stoop reaches the ground");
+        let when =
+            crate::gesture::picks_up_at(errand).expect("this errand closes its hands on something");
 
         // standing over it, before the hand closes
         let early = at(1, when - 0.2);
@@ -1419,8 +1434,8 @@ mod tests {
                     );
                     assert!(
                         crate::gesture::picks_up_at(stop.doing).is_some(),
-                        "a stop on {}'s round {} takes something off the ground \
-                         with an errand that never reaches it",
+                        "a stop on {}'s round {} takes something up with an \
+                         errand whose hands never close on anything",
                         what,
                         n
                     );

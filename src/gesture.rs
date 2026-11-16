@@ -388,16 +388,35 @@ pub fn lets_go_at(errand: Errand) -> Option<f32> {
 /// and a change to the stoop's clock would move one of them.
 pub const STOOP_BOTTOM: f32 = 0.78;
 
-/// How long after arriving an errand closes its hand on something lying on
-/// the ground, per spec 0080, or `None` for an errand that never reaches it.
+/// How far into a lift the hands are on what is being lifted, which is the
+/// bottom of its first heave.
 ///
-/// **The same errands and the same moment as [`lets_go_at`].** A stoop is
-/// the only thing in this building that gets a hand down to the floor, and
-/// which way the load is going is the round's business rather than the
-/// body's: the hand is at the ground either way.
+/// **Its own number rather than [`STOOP_BOTTOM`].** The two are the same
+/// kind of moment and not the same one. A stoop dips once in the first
+/// third of a 4.6 second turn; a lift heaves on 3.4 and its lowest point is
+/// halfway through, where the `down` term's `(1 - cos(through * TAU)) * 0.5`
+/// peaks. Writing one number above both would be one account of two clocks,
+/// and the day either turn changed, the other's moment would move with it.
+pub const LIFT_BOTTOM: f32 = 1.7;
+
+/// How long after arriving an errand closes its hands on what it is there
+/// to take, per spec 0080, or `None` for an errand that never reaches one.
+///
+/// **The moment, not the height.** This said a stoop was the only thing
+/// here that gets a hand to the floor, which was true and was answering a
+/// question nobody asked: what a round needs to know is when the hands are
+/// on the thing, and where the thing is sitting is the round's own business.
+/// A lift is the same instant seen at a wagon's bed rather than at the
+/// ground, which is spec 0084, and the village's loading round had been
+/// miming one for 5.5 seconds with the sack appearing as it walked off.
+///
+/// Stoop keeps [`lets_go_at`]'s number, since letting go and taking hold are
+/// one instant of one motion. A lift has no second half here: nothing in
+/// this building puts a thing down into anything.
 pub fn picks_up_at(errand: Errand) -> Option<f32> {
     match errand {
         Errand::Stoop => Some(STOOP_BOTTOM),
+        Errand::Lift => Some(LIFT_BOTTOM),
         _ => None,
     }
 }
