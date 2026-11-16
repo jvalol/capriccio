@@ -1258,9 +1258,17 @@ struct Arcade {
 
 /// Lays a plate and its line under a block of text, if there is one.
 ///
-/// The line first and the shade on top of it, so what is left showing round
-/// the edge is the line. Two quads and not a frame of four: a frame of four is
+/// The line first and the shade on top of it, so what stands proud round the
+/// edge is the line. Two quads and not a frame of four: a frame of four is
 /// four chances to be a pixel out.
+///
+/// **It is not only round the edge, and the old wording here said it was.**
+/// The shade is see-through, so the line's white sits under the whole plate
+/// and lifts it: at the shade's old alpha that was a measured 119 to 132
+/// over a pale table, and over a dark room it would have been the grey box
+/// `aim::PLATE`'s own note says a plate must never be. Spec 0108 raised the
+/// shade, which leaves the white as a floor of about a fiftieth. Worth
+/// knowing before anyone lowers that alpha again.
 fn plate(geometry: &mut Geometry, plate: Option<aim::Plate>) {
     use blitzkit::geometry::quad::Quad;
 

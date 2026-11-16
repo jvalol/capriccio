@@ -1388,7 +1388,16 @@ pub const ROCK: Vec4 = vec4(0.21, 0.20, 0.19, 1.0);
 /// room is a grey box and over a bright one is still grey: black takes
 /// whatever is behind it down by the same amount wherever you stand, which is
 /// the whole point.
-pub const PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.62);
+///
+/// **The alpha is a measured number and not a chosen one.** Spec 0108. These
+/// quads are blended before the frame is tonemapped, so the figure here is
+/// not the fraction of the room it takes away: at 0.62 the plate over the
+/// nook's table measured 119 against a bare 158, which is a fifth off rather
+/// than the two thirds it reads as, and white on it came to 4.5 to one.
+/// Jake, playing: the contrast of the text is hard to read. Measured down
+/// the range at that one pixel, 0.80 gives 101, 0.90 gives 86 and 0.96
+/// gives 73, so it is still a shade at 0.90 and a bar not far above it.
+pub const PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.90);
 
 /// How much wider and taller the plate is than the words on it.
 pub const PLATE_PAD: f32 = 7.0;
@@ -2529,8 +2538,12 @@ mod tests {
     /// The plate is a shade with a line round it, not a bar across the top.
     #[test]
     fn the_plate_is_a_shade_and_not_a_bar() {
+        // The bounds are off the measurements in `PLATE`'s own note and not
+        // off what the number looks like: these quads blend before the
+        // tonemap, so 0.9 here is a plate you can still see the room
+        // through rather than the bar the old upper bound took it for.
         assert!(
-            PLATE.w > 0.3 && PLATE.w < 0.9,
+            PLATE.w > 0.75 && PLATE.w < 0.98,
             "a plate at {} alpha is either nothing or a bar",
             PLATE.w
         );
