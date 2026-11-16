@@ -9308,11 +9308,10 @@ impl Game for Arcade {
                 (
                     Some(format!("{:?}", face).to_lowercase()),
                     Some(match next {
-                        Some(next) => format!(
-                            "[COPY - Jake] {}. Shift and up plays the next move, {}",
-                            keys, next
-                        ),
-                        None => format!("[COPY - Jake] {}. Enter scrambles it", keys),
+                        Some(next) => {
+                            format!("{}. Shift and up plays the next move, {}", keys, next)
+                        }
+                        None => format!("{}. Enter scrambles it", keys),
                     }),
                 )
             }
