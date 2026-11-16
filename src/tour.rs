@@ -979,6 +979,38 @@ pub fn clip(room: &crate::room::Room, done: bool) -> Vec<Step> {
         );
 
         route.push(Step::At(stand, 0));
+
+        // **The way to the village, before anything you have to look up
+        // at.** Spec 0088. Spec 0086 wore a path out of this gap because
+        // the place it leads to sat out in the field with nothing leading
+        // to it, and then the one film of this building stood in the gap
+        // and looked over the top of it: three beats out here and every
+        // one of them above the horizon.
+        //
+        // **Aimed at where the run begins, which is as far along it as the
+        // gap allows.** The first build looked at the far end and drew a
+        // wall: this stand is `BACK_FROM_THE_WAY` inside the garden, the
+        // gap is 3.2 metres wide, and the village is south west, so the
+        // wedge the opening leaves is west and nothing else. Twelve metres
+        // along the run is behind the garden's south wall and so is five;
+        // the arithmetic puts the limit near three. What the start gives
+        // is the path leaving the opening and bending out of frame, with
+        // the runestone and the bridge behind it, which is the cue rather
+        // than the destination and is all this beat can carry.
+        //
+        // Walking out instead is not available. The comment on
+        // `BACK_FROM_THE_WAY` says why: the field is not in
+        // `room::grounds`, so the planner lays no lattice over it and a
+        // stop out there plans no way at all.
+        //
+        // First of the three, because the two after it are the bridge and
+        // the moon and the comment below is right that a turn ending
+        // upward is the better last thing. This is the one that is not a
+        // turn upward, so it goes before them.
+        let (path_starts, _) = crate::village::path_runs(reaches);
+
+        route.push(Step::Look(path_starts));
+        route.push(Step::Stand(2.0));
         route.push(Step::Look(crate::bridge::top(reaches)));
         route.push(Step::Stand(3.0));
 
@@ -1409,7 +1441,7 @@ mod tests {
             crate::moon::showing(since)
         );
 
-        // where the route stands for its one outdoor shot, and the two
+        // where the route stands for its one outdoor shot, and the three
         // things it looks at from there
         let steps = clip(&room, true);
         let mut stand = None;
@@ -1432,15 +1464,23 @@ mod tests {
 
         let stand = stand.expect("the route stands in the garden's way out");
 
+        // **Three since spec 0088**, which put the way to the village in
+        // front of the two that were here. The count is pinned rather than
+        // ignored so that a beat going missing is somebody's decision and
+        // not a silence.
         assert_eq!(
             looks.len(),
-            2,
-            "it looks {} ways from the way out, not two",
+            3,
+            "it looks {} ways from the way out, not three",
             looks.len()
         );
 
         let eye = vec3(stand.x, stand.y + crate::EYE, stand.z);
-        let way = (looks[1] - eye).normalize();
+        // the last of them, and not an index. The route's own comment says
+        // the moon goes after the bridge because a turn that ends looking
+        // up is the better last thing to see of the field, so last is the
+        // rule and a number is a restatement of it that spec 0088 broke.
+        let way = (looks[looks.len() - 1] - eye).normalize();
         let moon = crate::moon::at(since);
 
         assert!(
@@ -1491,6 +1531,73 @@ mod tests {
             0.0,
             (from + to) * 0.5,
         )
+    }
+
+    /// Spec 0088: and every look in it has something to look at.
+    ///
+    /// **Written because nothing caught a beat aimed at a wall.** The
+    /// village look added by that spec first pointed at the far end of the
+    /// run, which from a stand `BACK_FROM_THE_WAY` inside the garden is
+    /// behind the south wall. The clip filmed it, the route tests passed,
+    /// and the only thing that found it was rendering the frame and
+    /// looking. A camera turning to face masonry for two seconds is the
+    /// cheapest fault in this file to make and was the only one with
+    /// nothing watching for it.
+    ///
+    /// **It stops short of the target**, the way `room::can_see_outdoors`
+    /// does, because a look is usually at a solid thing: the bookcase, the
+    /// leaf, the cube. What is being asked is whether something stands
+    /// between, not whether the thing itself is solid.
+    ///
+    /// It asks only the looks taken from a stand the route names, which is
+    /// all of them: a `Step::Look` is always preceded by the `Step::At`
+    /// it is taken from.
+    #[test]
+    fn every_look_in_the_clip_has_something_to_look_at() {
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+        let mut stood = room.doorway();
+        let mut looked = 0;
+
+        for step in clip(&room, true) {
+            match step {
+                Step::At(at, _) => stood = at,
+                Step::Look(target) => {
+                    let eye = vec3(stood.x, stood.y + crate::EYE, stood.z);
+                    let way = target - eye;
+                    let reach = way.length();
+
+                    if reach < 1e-3 {
+                        continue;
+                    }
+
+                    looked += 1;
+
+                    let way = way / reach;
+                    let blocked = solid.iter().find(|box_| {
+                        crate::room::slab(eye, way, box_)
+                            .is_some_and(|hit| hit > 1e-3 && hit < reach - 0.2)
+                    });
+
+                    assert!(
+                        blocked.is_none(),
+                        "from {:?} the clip looks at {:?} and {:?} is in the way",
+                        stood,
+                        target,
+                        blocked.map(|box_| box_.center())
+                    );
+                }
+                _ => (),
+            }
+        }
+
+        // and it found looks to ask about, or it says nothing at all
+        assert!(
+            looked > 8,
+            "only {} looks were checked, so this is not reading the route \
+             it thinks it is",
+            looked
+        );
     }
 
     /// about; swung, they are somewhere else and this says nothing.
