@@ -83,7 +83,7 @@ pub enum Room {
     /// hall's sky, and the hall has one: its door looks into the garden.
     /// The gallery is roofed and shut, so a whole twenty second day was
     /// running across its floor with no window to run through, which Jake
-    /// stood still in and watched. Spec 0106.
+    /// stood still in and watched. Spec 0095.
     ///
     /// Everything else about it is the hall's, deliberately: it is carpeted
     /// like the hall and hears what the hall hears, and the only question
@@ -1340,7 +1340,7 @@ mod tests {
         assert!(placed > 0, "no voice has a place, so this checked nothing");
     }
 
-    /// Spec 0106: the gallery is its own room and has no sky.
+    /// Spec 0095: the gallery is its own room and has no sky.
     ///
     /// **The fault, in the building's own numbers.** Answered as the hall
     /// it was given the hall's sky, and the hall has one: its door looks

@@ -94,7 +94,7 @@ pub fn sweep() -> f32 {
 ///
 /// Measured and not drawn, which is the family three constants above are in
 /// already: it exists so the fit can be checked. The ceiling used to divide
-/// it to place three lamps, and spec 0105 hung one over each exhibit off
+/// it to place three lamps, and spec 0094 hung one over each exhibit off
 /// `along` instead, so nothing that renders reads this now.
 #[allow(dead_code)]
 pub fn row() -> f32 {
@@ -180,7 +180,7 @@ pub fn count() -> usize {
 /// Where the nth one stands along the row: out from the picture a step at a
 /// time, each half its own way.
 ///
-/// **Its own function because the ceiling asks it too.** Spec 0105 hangs a
+/// **Its own function because the ceiling asks it too.** Spec 0094 hangs a
 /// light over each exhibit, and a lamp that worked out where the plinths
 /// are for itself is the second list this building has learnt not to keep.
 /// `all_of_them` cannot answer it, because building six meshes to find out

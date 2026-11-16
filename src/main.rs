@@ -176,7 +176,7 @@ const TILTS: f32 = 1.6;
 /// for that is that nothing presses the next key inside this: `play` in
 /// `refresh-examples` waits longer than this on purpose and says so.
 /// How long the sky's fill takes to come in or go out as you cross a
-/// threshold, in seconds. Spec 0106. Long enough not to read as a switch
+/// threshold, in seconds. Spec 0095. Long enough not to read as a switch
 /// and short enough that a doorway is not a tunnel.
 const SKY_FILL_LAGS: f32 = 0.6;
 
@@ -734,10 +734,16 @@ struct Arcade {
     floor: Option<MeshId>,
     /// The carpet, and the ceiling that stops the room opening onto nothing.
     carpet: Option<TextureId>,
+    /// The village track's face, with its ruts painted into it. Spec 0096.
+    track_face: Option<TextureId>,
     /// The worn track in it at the foot of the near wall, which is the one
     /// thing in the hall that says the way through is there. Spec 0020.
     worn: Option<TextureId>,
-    worn_mesh: Option<MeshId>,
+    /// One quad a unit across, laid flat, for anything painted onto a
+    /// surface rather than built on it: the hall's wear and the village
+    /// track's ruts. Named for the shape and not for the first thing that
+    /// wanted it, which is what `worn_mesh` was. Spec 0096.
+    flat_quad: Option<MeshId>,
     /// Which strike's thunder has been played. Spec 0016.
     thundered: Option<u32>,
     /// The rug in the nook, which is not the arcade's carpet.
@@ -1174,7 +1180,7 @@ struct Arcade {
     /// went back to turning the person.
     /// How much of the sky's fill is reaching you, from nought in a roofed
     /// room to one under the open sky, wound rather than switched so that a
-    /// doorway is a doorway and not a shutter. Spec 0106.
+    /// doorway is a doorway and not a shutter. Spec 0095.
     ///
     /// **`None` until the first frame has been through**, because a wind
     /// has to start somewhere and nought is the wrong place: every picture
@@ -1390,8 +1396,9 @@ impl Arcade {
             pane: None,
             floor: None,
             carpet: None,
+            track_face: None,
             worn: None,
-            worn_mesh: None,
+            flat_quad: None,
             thundered: None,
             rug: None,
             rug_mesh: None,
@@ -3300,6 +3307,28 @@ impl Arcade {
             );
         }
 
+        // and the ruts, painted on the track's top rather than built on it.
+        // Spec 0096. Two millimetres up, which is `behind::TRACK_HIGH`'s
+        // reason word for word: in the track's own plane it would be two
+        // exposed faces sharing one.
+        if let (Some(face), Some(quad)) = (self.track_face, self.flat_quad) {
+            let ground = village::track(reaches);
+            let size = ground.size();
+
+            scene.push_textured(
+                quad,
+                face,
+                &Transform::at(vec3(
+                    ground.center().x,
+                    ground.max.y + behind::TRACK_HIGH,
+                    ground.center().z,
+                ))
+                .with_scale(vec3(size.x, 1.0, size.z)),
+                glam::Vec4::ONE,
+                aim::MATTE,
+            );
+        }
+
         // and the way there, worn across the field from the gap. Spec
         // 0086. Laid before the ruts and after the track for the same
         // reason they are: it is the surface, and they go on it.
@@ -3310,17 +3339,6 @@ impl Arcade {
                     .with_rotation(glam::Quat::from_rotation_y(turn))
                     .with_scale(size),
                 aim::VILLAGE_EARTH,
-                aim::MATTE,
-            );
-        }
-
-        // the ruts worn down it, which is what says a cart goes up and
-        // down here rather than that somebody laid a surface
-        for rut in village::ruts(reaches) {
-            scene.push_material(
-                cube,
-                &Transform::at(rut.center()).with_scale(rut.size()),
-                aim::VILLAGE_RUT,
                 aim::MATTE,
             );
         }
@@ -7755,6 +7773,9 @@ impl Game for Arcade {
         ))));
         self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
         self.carpet = Some(renderer.add_texture(&carpet::woven()));
+        // and the village track's, which is one texture against the 116
+        // slabs it replaces. Spec 0096.
+        self.track_face = Some(renderer.add_texture(&village::face(self.room.reaches)));
         {
             // and the wear in it at the foot of the near wall, per spec 0020
             let track = behind::track(self.room.reaches);
@@ -7766,7 +7787,7 @@ impl Game for Arcade {
                 track.fade,
                 track.shape,
             )));
-            self.worn_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
+            self.flat_quad = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         }
         let (_, rug) = room::open_floor(self.room.reaches);
         self.rug = Some(renderer.add_texture(&carpet::rug(rug.z / rug.x)));
@@ -8522,7 +8543,7 @@ impl Game for Arcade {
                 .can_see_outdoors(self.looking_from(), self.room.reaches);
 
         // how much of the sky's own fill reaches you, wound toward whether
-        // the room you are standing in has any sky at all. Spec 0106.
+        // the room you are standing in has any sky at all. Spec 0095.
         let wants = if noise::room_at(self.room.reaches, self.at).sees_the_sky() {
             1.0
         } else {
@@ -9214,7 +9235,7 @@ impl Game for Arcade {
         let strength = if sky { strength } else { 0.0 };
 
         scene.light.intensity = strength;
-        // and the fill the same way, which it was not. Spec 0106. The sun
+        // and the fill the same way, which it was not. Spec 0095. The sun
         // is kept out of a roofed room three lines up and the ambient was
         // handed to every room alike, so the gallery ran a whole twenty
         // second day with no window to run it through: Jake stood still in
@@ -9356,11 +9377,11 @@ impl Game for Arcade {
         // this hall that says the way through the near wall is there. Spec
         // 0020: it is a thing that happened rather than a thing somebody put
         // up, which is what lets it point without pointing.
-        if let (Some(worn), Some(worn_mesh)) = (self.worn, self.worn_mesh) {
+        if let (Some(worn), Some(quad)) = (self.worn, self.flat_quad) {
             let track = behind::track(self.room.reaches);
 
             scene.push_textured(
-                worn_mesh,
+                quad,
                 worn,
                 &Transform::at(track.at).with_scale(track.size),
                 aim::WORN,
@@ -12443,7 +12464,7 @@ impl Game for Arcade {
         // the middle of the floor.
         //
         // **One over each exhibit, and the same two always cast.** Spec
-        // 0105. The engine carries two shadowing lamps against six here,
+        // 0094. The engine carries two shadowing lamps against six here,
         // so two of the six have to be chosen, and the first go chose the
         // two nearest the eye. Jake walked the room and sent back a light
         // sweeping over the floor and into the wall: four metres of

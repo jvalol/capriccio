@@ -658,50 +658,107 @@ pub fn along_the_path(reaches: f32, at: Vec3) -> bool {
     vec3(at.x - near.x, 0.0, at.z - near.z).length() < PATH_CLEAR
 }
 
-/// The wheel ruts worn down it, as a run of short pieces each.
+/// How wide a wheel rut is worn.
 ///
 /// **A track and not two painted lines.** The street was one flat slab of
 /// earth, which is a surface and not a place anybody has driven over. What
 /// says a cart goes up and down here is a pair of ruts at a wagon's own
 /// wheel spacing, and what stops them reading as road markings is that they
-/// wander: each piece is laid off the one before it by a little, the way a
-/// wheel follows the last wheel without following it exactly.
+/// wander, the way a wheel follows the last wheel without following it
+/// exactly.
+///
+/// They were 58 slabs a side until spec 0096 painted them into the track's
+/// own face instead. `RUT_PIECES` went with them, and so did the comment
+/// about keeping each piece barely proud of the track: nothing stands proud
+/// of anything now.
 pub const RUT_WIDE: f32 = 0.34;
-pub const RUT_PIECES: usize = 58;
 
-pub fn ruts(reaches: f32) -> Vec<Aabb> {
-    let middle = at(reaches);
-    let long = STREET_LONG + 14.0;
-    let piece = long / RUT_PIECES as f32;
-    let mut out = Vec::new();
+/// One channel of a colour as this engine's textures hold it.
+///
+/// **sRGB and not the number.** `texture::FORMAT` is `Rgba8UnormSrgb`, so
+/// the sampler decodes every texel on the way in, where an instance's own
+/// colour is handed to the shader as it stands. Written straight, the
+/// track's earth of 0.235 came back as 0.045 and the street was nearly
+/// black: the same colour, read twice.
+fn encoded(channel: f32) -> u8 {
+    let channel = channel.clamp(0.0, 1.0);
+    let srgb = if channel <= 0.003_130_8 {
+        channel * 12.92
+    } else {
+        1.055 * channel.powf(1.0 / 2.4) - 0.055
+    };
 
-    for side in [-1.0f32, 1.0] {
-        // a wagon's own track, which is the wheels either side of its bed
-        let apart = (WAGON_WIDE * 0.5 + WHEEL_THICK) * side;
+    (srgb * 255.0).round().clamp(0.0, 255.0) as u8
+}
 
-        for n in 0..RUT_PIECES {
-            let along = middle.x - long * 0.5 + (n as f32 + 0.5) * piece;
-            let seed = along * 0.37 + side * 11.0;
-            let wander = (seed * 1.3).sin() * 0.22 + (seed * 0.47).sin() * 0.16;
+/// How far the rut on this side has wandered at this point along the street.
+///
+/// **One account of the curve**, because the track's own face is painted
+/// from it and the pieces used to be laid from it, and two would have come
+/// apart the first time either moved. Spec 0096.
+pub fn rut_wander(along: f32, side: f32) -> f32 {
+    let seed = along * 0.37 + side * 11.0;
 
-            out.push(Aabb::from_center_size(
-                vec3(
-                    along,
-                    middle.y + TRACK_UP + 0.002,
-                    middle.z + apart + wander,
-                ),
-                // **Barely off the track, and in short pieces.** It was a
-                // centimetre proud in pieces nearly three metres long,
-                // which lit along its edge and stepped sideways at every
-                // join: a kerb laid down the street rather than a wheel
-                // worn into it. What a rut is here is a darker line, and
-                // the lift is only enough to keep it off the track's face.
-                vec3(piece * 1.06, 0.005, RUT_WIDE),
-            ));
+    (seed * 1.3).sin() * 0.22 + (seed * 0.47).sin() * 0.16
+}
+
+/// Where the middle of the rut on this side runs, across the street.
+pub fn rut_runs(side: f32, along: f32) -> f32 {
+    (WAGON_WIDE * 0.5 + WHEEL_THICK) * side + rut_wander(along, side)
+}
+
+/// How wide and tall the track's own face is drawn, in texels.
+///
+/// The track is 72 metres by 10, so this is a texel every 35 millimetres
+/// along it and every 39 across, which puts nine of them across a rut. A
+/// power of two each way because the mips halve to a pixel and a run of
+/// odd sizes rounds differently every level.
+pub const FACE_WIDE: u32 = 2048;
+pub const FACE_TALL: u32 = 256;
+
+/// The track's face: earth, with the two ruts worn into it. Spec 0096.
+///
+/// **Painted and not built.** The ruts were 116 slabs standing two
+/// millimetres proud of the track, 58 a side, which is a texture's job done
+/// with geometry: each one cast its own shadow, so the lines swung across
+/// the street as the sun went round and aliased into a crawl at distance.
+/// Jake, who found it: textured surfaces should have small shadows, mipmaps
+/// are a thing for a reason. The engine's `build_mips` says the same in its
+/// own words, that without it a textured floor seen at an angle shimmers.
+pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
+    let ground = track(reaches);
+    let (from, size) = (ground.min, ground.size());
+    let earth = crate::aim::VILLAGE_EARTH;
+    let rut = crate::aim::VILLAGE_RUT;
+    let mut pixels = Vec::with_capacity((FACE_WIDE * FACE_TALL * 4) as usize);
+
+    for y in 0..FACE_TALL {
+        for x in 0..FACE_WIDE {
+            // the texel's own place on the track, in the world's own numbers,
+            // so the curve below is the one the wheels wore
+            let along = from.x + (x as f32 + 0.5) / FACE_WIDE as f32 * size.x;
+            let across = from.z + (y as f32 + 0.5) / FACE_TALL as f32 * size.z;
+
+            // how far off the nearer rut it is, soft over the last fifth of
+            // the width so the edge is worn rather than cut
+            let off = [-1.0f32, 1.0]
+                .iter()
+                .map(|side| (across - (ground.center().z + rut_runs(*side, along))).abs())
+                .fold(f32::MAX, f32::min);
+            let edge = RUT_WIDE * 0.1;
+            let worn = ((RUT_WIDE * 0.5 + edge - off) / (edge * 2.0)).clamp(0.0, 1.0);
+
+            let colour = earth.lerp(rut, worn);
+            pixels.extend_from_slice(&[
+                encoded(colour.x),
+                encoded(colour.y),
+                encoded(colour.z),
+                255,
+            ]);
         }
     }
 
-    out
+    blitzkit::texture::TextureData::from_pixels(FACE_WIDE, FACE_TALL, pixels)
 }
 
 /// And the common off it, where the fire stands.
@@ -1207,6 +1264,71 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Spec 0096: the track's face is worn where the wheels run, and the
+    /// earth between comes back the colour it went in.
+    ///
+    /// **Both halves were faults, in that order.** The ruts were built as
+    /// 116 slabs standing proud of the track, so each cast a shadow and the
+    /// lines swung across the street as the sun went round; painted, they
+    /// can instead land in the wrong place, because the texture and the
+    /// wheels are two readings of one curve. And the first painting came
+    /// out nearly black: `texture::FORMAT` is sRGB and the colour was
+    /// written straight, so 0.235 was read back as 0.045.
+    #[test]
+    fn the_track_is_worn_where_the_wheels_run() {
+        let reaches = 9.0;
+        let ground = track(reaches);
+        let face = face(reaches);
+        let (from, size) = (ground.min, ground.size());
+
+        let texel = |along: f32, across: f32| {
+            let x = (((along - from.x) / size.x) * FACE_WIDE as f32) as u32;
+            let y = (((across - from.z) / size.z) * FACE_TALL as f32) as u32;
+            let n = ((y.min(FACE_TALL - 1) * FACE_WIDE + x.min(FACE_WIDE - 1)) * 4) as usize;
+            let level = face.levels.first().expect("a base level");
+
+            level.pixels[n]
+        };
+
+        // a quarter, a half and three quarters of the way down it
+        for share in [0.25f32, 0.5, 0.75] {
+            let along = from.x + size.x * share;
+
+            for side in [-1.0f32, 1.0] {
+                let on = texel(along, ground.center().z + rut_runs(side, along));
+                let off = texel(along, ground.center().z);
+
+                assert!(
+                    on < off,
+                    "at {:.1} along, the {} rut reads {} against earth at {}",
+                    along,
+                    if side < 0.0 { "near" } else { "far" },
+                    on,
+                    off
+                );
+            }
+        }
+
+        // and the earth between them is the earth, read back through the
+        // sRGB the sampler will undo
+        let middle = texel(from.x + size.x * 0.5, ground.center().z);
+        let back = {
+            let one = middle as f32 / 255.0;
+            if one <= 0.040_45 {
+                one / 12.92
+            } else {
+                ((one + 0.055) / 1.055).powf(2.4)
+            }
+        };
+
+        assert!(
+            (back - crate::aim::VILLAGE_EARTH.x).abs() < 0.01,
+            "the track's earth went in at {:.3} and comes back at {:.3}",
+            crate::aim::VILLAGE_EARTH.x,
+            back
+        );
+    }
     use super::*;
 
     const REACHES: f32 = 20.0;

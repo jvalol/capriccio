@@ -1,4 +1,4 @@
-# 0105 A light over each exhibit
+# 0094 A light over each exhibit
 
 **Status:** implemented
 **Date:** 2026-11-16

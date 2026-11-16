@@ -1,4 +1,4 @@
-# 0106 The gallery's own sky
+# 0095 The gallery's own sky
 
 **Status:** implemented
 **Date:** 2026-11-16

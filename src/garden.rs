@@ -537,7 +537,7 @@ pub fn firelight(since: f32) -> f32 {
 /// Never nought: a storm at midnight is still a lid over the garden and a
 /// garden with no fill at all is a black rectangle. It goes from deep blue to
 /// the daylight fill of `aim::FILL`.
-/// What fills a room the sky cannot reach. Spec 0106.
+/// What fills a room the sky cannot reach. Spec 0095.
 ///
 /// **The same two colours as the sky's own fill, at the hour it is level.**
 /// Jake: if the light cannot reach a room, it should not make it to that

@@ -317,7 +317,7 @@ pub fn gallery_deep() -> f32 {
 ///
 /// **Asked of the floor it stands on**, which is the one the room is
 /// measured by, and generously in x because the room is as wide as its
-/// floor and a body against a wall is still in it. Spec 0106.
+/// floor and a body against a wall is still in it. Spec 0095.
 pub fn in_the_gallery(reaches: f32, at: Vec3) -> bool {
     let (middle, size) = gallery(reaches);
 
@@ -353,7 +353,7 @@ pub fn gallery_way() -> (f32, f32) {
 pub const GALLERY_LAMP_UP: f32 = TALL - 0.38;
 pub const GALLERY_SHADE: Vec3 = vec3(0.26, 0.12, 0.26);
 
-/// **One over each exhibit, which is what a gallery does.** Spec 0105.
+/// **One over each exhibit, which is what a gallery does.** Spec 0094.
 /// There were three, spread evenly along the row on the argument that three
 /// covers six without a fitting per shape, and what that bought was a lamp
 /// over a gap and a shape lit from a foot to one side.
@@ -2537,7 +2537,7 @@ impl Room {
 #[cfg(test)]
 mod tests {
 
-    /// Spec 0105: one lamp over each exhibit, at the exhibit's own place.
+    /// Spec 0094: one lamp over each exhibit, at the exhibit's own place.
     ///
     /// **Because the ceiling used to work it out for itself.** The lamps
     /// were three, spread along a division of `display::row()`, so the row
