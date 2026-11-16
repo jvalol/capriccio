@@ -3161,6 +3161,20 @@ impl Arcade {
             );
         }
 
+        // and the way there, worn across the field from the gap. Spec
+        // 0086. Laid before the ruts and after the track for the same
+        // reason they are: it is the surface, and they go on it.
+        for (at, size, turn) in village::path(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(at)
+                    .with_rotation(glam::Quat::from_rotation_y(turn))
+                    .with_scale(size),
+                aim::VILLAGE_EARTH,
+                aim::MATTE,
+            );
+        }
+
         // the ruts worn down it, which is what says a cart goes up and
         // down here rather than that somebody laid a surface
         for rut in village::ruts(reaches) {

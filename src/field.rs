@@ -587,7 +587,15 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // stone stands. This list has only ever kept trees out of the
         // building, so one grew through the runestone and the low stretch
         // of the deck ran through whatever was sown under it.
-        if crate::bridge::shades(reaches, at) || crate::village::shades(reaches, at) {
+        // **And not across the way there.** Spec 0086. The village's own
+        // header says it is sited near enough that you can see it from the
+        // gap and decide to go, and a stand of birch had grown straight
+        // across that line, so what you saw from the gap was trees. A
+        // keep-out along the run is what makes the promise true again.
+        if crate::bridge::shades(reaches, at)
+            || crate::village::shades(reaches, at)
+            || crate::village::along_the_path(reaches, at)
+        {
             continue;
         }
 
@@ -618,8 +626,8 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
 
         // and not inside spec 0068's village, where flowers growing
         // through a cart's bed is what a field does to anything standing
-        // on it that it was not told about
-        if crate::village::shades(reaches, at) {
+        // on it that it was not told about, nor up through the way there
+        if crate::village::shades(reaches, at) || crate::village::along_the_path(reaches, at) {
             continue;
         }
 

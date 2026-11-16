@@ -23,6 +23,16 @@ use glam::{vec3, Vec3};
 /// from there, so south is the free direction. Forty-four is far enough that
 /// the garden's wall does not frame it and near enough that you can see it
 /// from the gap and decide to go.
+///
+/// **That last clause was not true for a long time.** Jake, 2026-11-15: the
+/// village seems sort of just randomly out there with no obvious path to it
+/// from anywhere until it is already in view. Standing in the gap and aiming
+/// straight at this place put a stand of birch across the whole of it, and
+/// seventy-two metres of undifferentiated grass under that. The distance was
+/// never the problem and moving it would not have helped. Spec 0086 keeps
+/// the promise two ways instead: `path` wears a line from the gap to where
+/// the street's ruts run out, and `along_the_path` is what stops the field
+/// sowing anything across the view down it.
 pub const WEST: f32 = 56.0;
 pub const SOUTH: f32 = 46.0;
 
@@ -92,9 +102,24 @@ pub const SHOT_DAY: f32 = 20.0 * 60.0;
 /// already named once, on the arcade's own still: the near cabin on that
 /// side stood across a third of the frame, and the picture's job is the
 /// street rather than a cabin.
+///
+/// **And a third of the way out was too near the wagon.** Spec 0086. At
+/// 0.34 the east cart stood 5.7 metres down the street and 5.1 across,
+/// which is close enough to be seen end on and cropped by the frame: a
+/// wheel, a man, and no wagon. Spec 0084 put a sack in his hands and the
+/// picture still read as somebody wrestling a cartwheel, because what was
+/// wrong with it by then was the camera. At 0.42 the whole cart is in and
+/// side on, which is what makes the errand legible.
+///
+/// Half the width off instead of 0.12, for the same reason 0.12 replaced
+/// 0.25 and in the other direction: standing back put the timber stacked
+/// against the near cabin into the left of the frame as a dark mass. The
+/// offset still has its original job, which is keeping the ruts out of
+/// the middle, and 0.06 is the least that still does it. Nought was tried
+/// and runs them straight up the centre.
 pub fn posed(reaches: f32) -> (Vec3, f32, f32) {
     let middle = at(reaches);
-    let stand = middle + vec3(STREET_LONG * 0.34, 0.0, STREET_WIDE * 0.12);
+    let stand = middle + vec3(STREET_LONG * 0.42, 0.0, STREET_WIDE * 0.06);
     let look = middle + vec3(-STREET_LONG * 0.24, crate::EYE - 0.3, STREET_WIDE * 0.1);
     let way = look - (stand + Vec3::Y * crate::EYE);
     let flat = vec3(way.x, 0.0, way.z).length();
@@ -495,6 +520,142 @@ pub fn track(reaches: f32) -> Aabb {
         middle + Vec3::Y * (TRACK_UP - 0.05),
         vec3(STREET_LONG + 14.0, 0.1, STREET_WIDE),
     )
+}
+
+/// How wide the way there is worn, in how many pieces, and how far clear of
+/// it the field keeps its trees.
+///
+/// **A footpath and not a cart track.** The street's own ruts are two lines
+/// at a wagon's wheel spacing, because a cart goes up and down it. Nothing
+/// drives out to the gap in the garden wall, so what wears this is feet: one
+/// band, wide enough for two to pass, and `RUT_WIDE` deliberately not reused.
+///
+/// `PATH_CLEAR` is not the crown's reach but the sightline's. The village's
+/// own keep-out is a share wider than `around` so a trunk just outside does
+/// not hang a crown over a roof, which is a question about what is above
+/// you. This one is a question about what you can see along: the whole
+/// reason the way there exists is that the module header promises you can
+/// see this place from the gap and decide to go, and the field had grown a
+/// stand of birch across that line. Crowns meeting overhead are welcome and
+/// do not close the view.
+///
+/// **Four and not two and a half**, which was tried and is in a picture.
+/// Two and a half keeps the run itself clear of trunks, which is all a
+/// footpath needs, and left a conifer standing square across the view of
+/// the village from the gap. The run and the sightline are not the same
+/// line: the run meets the street's east end and the village's middle is
+/// most of thirty degrees west of it, so a tree beside the path can still
+/// be in front of the place. Four is what took that one out. This clears
+/// the view by happening to rather than by aiming, and a second keep-out
+/// along gap to middle would be two bare stripes crossing in a field.
+pub const PATH_WIDE: f32 = 1.2;
+pub const PATH_PIECES: usize = 40;
+pub const PATH_CLEAR: f32 = 4.0;
+
+/// How far out of the gap the way there begins.
+///
+/// **Clear of the wall it comes through**, so it reads as leaving the gap
+/// rather than as a floor laid in it. The garden's own ground is two
+/// centimetres over the field's and covers whatever it overlaps, so a piece
+/// started in the opening would be a piece nobody sees.
+pub const PATH_OFF: f32 = 2.0;
+
+/// The two ends of the way there: out of the gap, to where the street's own
+/// ruts run out.
+///
+/// **It ends where the ruts do and not where the street does.** They run
+/// seven metres past each end already, because a cart that stops at the
+/// first cabin is a cart that was lowered in. Meeting them there is what
+/// makes one way of getting here rather than two things that nearly touch.
+pub fn path_runs(reaches: f32) -> (Vec3, Vec3) {
+    let (from, to) = crate::field::way(reaches);
+    let middle = at(reaches);
+
+    (
+        vec3(
+            crate::field::starts(reaches) - PATH_OFF,
+            0.0,
+            (from + to) * 0.5,
+        ),
+        vec3(middle.x + (STREET_LONG + 14.0) * 0.5, 0.0, middle.z),
+    )
+}
+
+/// The way there, as a run of short worn pieces: where each sits, how big it
+/// is, and which way it is turned.
+///
+/// **Turned, because this one runs on the diagonal.** The street's ruts are
+/// boxes along x and need no rotation; the gap is north east of the village
+/// and nothing between them is square to anything. Each piece carries the
+/// run's own heading, the way a wagon's wheels carry the cart's.
+///
+/// It wanders like the ruts do and for the same reason. A worn line that is
+/// perfectly straight for fifty metres is a road somebody surveyed.
+pub fn path(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
+    let (from, to) = path_runs(reaches);
+    let way = to - from;
+    let long = way.length();
+    let along = way / long;
+    // across the run, which is the heading turned a quarter
+    let across = vec3(-along.z, 0.0, along.x);
+    let piece = long / PATH_PIECES as f32;
+
+    (0..PATH_PIECES)
+        .map(|n| {
+            let down = (n as f32 + 0.5) * piece;
+            // **Read off the distance and barely there.** The first build
+            // seeded on the piece's number with a tenth of a radian step,
+            // which is a fast wave, and threw each piece half a width
+            // sideways of the last: a line of paving slabs dealt out by
+            // hand. The ruts' own comment says what that looks like, since
+            // they were a kerb down the street for the same reason. Long
+            // waves and a tenth of a metre, so a join is a soft edge
+            // rather than a notch.
+            let wander = (down * 0.21).sin() * 0.14 + (down * 0.53).sin() * 0.07;
+            let at = from + along * down + across * wander;
+
+            (
+                // laid on the field's own ground, which sits `field::DROP`
+                // under the garden's, and only far enough proud of it to
+                // keep the two out of one plane
+                vec3(at.x, -crate::field::DROP + 0.002, at.z),
+                // a third again as long as its step, so the wander never
+                // opens a gap between one piece and the next
+                vec3(piece * 1.33, 0.005, PATH_WIDE),
+                // **Not `people::facing`'s angle**, which is the one every
+                // other turn in this file is. That one answers which way a
+                // body looks and its forward is `(sin, 0, -cos)`; this is
+                // handed to `Quat::from_rotation_y`, which sends a box's
+                // own x to `(cos, 0, -sin)`. The first build used the
+                // facing and laid every piece across the run instead of
+                // along it: a path of slabs dealt sideways, a metre out of
+                // line at each join, which read as the wander being too
+                // coarse and was nothing of the sort.
+                (-along.z).atan2(along.x),
+            )
+        })
+        .collect()
+}
+
+/// Whether this is on the way there, for the field to keep its trees off it.
+///
+/// **The nearest point on the run and not a box round it.** A box round a
+/// diagonal fifty metres long is a box with most of a field in it, and the
+/// trees it took out would be a rectangle of bare ground with a path
+/// somewhere inside it.
+pub fn along_the_path(reaches: f32, at: Vec3) -> bool {
+    let (from, to) = path_runs(reaches);
+    let way = to - from;
+    let how_far = way.length_squared();
+
+    if how_far < 1e-6 {
+        return false;
+    }
+
+    let part = ((at - from).dot(way) / how_far).clamp(0.0, 1.0);
+    let near = from + way * part;
+
+    vec3(at.x - near.x, 0.0, at.z - near.z).length() < PATH_CLEAR
 }
 
 /// The wheel ruts worn down it, as a run of short pieces each.
@@ -1627,6 +1788,76 @@ mod tests {
     }
 
     /// Spec 0068: no tree grows inside it.
+    /// Spec 0086: and there is a way there, with nothing growing across it.
+    ///
+    /// **The field's own trees and not just the predicate.** The sibling
+    /// below asks `shades` at a grid of points, which says what the rule
+    /// answers and not what the field does with it. This one walks the
+    /// cells the run crosses and asks `field::trees` and `field::cover`
+    /// what they actually put there, because the fault being fixed was a
+    /// stand of birch standing exactly where the rule now says it may not:
+    /// a rule nothing consults reads the same as no rule.
+    #[test]
+    fn nothing_grows_across_the_way_to_the_village() {
+        let (from, to) = path_runs(REACHES);
+
+        // it leaves the gap and meets the ruts where they run out, which
+        // is what makes it one way of getting here
+        let (a, b) = crate::field::way(REACHES);
+        let gap = vec3(crate::field::starts(REACHES), 0.0, (a + b) * 0.5);
+        let middle = at(REACHES);
+
+        assert!(
+            from.distance(gap) < PATH_OFF + 0.01,
+            "the way there starts {:.1} metres from the gap",
+            from.distance(gap)
+        );
+        assert!(
+            (to.x - (middle.x + (STREET_LONG + 14.0) * 0.5)).abs() < 0.01
+                && (to.z - middle.z).abs() < 0.01,
+            "the way there ends at {:?}, which is not where the ruts run out",
+            to
+        );
+
+        // every cell the run passes through, which is what the field is
+        // asked for a cell at a time
+        let cell = crate::field::CELL;
+        let mut stood = 0;
+
+        for n in 0..=120 {
+            let on = from + (to - from) * (n as f32 / 120.0);
+            let (i, j) = ((on.x / cell).round() as i32, (on.z / cell).round() as i32);
+
+            for about in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let at = (i + about.0, j + about.1);
+
+                for one in crate::field::trees(REACHES, at)
+                    .into_iter()
+                    .chain(crate::field::cover(REACHES, at))
+                {
+                    stood += 1;
+
+                    assert!(
+                        !along_the_path(REACHES, one.at),
+                        "something grows at {:?}, which is on the way to the village",
+                        one.at
+                    );
+                }
+            }
+        }
+
+        // and the sweep found things to check, or it says nothing at all
+        assert!(
+            stood > 100,
+            "only {} things stand anywhere near the run, so this sweep is \
+             not looking at the field it thinks it is",
+            stood
+        );
+
+        // and the far side of the field is not on it
+        assert!(!along_the_path(REACHES, to + vec3(0.0, 0.0, -60.0)));
+    }
+
     #[test]
     fn nothing_is_sown_in_the_village() {
         let box_ = around(REACHES);
