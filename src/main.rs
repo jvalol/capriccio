@@ -8868,18 +8868,27 @@ impl Game for Arcade {
             // button would do, as a cabinet does
             (None, Some(room::Seen::Display(n))) => (
                 Some(self.room.displays[n].name.to_string()),
-                // the sixth is the way into spec 0021's room rather than a
-                // thing you take hold of, so it says so. Spec 0090. It read
-                // "to turn it" before, which was wrong for this one from the
-                // day it went in and misleading from the day it started
-                // turning itself.
-                Some(String::from(if n == display::tesseract() {
-                    "Click or press enter to enter it"
+                // **What the keys actually do, which it did not say.**
+                // Spec 0093. It read "to turn it" whether or not you were
+                // holding it and said nothing about the arrows, the shift
+                // pair or the knob, so the one plate in this room that
+                // does say its keys was the panel, and Jake read the
+                // difference off the screen. The sixth is the way into
+                // spec 0021's room rather than a thing you take hold of,
+                // which is spec 0090.
+                Some(if n == display::tesseract() {
+                    String::from("Click or press enter to enter it")
                 } else if self.spin.holding() == Some(n) {
-                    "Click or press enter to let go"
+                    match display::knob_says(n, self.knobs.get(n).copied().unwrap_or(0)) {
+                        Some(knob) => format!(
+                            "[COPY - Jake] Arrows turn it. Shift and up or down: {}. Enter lets go",
+                            knob
+                        ),
+                        None => String::from("[COPY - Jake] Arrows turn it. Enter lets go"),
+                    }
                 } else {
-                    "Click or press enter to turn it"
-                })),
+                    String::from("[COPY - Jake] Click or press enter to take hold")
+                }),
             ),
             (None, Some(room::Seen::Bench(n))) => {
                 let name = self.room.benches[n].name;
@@ -12280,14 +12289,13 @@ impl Game for Arcade {
 
             let (plinth, size) = display::plinth_under(one);
             scene.push_plain(cube, &Transform::at(plinth).with_scale(size), aim::PLINTH);
-            // a turned shape reaches lower than an upright one, so where its
-            // middle goes follows which way it is facing. It sank into its
-            // plinth otherwise.
+            // where its middle goes is one number and `fitted` settled it,
+            // lifted by how far the shape reaches rather than by how far it
+            // reaches this frame. Spec 0093.
             let facing = self.spin.facing(n, self.since);
-            let sits = vec3(one.at.x, display::sits_at(one, facing), one.at.z);
             scene.push_plain(
                 mesh,
-                &Transform::at(sits)
+                &Transform::at(one.at)
                     .with_rotation(facing)
                     .with_scale(Vec3::splat(one.scale)),
                 // see-through is an alpha short of full and nothing else:
@@ -12387,14 +12395,40 @@ impl Game for Arcade {
         // and the gallery's three, per spec 0022. The room at the end of the
         // aisle has one thing in it and these are over that rather than over
         // the middle of the floor.
-        for at in room::gallery_lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                aim::GALLERY_LAMP,
-                aim::GALLERY_LIT,
-                aim::GALLERY_RANGE,
-            ));
+        //
+        // **The two over the ends of the row cast.** Spec 0093. This room's
+        // own comment already said a shape is lit from in front and above
+        // so that it throws its shadow back onto the wall, and no lamp in
+        // the building asked for one, so it threw nothing: six objects on
+        // six plinths with no shadow under any of them and a sponge whose
+        // holes were as bright inside as its faces. Jake, off the engine's
+        // own menger example, which has a floor for the shadow to land on
+        // and calls that the point of it.
+        //
+        // Two and not three, and named rather than left to the engine. It
+        // carries two shadowing lamps and takes the first two it is given,
+        // so three asking is a draw settled by push order, which is the
+        // thing Valhalla's fires already say in their own comment. The
+        // middle one is over the panel, which has nothing standing in
+        // front of it; the outer two are each over a group of three
+        // plinths.
+        let mut casters = Vec::new();
+
+        for (n, at) in room::gallery_lamps(self.room.reaches)
+            .into_iter()
+            .enumerate()
+        {
+            if n == room::GALLERY_LAMPS / 2 {
+                shades.push((
+                    eye.distance_squared(at),
+                    at,
+                    aim::GALLERY_LAMP,
+                    aim::GALLERY_LIT,
+                    aim::GALLERY_RANGE,
+                ));
+            } else {
+                casters.push(at);
+            }
         }
 
         // and the corridor of mirrors', one over each frame, per spec 0061.
@@ -12720,6 +12754,29 @@ impl Game for Arcade {
         shades.sort_by(|one, other| {
             inside_its_reach(one.0, one.4).total_cmp(&inside_its_reach(other.0, other.4))
         });
+
+        // the casters first, so that what the engine drops when a building
+        // outgrows its cap is never the lamp a room is built around. They
+        // take the same cull as the rest: a shadow map for a room you
+        // cannot see is a shadow map of a room nobody is in. Measured
+        // headless in the gallery looking down the whole row, the pair
+        // takes twenty nine seconds of play from 7.27 seconds to 7.65,
+        // which is five per cent.
+        for at in casters {
+            if !seen.holds_sphere(at, aim::GALLERY_RANGE) {
+                continue;
+            }
+
+            scene.push_light(
+                blitzkit::lighting::PointLight::new(
+                    at,
+                    aim::GALLERY_LAMP,
+                    aim::GALLERY_LIT,
+                    aim::GALLERY_RANGE,
+                )
+                .casting(),
+            );
+        }
 
         for (_, at, colour, lit, range) in shades {
             scene.push_light(blitzkit::lighting::PointLight::new(at, colour, lit, range));

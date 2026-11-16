@@ -53,7 +53,7 @@ which spec 0001 ruled out and this does not change.
 - They stand along the far wall, clear of each other and of the cabinets. — `display::tests::they_stand_clear`
 - All five are drawn the same size, whatever their own arithmetic gave them. — `display::tests::they_are_all_the_same_size`
 - And a turning one never reaches the one beside it, about any axis. — `display::tests::a_turning_one_keeps_to_itself`
-- Each one sits on its plinth rather than over it. — `display::tests::each_one_sits_on_its_plinth`
+- Each one stands over its plinth and comes down to touch it. — `display::tests::no_turn_moves_a_shape_or_puts_it_through_its_plinth`, which took this over on 2026-11-16. Spec 0093 lifted the row by its sweep so that turning one does not move it, so a shape no longer rests on its plinth at every moment: it reaches the top at the one orientation that stands its diagonal upright and clears every other way up
 - And a plinth is wider than what it carries. — `display::tests::a_plinth_is_wider_than_its_shape`
 - Each one turns. — `display::tests::they_turn`
 - Looking at one names it, and names a cabinet when you look at a cabinet. — `room::tests::looking_at_a_display_names_it`

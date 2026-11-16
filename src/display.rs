@@ -192,10 +192,12 @@ pub fn knob_runs(n: usize) -> Option<(i32, i32)> {
         // as a solid and reads as grey noise on a sheet. Five is the last
         // one that is still an object
         SIERPINSKI => Some((1, 5)),
-        // three is 36 thousand triangles and a millisecond and a half to
-        // build; four is 673 thousand and twenty nine milliseconds, which
-        // is a frame and three quarters gone on one keypress
-        MENGER => Some((1, 3)),
+        // the engine's own cap, which its example opens at three of and
+        // which is the number the shape library will build. Three is 36
+        // thousand triangles and a millisecond and a half; four is 673
+        // thousand and 29 milliseconds, which is a frame and three
+        // quarters spent on the keypress that asks for it, once
+        MENGER => Some((1, blitzkit_shapes::menger::MAX_DEPTH as i32)),
         HILBERT => Some((1, 4)),
         _ => None,
     }
@@ -218,6 +220,25 @@ pub fn knob_rests(n: usize) -> i32 {
 /// at half of that: the fourth step is 0.06 and is the last one with
 /// anything left to see through.
 pub const HILBERT_STEP: f32 = 0.015;
+
+/// What a shape's knob is called and where it stands, for its plate.
+/// Spec 0093.
+///
+/// **The shape's own word for it.** A depth and a thickness are not the
+/// same thing, and a plate saying depth over a tube that has none is the
+/// fault this spec was written to fix.
+pub fn knob_says(n: usize, knob: i32) -> Option<String> {
+    let (_, most) = knob_runs(n)?;
+
+    // **No marker of its own.** This is half a sentence and is never drawn
+    // on its own, so the one the plate carries covers the whole line. A
+    // marker here would put two in one line of copy.
+    Some(match shape(n) {
+        TEAPOT | KLEIN => String::from(if knob > 0 { "see-through" } else { "solid" }),
+        HILBERT => format!("thickness {} of {}", knob, most),
+        _ => format!("depth {} of {}", knob, most),
+    })
+}
 
 /// Whether this one is drawn see-through at that knob.
 pub fn see_through(n: usize, knob: i32) -> bool {
@@ -254,6 +275,8 @@ pub fn all_of_them(wall: f32) -> Vec<Display> {
                 scale: 1.0,
                 half: Vec3::ZERO,
             };
+            // `fitted` settles the height, so `HIGH` above is only the
+            // row's nominal line and the one below it is what is drawn
             one.fitted(&mesh);
 
             one
@@ -273,6 +296,10 @@ impl Display {
         let size = mesh.bounds().size();
         self.scale = ACROSS / size.max_element().max(1e-4);
         self.half = size * self.scale * 0.5;
+        // and where its middle goes follows how far it reaches, so this is
+        // the one account of it: the sight reads `at` and so does the draw.
+        // Spec 0093.
+        self.at.y = sits_at(self);
     }
 }
 
@@ -315,22 +342,32 @@ pub fn stands_at() -> f32 {
     HIGH - ACROSS * 0.5
 }
 
-/// Where a shape's middle has to be for it to rest on its plinth, facing this
-/// way.
+/// How far a shape reaches from its own middle, whichever way it is turned.
 ///
-/// A turned shape is lower at the bottom than an upright one, by however much
-/// its own corners reach: the drop is the box's half extents projected onto the
-/// upright. Spec 0004 turned them about every axis and left them sinking a
-/// seventh of a unit into the plinth when they were tipped, with the number
-/// written down as a trade rather than a defect. It is a defect. A thing rests
-/// on the thing it is standing on, whichever way up it is.
-pub fn sits_at(one: &Display, facing: Quat) -> f32 {
-    let m = glam::Mat3::from_quat(facing);
-    let reach = one.half.x * m.x_axis.y.abs()
-        + one.half.y * m.y_axis.y.abs()
-        + one.half.z * m.z_axis.y.abs();
+/// The half diagonal of its box, which is the radius of the ball it sweeps,
+/// and so the one number that holds for every orientation at once.
+pub fn reaches(one: &Display) -> f32 {
+    one.half.length()
+}
 
-    stands_at() + reach
+/// Where a shape's middle sits over its plinth. Spec 0093.
+///
+/// **One height and not one per facing.** Spec 0004 turned these about
+/// every axis and left them sinking a seventh of a unit into the plinth when
+/// they tipped, and spec 0005 answered that by lifting each one by however
+/// far its own corners reached that frame. That is right standing still and
+/// wrong the moment a hand turns it: the shape rises and falls twice a
+/// revolution, which Jake read off the screen as bouncing on the plinth the
+/// day the arrows could turn one.
+///
+/// So the lift is the sweep instead, which no turn can change. The shape
+/// keeps its middle where it is however it is turned and its lowest corner
+/// reaches the plinth's top only at the one orientation that stands the
+/// diagonal upright. Every other way up it clears, which is what puts air
+/// under it, and air under it is what the engine's own menger example has
+/// and the reason that one has a shadow to look at.
+pub fn sits_at(one: &Display) -> f32 {
+    stands_at() + reaches(one)
 }
 
 /// The plinth under a shape: where its middle is and how big it is.
@@ -611,63 +648,69 @@ mod tests {
         );
     }
 
-    /// Spec 0004: a shape rests on its plinth whichever way it is turned.
+    /// Spec 0093: no turn moves a shape, and no turn puts it through its
+    /// plinth.
     ///
-    /// Not only upright. Turned about every axis it reaches lower than it does
-    /// standing, and it sank a seventh of a unit into the plinth.
+    /// **Both halves, because either alone is met by something wrong.**
+    /// Spec 0005 lifted each shape by how far it reached that frame, which
+    /// never collides and moves the shape twice a revolution, and Jake read
+    /// that off the screen as bouncing. Leaving it where it stands never
+    /// moves it and sinks it a seventh of a unit in when it tips, which is
+    /// the fault spec 0005 was written for. The lift that does both is the
+    /// sweep, and this says so by walking the turns.
+    ///
+    /// And the closest approach has to be nought, or a lift of any size at
+    /// all would pass: a shape held a metre up never collides either, and
+    /// what it looks like is a row that forgot its plinths.
     #[test]
-    fn a_turned_one_still_rests_on_its_plinth() {
+    fn no_turn_moves_a_shape_or_puts_it_through_its_plinth() {
         let quarter = std::f32::consts::FRAC_PI_2;
-        let facings = [
-            Quat::IDENTITY,
-            Quat::from_rotation_x(quarter),
-            Quat::from_rotation_z(quarter),
-            Quat::from_rotation_x(0.7) * Quat::from_rotation_y(1.2),
-            Quat::from_rotation_x(quarter * 0.5) * Quat::from_rotation_z(quarter * 0.5),
-        ];
 
         for one in all_of_them(-6.0).iter() {
             let (at, size) = plinth_under(one);
             let top = at.y + size.y * 0.5;
+
+            // a spread, and then the one that stands the box's own diagonal
+            // upright, which is where a box hangs lowest
+            let mut facings = vec![
+                Quat::IDENTITY,
+                Quat::from_rotation_x(quarter),
+                Quat::from_rotation_z(quarter),
+                Quat::from_rotation_x(0.7) * Quat::from_rotation_y(1.2),
+                Quat::from_rotation_x(quarter * 0.5) * Quat::from_rotation_z(quarter * 0.5),
+                Quat::from_rotation_arc(one.half.normalize_or(Vec3::Y), Vec3::Y),
+            ];
+            for step in 0..24 {
+                let turn = step as f32 * 0.26;
+                facings.push(Quat::from_rotation_x(turn) * Quat::from_rotation_z(turn * 0.61));
+            }
+
+            let mut closest = f32::MAX;
 
             for facing in facings {
                 let m = glam::Mat3::from_quat(facing);
                 let reach = one.half.x * m.x_axis.y.abs()
                     + one.half.y * m.y_axis.y.abs()
                     + one.half.z * m.z_axis.y.abs();
-                let bottom = sits_at(one, facing) - reach;
+                let bottom = one.at.y - reach;
 
                 assert!(
-                    (bottom - top).abs() < 1e-4,
-                    "{} turned {:?} has its lowest point at {} over a plinth reaching {}",
+                    bottom > top - 1e-4,
+                    "{} turned {:?} reaches {:.4} into a plinth whose top is {:.4}",
                     one.name,
                     facing,
                     bottom,
                     top
                 );
+
+                closest = closest.min(bottom - top);
             }
-        }
-    }
-
-    /// Spec 0002: a shape sits on its plinth rather than over it.
-    #[test]
-    fn each_one_sits_on_its_plinth() {
-        for one in all_of_them(-6.0).iter() {
-            let (at, size) = plinth_under(one);
-            let top = at.y + size.y * 0.5;
-            let bottom = sits_at(one, Quat::IDENTITY) - one.half.y;
 
             assert!(
-                (top - bottom).abs() < 1e-3,
-                "{} stands at {} over a plinth reaching {}",
+                closest < 1e-3,
+                "{} never comes nearer its plinth than {:.4}, so it is hanging rather than standing over it",
                 one.name,
-                bottom,
-                top
-            );
-            assert!(
-                at.y - size.y * 0.5 > -1e-3,
-                "{}'s plinth goes through the floor",
-                one.name
+                closest
             );
         }
     }

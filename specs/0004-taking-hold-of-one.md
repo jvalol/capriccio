@@ -121,7 +121,7 @@ it is the game's.
 - A free one does. — `display::tests::a_free_one_turns`
 - It turns about every axis, not only the upright. — `display::tests::it_turns_in_every_direction`
 - A tilt survives letting go. — `display::tests::a_tilted_one_goes_on_turning_tilted`
-- And a turned one still rests on its plinth. — `display::tests::a_turned_one_still_rests_on_its_plinth`
+- And a turned one never goes through its plinth. — `display::tests::no_turn_moves_a_shape_or_puts_it_through_its_plinth`, which took this over on 2026-11-16. Spec 0005 answered this by lifting a shape by how far it reached that frame, and spec 0093 found what that does under a hand: the lift follows the facing, so a shape being turned rises and falls twice a revolution. The lift is the sweep now, which no turn can change
 - A screen reads forwards from the front and backwards from behind. — `room::tests::a_screen_reads_backwards_from_behind`
 - Turning moves the one in your hands and no other. — `display::tests::turning_moves_only_the_held_one`
 - Letting go carries on from where you left it. — `display::tests::it_carries_on_from_where_you_left_it`
