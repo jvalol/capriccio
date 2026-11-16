@@ -394,6 +394,36 @@ pub const REACH: f32 = 4.0;
 /// stood since the nook was built stands 1.4 away and still passes.
 pub const BENCH_REACH: f32 = 1.8;
 
+/// And how far a part of a toy does, which is less again. Spec 0106.
+///
+/// **Because a part takes the arrows and a bench mostly did not.** Specs
+/// 0098 to 0105 put six parts in front of the benches they stand on, each
+/// answering before the room is asked and each binding the arrows to a
+/// toy. Two of those toys never wanted the arrows at all before: nothing
+/// in `wanted_by` matches the cradle or the puzzle, so walking past them
+/// you kept your keys, and now a ball and a facelet take them from 1.8
+/// metres off. Jake, playing: the game feels hard to control, it overlaps
+/// with movement in the room.
+///
+/// The building already knew. `looking_at`'s own comment says the arrows
+/// work the toy the sight is on and turn you when it is on nothing, so
+/// crossing the nook they stop turning you for no reason you can see.
+///
+/// An arm's length. You read what a thing is from a step back and you
+/// touch it when you are at it, which is also what keeps the plate
+/// honest: a part is only ever named when its keys actually work.
+pub const PART_REACH: f32 = 1.0;
+
+/// A part reaches less far than the bench it stands on, which is the whole of
+/// spec 0106 in one line.
+///
+/// Said to the compiler rather than to a test, because clippy is right that
+/// the comparison is constant: a test asserting it is a test that cannot
+/// fail at run time, and the only way for this to go wrong is somebody
+/// editing one of the two numbers above, which is exactly when a compile
+/// error is the thing you want.
+const _: () = assert!(PART_REACH < BENCH_REACH);
+
 /// A floor quad whose u and v run past one, so a tiling texture repeats across
 /// it rather than being stretched over the whole thing.
 ///

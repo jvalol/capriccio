@@ -2174,7 +2174,7 @@ impl Arcade {
         let (from, way) = (self.looking_from(), self.facing());
 
         room::slab(from, way, &box_)
-            .filter(|far| *far <= room::BENCH_REACH)
+            .filter(|far| *far <= room::PART_REACH)
             .map(|far| room::Seen::Cubie(kociemba::face_at(middle, from + way * far) as usize))
     }
 
@@ -2196,7 +2196,7 @@ impl Arcade {
         let box_ = Aabb::from_center_size(at, Vec3::splat(metronome::WEIGHT * 2.0));
 
         room::slab(self.looking_from(), self.facing(), &box_)
-            .filter(|far| *far <= room::BENCH_REACH)
+            .filter(|far| *far <= room::PART_REACH)
             .map(|_| room::Seen::Weight)
     }
 
@@ -2212,7 +2212,7 @@ impl Arcade {
         let box_ = Aabb::from_center_size(at, Vec3::splat(wrecker::BALL * 2.0));
 
         room::slab(self.looking_from(), self.facing(), &box_)
-            .filter(|far| *far <= room::BENCH_REACH)
+            .filter(|far| *far <= room::PART_REACH)
             .map(|_| room::Seen::Wrecker)
     }
 
@@ -2227,7 +2227,7 @@ impl Arcade {
         let box_ = Aabb::from_center_size(at, Vec3::splat(globe::RADIUS * 2.0));
 
         room::slab(self.looking_from(), self.facing(), &box_)
-            .filter(|far| *far <= room::BENCH_REACH)
+            .filter(|far| *far <= room::PART_REACH)
             .map(|_| room::Seen::Globe)
     }
 
@@ -2250,7 +2250,7 @@ impl Arcade {
         let box_ = Aabb::from_center_size(at, Vec3::splat(gyro::RADIUS * 2.0));
 
         room::slab(self.looking_from(), self.facing(), &box_)
-            .filter(|far| *far <= room::BENCH_REACH)
+            .filter(|far| *far <= room::PART_REACH)
             .map(|_| room::Seen::Rotor)
     }
 
@@ -2275,7 +2275,7 @@ impl Arcade {
                 let box_ = Aabb::from_center_size(at, Vec3::splat(cradle::BALL * 2.0));
 
                 room::slab(from, way, &box_)
-                    .filter(|far| *far <= room::BENCH_REACH)
+                    .filter(|far| *far <= room::PART_REACH)
                     .map(|far| (ball, far))
             })
             .min_by(|one, other| one.1.total_cmp(&other.1))
@@ -15438,6 +15438,55 @@ mod tests {
             !matches!(one.what_i_see(), Some(room::Seen::Cubie(_))),
             "turned away the sight still found {:?}",
             one.what_i_see()
+        );
+    }
+
+    /// Spec 0106: a part answers at arm's length and lets go beyond it.
+    ///
+    /// **Which is the whole of what Jake reported.** Specs 0098 to 0105 put
+    /// six parts in front of six benches, each sighted as far as a bench is
+    /// and each binding the arrows to a toy. Two of those toys never wanted
+    /// the arrows at all, so the nook took his keys away from him in places
+    /// that used to leave them alone. `Room::looking_at` already writes this
+    /// family of fault down in its own words.
+    ///
+    /// A bench is unchanged: `BENCH_REACH` is what it was and the sights that
+    /// use it were not touched, which is why the second assertion is here
+    /// rather than a staged walk. Standing a step back from the globe along
+    /// its own axis puts you inside a cabinet in the hall, so there is no
+    /// handover to photograph; what there is, is one number smaller than the
+    /// other for a reason.
+    #[test]
+    fn a_part_answers_at_arms_length_and_no_further() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == globe::NAME)
+            .copied()
+            .expect("the globe is on a bench");
+        let at = bench.at + Vec3::Y * (bench.size.y + globe::HIGH);
+
+        // Stood off the end of the row so the aim is the only thing that
+        // decides it, and aimed at the ball from your own height.
+        let mut aim = |away: f32| {
+            one.at = vec3(at.x, 0.0, at.z + away);
+            let from = one.looking_from();
+            one.yaw = 0.0;
+            one.pitch = ((at.y - from.y) / away).atan();
+            one.globe_i_see()
+        };
+
+        assert_eq!(
+            aim(room::PART_REACH - 0.2),
+            Some(room::Seen::Globe),
+            "at the globe the sight does not find it"
+        );
+        assert_eq!(
+            aim(room::PART_REACH + 0.2),
+            None,
+            "a step back from the globe the sight still has it"
         );
     }
 
