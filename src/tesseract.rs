@@ -595,19 +595,82 @@ pub fn panel(face: Face) -> (Vec3, Vec3) {
 /// that the inner cube is a cube rather than a dot.
 pub const EYE: f32 = 2.6;
 
-pub fn corners() -> Vec<Vec3> {
+/// The sixteen corners, flattened, turned in four dimensions first.
+///
+/// **One plane, and it has to be one that holds the fourth.** A rotation in
+/// any plane of the three is an ordinary turn and the plinth already has
+/// two of those, the slow one every display gets and the one your hand
+/// gives it. What makes a tesseract worth standing in front of is the other
+/// kind: the inner cube swells through the outer one, passes it, and the
+/// two change places. Nothing but a plane holding the fourth axis does
+/// that, because nothing else changes a corner's `w`, and `w` is the whole
+/// of what the projection divides by.
+///
+/// The plane of x and the fourth, which with the plinth's own turn about
+/// the upright is the same as the plane of z and the fourth half a turn
+/// later. What it is not is the plane of y and the fourth: that one swells
+/// the shape up and down against a room where up is a fixed thing, and it
+/// reads as a squash rather than a turn.
+///
+/// It cannot divide by nothing. At rest a corner's fourth is ±1 against an
+/// `EYE` of 2.6; turned, the furthest it reaches is the root of two, so the
+/// divisor runs between 1.19 and 4.01 and never approaches zero.
+///
+/// **Held to one size, which is the row's own rule and not an exception to
+/// it.** The cast really does grow: 1.32 across at rest and 1.76 at its
+/// widest, a third more. `display::ACROSS` is `APART` over the root of
+/// three precisely so a shape's turning sweep fails to reach its
+/// neighbour, so left alone this one would have reached into the hilbert
+/// tube and down through its own plinth, which is the fault spec 0004
+/// already fixed once for the Sierpinski tetrahedron. Every shape in that
+/// row is scaled to a common width by its own bounds; this does the same
+/// thing at every phase rather than once, so the object stays the size of
+/// its neighbours and the inner cube still swells through the outer one,
+/// that being a change in the proportions rather than in the size.
+pub fn corners_at(phase: f32) -> Vec<Vec3> {
+    let turned = cast(phase);
+    let rest = widest_of(&cast(0.0));
+    let now = widest_of(&turned);
+
+    if now < 1e-6 {
+        return turned;
+    }
+
+    turned.iter().map(|at| *at * (rest / now)).collect()
+}
+
+/// The sixteen corners flattened, before anything is done about how big
+/// they came out.
+fn cast(phase: f32) -> Vec<Vec3> {
+    let (sin, cos) = phase.sin_cos();
     let mut out = Vec::with_capacity(16);
 
     for n in 0..16 {
         let at: Vec<f32> = (0..4)
             .map(|axis| if n >> axis & 1 == 1 { 1.0 } else { -1.0 })
             .collect();
-        let near = 1.0 / (EYE - at[3]);
 
-        out.push(vec3(at[0] * near, at[1] * near, at[2] * near));
+        let x = at[0] * cos - at[3] * sin;
+        let w = at[0] * sin + at[3] * cos;
+        let near = 1.0 / (EYE - w);
+
+        out.push(vec3(x * near, at[1] * near, at[2] * near));
     }
 
     out
+}
+
+/// How far across a cast of it is, which is what holds its size still.
+fn widest_of(corners: &[Vec3]) -> f32 {
+    let mut least = Vec3::splat(f32::MAX);
+    let mut most = Vec3::splat(f32::MIN);
+
+    for at in corners {
+        least = least.min(*at);
+        most = most.max(*at);
+    }
+
+    (most - least).max_element()
 }
 
 /// Which corners are joined: the pairs that differ in exactly one of the four.
@@ -641,9 +704,10 @@ pub fn edges() -> Vec<(usize, usize)> {
 /// cube, is the cell they are standing in. The part of the shape on your
 /// left is the cell through the wall on your left.
 ///
-/// [`corners`] is the same thing from the world's point of view and is what
-/// the object on the plinth is built from, where there is nobody standing
-/// inside it to have a point of view.
+/// [`corners_at`] is the same thing from the world's point of view and is
+/// what the object on the plinth is built from, where there is nobody
+/// standing inside it to have a point of view. It took no angle until spec
+/// 0089 and was called `corners`.
 pub fn corners_in(frame: Frame) -> Vec<Vec3> {
     let along = [frame.right, frame.up, frame.ahead, frame.ana];
     let mut out = Vec::with_capacity(16);
@@ -843,7 +907,23 @@ pub const BAR_SIDES: u32 = 6;
 /// are round and lit like everything else in the nook rather than being
 /// lines, which this renderer does not draw.
 pub fn shape() -> blitzkit::mesh::MeshData {
-    let corners = corners();
+    shape_turned(0.0)
+}
+
+/// How fast a held arrow turns it in the fourth, in radians a second.
+///
+/// A whole turn in about nine seconds, which is slow enough that the swell
+/// through the middle can be watched and fast enough that nobody holds the
+/// key wondering whether it is doing anything.
+pub const TURNS_BY: f32 = 0.7;
+
+/// The same object, turned in the fourth by `phase`. Spec 0089.
+///
+/// **Not `shape_at`**, which is three hundred lines down and is where the
+/// room's own plinth holds a thing. One module, two senses of the word, and
+/// the compiler caught it.
+pub fn shape_turned(phase: f32) -> blitzkit::mesh::MeshData {
+    let corners = corners_at(phase);
     let mut out = blitzkit::mesh::MeshData::new(Vec::new(), Vec::new());
 
     for (one, other) in edges() {
@@ -1408,6 +1488,50 @@ pub fn arriving() -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0089: turning it in the fourth never makes it outgrow its place
+    /// in the row.
+    ///
+    /// **The row's rule is arithmetic and this has to obey it.**
+    /// `display::ACROSS` is `APART` over the root of three, which is the
+    /// largest a shape can be drawn and still have its turning sweep fail
+    /// to reach the plinth beside it. A cast that grows breaks that, and
+    /// the raw one does: 1.32 at rest against 1.76 at phase 0.77.
+    ///
+    /// So this asks the thing that matters rather than the ratio: across a
+    /// whole turn, is the shape ever wider than it is at rest. Breaking the
+    /// hold makes it fail at a third over.
+    #[test]
+    fn turning_it_in_the_fourth_never_makes_it_bigger() {
+        let rest = widest_of(&corners_at(0.0));
+        let mut widest: f32 = 0.0;
+        let mut raw: f32 = 0.0;
+
+        for n in 0..240 {
+            let phase = n as f32 / 240.0 * std::f32::consts::TAU;
+
+            widest = widest.max(widest_of(&corners_at(phase)));
+            raw = raw.max(widest_of(&cast(phase)));
+        }
+
+        assert!(
+            widest <= rest * 1.001,
+            "turned, it reaches {:.3} against {:.3} at rest, so it is \
+             bigger than the place the row leaves it",
+            widest,
+            rest
+        );
+
+        // and the raw cast really does grow, or this test is holding
+        // nothing: the hold is the only reason the line above passes
+        assert!(
+            raw > rest * 1.2,
+            "the unheld cast only reaches {:.3} against {:.3}, so there \
+             was nothing to hold and this proves nothing",
+            raw,
+            rest
+        );
+    }
 
     /// Spec 0021: six neighbours and one opposite, and the neighbours are the
     /// cells on the other three axes.
@@ -2150,7 +2274,7 @@ mod tests {
     /// every corner is on four of them, one for each direction.
     #[test]
     fn the_shape_on_the_plinth_is_a_four_cube() {
-        let corners = corners();
+        let corners = corners_at(0.0);
         let edges = edges();
 
         assert_eq!(corners.len(), 16);

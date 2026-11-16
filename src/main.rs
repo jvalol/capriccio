@@ -1157,6 +1157,18 @@ struct Arcade {
     /// and the curve is the speed, so a turn leans into itself and out again.
     turning: f32,
     tilting: f32,
+    /// How far the tesseract on its plinth is turned in the fourth, and
+    /// which way the hand is turning it. Spec 0089.
+    ///
+    /// **Turning and not a target.** The shape has no phases to step
+    /// between: a quarter turn is as good a place to stop as nought, so
+    /// what the arrows give is a direction to go while they are held, the
+    /// way leaning on the gyro walks its axis.
+    tesseract_phase: f32,
+    tesseract_turning: f32,
+    /// What phase the mesh on the plinth was last written at, so a frame
+    /// nobody is turning it writes nothing.
+    shown_phase: Option<f32>,
     /// Whether this run is flying rather than walking, per spec 0041.
     ///
     /// **State and not a flag read where it is wanted.** `--fly` says what
@@ -1567,6 +1579,9 @@ impl Arcade {
             },
             turning: 0.0,
             tilting: 0.0,
+            tesseract_phase: 0.0,
+            tesseract_turning: 0.0,
+            shown_phase: None,
             flying: flying(),
             showing_solid: false,
             showing_cost: false,
@@ -1707,11 +1722,38 @@ impl Arcade {
     /// A held arrow repeats, and a repeat is swallowed without doing anything: a
     /// pull is a press, so holding the key down is one pull, not forty a second.
     fn work_a_toy(&mut self, input: &KeyboardInput, held: bool) -> bool {
-        let Some(room::Seen::Bench(n)) = self.seen else {
+        let Some(which) = arrow_at(input.key) else {
             return false;
         };
 
-        let Some(which) = arrow_at(input.key) else {
+        // **The tesseract on its plinth, which is a toy and not a bench.**
+        // Spec 0089. Every other worked thing in this building stands on a
+        // bench and is found by name; this one is the sixth display in the
+        // gallery's row, and Return at it is already spoken for by the way
+        // in. So the arrows are what it answers to, which is what the help
+        // text has promised all along about the toy you are looking at.
+        //
+        // Left and right only. Up and down would be a second plane of the
+        // same rotation and `corners_at` turns in one on purpose.
+        if self.seen == Some(room::Seen::Display(display::tesseract())) {
+            if !matches!(input.key, KeyboardKey::Left | KeyboardKey::Right) {
+                return false;
+            }
+
+            self.looking[which] = false;
+            self.leaning[which] = false;
+            self.tesseract_turning = if !held {
+                0.0
+            } else if input.key == KeyboardKey::Left {
+                -1.0
+            } else {
+                1.0
+            };
+
+            return true;
+        }
+
+        let Some(room::Seen::Bench(n)) = self.seen else {
             return false;
         };
         let name = self.room.benches[n].name;
@@ -7357,6 +7399,26 @@ impl Game for Arcade {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
 
+        // the tesseract's own shape, rebuilt whenever the hand has turned it
+        // in the fourth. Spec 0089.
+        //
+        // **Written again rather than drawn from parts.** Turning in the
+        // fourth moves all sixteen corners and changes how long every one
+        // of the thirty-two bars is, so nothing about it is a transform:
+        // the object really is a different shape at every phase. The
+        // alternative was thirty-two bars pushed as instances, which costs
+        // nothing to turn and would have made them boxes rather than the
+        // tubes every other shape in this row is drawn with. This is the
+        // engine's spec 0074 answer again, one mesh written over, and it
+        // only happens on the frames somebody is turning it.
+        if let (Some(mesh), true) = (
+            self.shown.get(display::tesseract()).copied(),
+            self.shown_phase != Some(self.tesseract_phase),
+        ) {
+            renderer.update_mesh(mesh, &tesseract::shape_turned(self.tesseract_phase));
+            self.shown_phase = Some(self.tesseract_phase);
+        }
+
         // the gallery's panel. One texture, written again whenever the view
         // has moved, per the engine's spec 0074. It was a ladder of fixed
         // views before that, because adding a texture was the only way to
@@ -8411,6 +8473,15 @@ impl Game for Arcade {
             Vec3::ZERO
         };
         self.gyro.advance(dt);
+
+        // and the tesseract on its plinth, while an arrow is held at it.
+        // Spec 0089. Wrapped rather than clamped: it is a turn, and a turn
+        // that stops at its own start is a thing that jams once.
+        if self.tesseract_turning != 0.0 {
+            self.tesseract_phase = (self.tesseract_phase
+                + self.tesseract_turning * tesseract::TURNS_BY * dt)
+                .rem_euclid(std::f32::consts::TAU);
+        }
         self.globe.advance(dt);
         self.puzzle.advance(dt);
 
