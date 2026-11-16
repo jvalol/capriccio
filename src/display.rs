@@ -268,6 +268,13 @@ pub fn turned(seconds: f32) -> f32 {
 /// you are turning it to see the far side, so a flick should get you there.
 pub const TURN_BY: f32 = 0.008;
 
+/// How fast a held arrow turns a shape, in radians a second. Spec 0091.
+///
+/// Half a turn in about two seconds, which is the same errand a flick of the
+/// mouse does in one: an arrow cannot be flicked, so it is the holding that
+/// has to get you to the far side without becoming a wait.
+pub const ARROW_TURNS: f32 = 1.5;
+
 /// Which way each shape is facing: the slow turn they share, and whatever a
 /// hand has turned one of them to.
 ///
@@ -340,12 +347,23 @@ impl Spin {
 
     /// How far a drag turns a shape: across the screen about the upright, up
     /// and down about whichever way is right on the screen.
+    pub fn drag(delta: glam::Vec2, right: Vec3) -> Quat {
+        Self::turn_of(delta * TURN_BY, right)
+    }
+
+    /// The same turn asked for by the arrows, which give a direction held
+    /// for a while rather than a distance moved. Spec 0091.
+    pub fn held(wish: glam::Vec2, right: Vec3, dt: f32) -> Quat {
+        Self::turn_of(wish * ARROW_TURNS * dt, right)
+    }
+
+    /// Which axes a turn is about, in radians, said once.
     ///
     /// The camera's right rather than a fixed axis, so turning one stays the
     /// way it looks whichever side of the aisle you are standing on.
-    pub fn drag(delta: glam::Vec2, right: Vec3) -> Quat {
-        Quat::from_axis_angle(Vec3::Y, delta.x * TURN_BY)
-            * Quat::from_axis_angle(right.normalize_or(Vec3::X), delta.y * TURN_BY)
+    fn turn_of(by: glam::Vec2, right: Vec3) -> Quat {
+        Quat::from_axis_angle(Vec3::Y, by.x)
+            * Quat::from_axis_angle(right.normalize_or(Vec3::X), by.y)
     }
 
     /// Let go, leaving it where you left it rather than where it would have

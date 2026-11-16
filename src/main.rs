@@ -1900,8 +1900,25 @@ impl Arcade {
         // off the panel, so a pan stopped within a frame of starting. From
         // the floor that is a window that only scrolls up and down, which
         // is how Jake found it.
+        // **And all four go into a shape you are holding**, which is the
+        // panel's fault above, found again by Jake in the gallery and fixed
+        // the same way. Spec 0091. Taking hold froze the shape and then the
+        // arrows turned you instead, which took the sight off it and let go,
+        // so the only thing the keyboard could do at a plinth was stop the
+        // row's turn and start it again. The mouse always worked; the help
+        // text promises the arrows work the toy you are looking at, and at
+        // the one row of toys in the building that are not on a bench they
+        // did not.
+        let turning_a_shape = self.spin.holding().is_some();
         let diving = self.seen == Some(room::Seen::Mandel);
-        let (turn, tilt) = if diving {
+        let (turn, tilt) = if turning_a_shape {
+            self.moving_the_view = false;
+            let across = self.forward().cross(Vec3::Y);
+            self.spin
+                .turn(display::Spin::held(glam::vec2(right, -up), across, dt));
+
+            (0.0, 0.0)
+        } else if diving {
             self.moving_the_view = up != 0.0 || right != 0.0;
             self.view = if self.shifted {
                 self.view.moved((0.0, 0.0), up as f64, dt)
@@ -14084,6 +14101,73 @@ mod tests {
             arcade.trail.given(),
             [trail::Asked::WentInsideTheTesseract],
             "you went inside and the building did not notice"
+        );
+    }
+
+    /// Spec 0091: an arrow turns the shape in your hands rather than you.
+    ///
+    /// **The test that was missing, and the fault it holds was in the
+    /// building for the whole of spec 0004.** Taking hold froze a shape and
+    /// the mouse turned it, which worked; the arrows went on turning the
+    /// player, which took the sight off the thing being held and let go of
+    /// it within a frame. From the floor that is a row of shapes whose only
+    /// keyboard answer is stopping and starting the turn, which is how Jake
+    /// found it. The panel above has the same fault written into its own
+    /// comment, found the same way, two specs earlier.
+    ///
+    /// The control is the second half: the same arrow with nothing in your
+    /// hands still turns you, so a fix that swallowed the arrows everywhere
+    /// fails here.
+    #[test]
+    fn an_arrow_turns_the_shape_in_your_hands_and_not_you() {
+        let shape = 4;
+
+        let mut one = Arcade::new();
+        one.at = vec3(one.room.displays[shape].at.x, 0.0, -13.0);
+        one.yaw = 0.0;
+        one.seen = one.what_i_see();
+        assert_eq!(
+            one.seen,
+            Some(room::Seen::Display(shape)),
+            "the camera is not looking at the shape this test is about"
+        );
+
+        one.use_what_i_see();
+        assert_eq!(one.spin.holding(), Some(shape), "it is not in your hands");
+
+        let yaw = one.yaw;
+        let facing = one.spin.facing(shape, one.since);
+
+        one.looking = [false, false, false, true];
+        for _ in 0..30 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            (one.yaw - yaw).abs() < 1e-4,
+            "half a second of right arrow turned you by {:.3}",
+            one.yaw - yaw
+        );
+        assert_eq!(one.spin.holding(), Some(shape), "turning it let go of it");
+        assert!(
+            facing.angle_between(one.spin.facing(shape, one.since)) > 0.5,
+            "half a second of right arrow turned it by {:.3} radians",
+            facing.angle_between(one.spin.facing(shape, one.since))
+        );
+
+        // and with nothing in your hands the same arrow turns you
+        let mut one = Arcade::new();
+        one.at = vec3(one.room.displays[shape].at.x, 0.0, -13.0);
+        one.yaw = 0.0;
+        one.looking = [false, false, false, true];
+        for _ in 0..30 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            one.yaw > 0.1,
+            "half a second of right arrow with empty hands turned you by {:.3}",
+            one.yaw
         );
     }
 
