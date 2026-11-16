@@ -227,6 +227,35 @@ pub const SLICE_WAYS: usize = 24; // the four slice edges among themselves
 pub const TURNS_IN_ALL: usize = 18;
 
 /// The `n`th of them, as a face and a number of quarters.
+/// A move written the way a cuber writes one: the face's letter, then a
+/// prime for the quarter the other way and a two for the half. Spec 0105.
+///
+/// Not copy. These five letters are the notation, the same in every
+/// language this building might ever be read in, and a hint that said
+/// "turn the right face anticlockwise" would be a sentence where `R'` is
+/// the thing itself.
+pub fn says(turn: usize) -> String {
+    let (face, quarters) = turn_number(turn);
+    let letter = match face {
+        Face::Up => "U",
+        Face::Right => "R",
+        Face::Front => "F",
+        Face::Down => "D",
+        Face::Left => "L",
+        Face::Back => "B",
+    };
+
+    format!(
+        "{}{}",
+        letter,
+        match quarters {
+            2 => "2",
+            3 => "'",
+            _ => "",
+        }
+    )
+}
+
 pub fn turn_number(n: usize) -> (Face, u8) {
     (Face::ALL[n / 3], (n % 3) as u8 + 1)
 }
@@ -965,6 +994,27 @@ pub fn face_way(n: usize) -> Vec3 {
     [Vec3::Y, Vec3::X, Vec3::Z, -Vec3::Y, -Vec3::X, -Vec3::Z][n]
 }
 
+/// Which face of a cube a point on its surface belongs to. Spec 0105.
+///
+/// **By the axis it stands furthest along**, which is what a facelet is: a
+/// point on the up face is further up than it is anything else. Taken from
+/// the cube's own middle so it holds wherever the thing is standing, and
+/// against `face_way` so the answer is the same list the turns are written
+/// in rather than a second one.
+pub fn face_at(middle: Vec3, at: Vec3) -> Face {
+    let off = at - middle;
+    let mut best = (0, f32::MIN);
+
+    for (n, face) in Face::ALL.iter().enumerate() {
+        let along = off.dot(face_way(*face as usize));
+        if along > best.1 {
+            best = (n, along);
+        }
+    }
+
+    Face::ALL[best.0]
+}
+
 /// Every cubie of a cube standing with its middle here: twenty-six boxes,
 /// the core left out because nobody can see it.
 pub fn cubies(middle: Vec3) -> Vec<Aabb> {
@@ -1259,6 +1309,80 @@ impl Toy {
 
         moves.reverse();
         self.left = moves;
+    }
+
+    /// Turns one face by hand, which goes on the same list the solver's
+    /// moves do. Spec 0105.
+    ///
+    /// **Queued and not applied.** A turn here is swept over `TURNS_AT`
+    /// like any other, so a hand's turn and a solver's look the same and
+    /// there is still one account of where the pieces are. A cube already
+    /// in the middle of something is left alone, the way `worked` leaves
+    /// it alone.
+    pub fn turn(&mut self, face: Face, quarters: u8) {
+        if self.going() {
+            return;
+        }
+
+        let quarters = quarters.clamp(1, 3);
+        let want = (face as usize) * 3 + quarters as usize - 1;
+
+        self.left.push(want);
+    }
+
+    /// The next move of a solution from where the cube stands, as a hint.
+    /// Spec 0105.
+    ///
+    /// **Worked out from the cube and not kept.** A solve of a scrambled
+    /// cube measures 58 microseconds the first time and 7 after, which is
+    /// a third of one per cent of a frame, so the thing that keeps this
+    /// honest is that there is nothing to keep in step: ask the cube.
+    /// Nothing while it is moving, because the answer would be about a
+    /// state that is halfway to somewhere else.
+    pub fn hint(&mut self) -> Option<usize> {
+        if self.going() || self.cube.solved() {
+            return None;
+        }
+
+        let solver = self.solver.get_or_insert_with(Solver::new);
+
+        solver.solve(&self.cube).first().copied()
+    }
+
+    /// How many moves away from solved the cube stands. Spec 0105.
+    ///
+    /// The length of a solution and not a distance: the solver does not
+    /// always give the shortest one. A cube one `R` from solved comes back
+    /// as `R` then `R2`, which is two moves to undo one and is still a
+    /// solution. What this is good for is saying that a step got nearer.
+    pub fn away(&mut self) -> usize {
+        if self.cube.solved() {
+            return 0;
+        }
+
+        let solver = self.solver.get_or_insert_with(Solver::new);
+
+        solver.solve(&self.cube).len()
+    }
+
+    /// Takes one step of that solution, and nothing more. Spec 0105.
+    pub fn step(&mut self) {
+        if let Some(turn) = self.hint() {
+            self.left.push(turn);
+        }
+    }
+
+    /// Solved, still, and with nothing left to play. Spec 0105.
+    ///
+    /// **Which `worked` is not**, and this is the fourth toy where the
+    /// obvious verb turns out to do one of the things: `worked` solves a
+    /// scrambled cube by queueing every move of the solution and playing
+    /// them, which is the demonstration and takes as long as it takes.
+    /// Nothing put the cube back at once.
+    pub fn home(&mut self) {
+        self.cube = Cube::SOLVED;
+        self.left.clear();
+        self.doing = None;
     }
 
     /// One frame of it.

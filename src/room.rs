@@ -1028,6 +1028,13 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// A facelet of the puzzle, by which face it is on. Spec 0105.
+    ///
+    /// **The face and not the cubie**, though a cubie is what you point
+    /// at: what you can do to a cube is turn a face, and which face a
+    /// facelet is on is the whole of what pointing at it tells you. A
+    /// corner cubie shows three and you have named one of them.
+    Cubie(usize),
     /// The weight on the metronome's needle. Spec 0104.
     Weight,
     /// The wrecker's ball on the end of its chain. Spec 0103.

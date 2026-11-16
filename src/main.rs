@@ -1696,6 +1696,10 @@ impl Arcade {
             // it starts and stops the thing, which is its bench's. Spec
             // 0104.
             Some(room::Seen::Weight) => self.metronome.press(),
+            // the cube's own key, which scrambles a solved one and solves
+            // a scrambled one. Spec 0105 leaves that where it was: what a
+            // facelet adds is the hand, and the hand is on the arrows.
+            Some(room::Seen::Cubie(_)) => self.puzzle.worked(),
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
             Some(room::Seen::Mandel) => self.view = mandel::View::default(),
@@ -1821,6 +1825,42 @@ impl Arcade {
         let Some(which) = arrow_at(input.key) else {
             return false;
         };
+
+        // **A facelet takes the arrows itself.** Spec 0105. Left and right
+        // turn the face you have your hand on, a quarter each way, which
+        // is what you can do to a cube and the reason pointing at a cubie
+        // is worth anything. Shift and up plays the next move of a
+        // solution, so the whole of it can be walked one step at a time
+        // rather than watched.
+        //
+        // Up and down alone are nothing here: a cube has no knob.
+        if let Some(room::Seen::Cubie(face)) = self.seen {
+            let face = kociemba::Face::ALL[face.min(kociemba::Face::ALL.len() - 1)];
+            let wanted = if self.shifted {
+                matches!(input.key, KeyboardKey::Up)
+            } else {
+                matches!(input.key, KeyboardKey::Left | KeyboardKey::Right)
+            };
+
+            if !wanted {
+                return false;
+            }
+
+            self.looking[which] = false;
+            self.leaning[which] = false;
+
+            if held && !input.repeat {
+                if self.shifted {
+                    self.puzzle.step();
+                } else if input.key == KeyboardKey::Right {
+                    self.puzzle.turn(face, 1);
+                } else {
+                    self.puzzle.turn(face, 3);
+                }
+            }
+
+            return true;
+        }
 
         // **Shift and up or down is the shape's own knob.** Spec 0092, and
         // the gesture is spec 0039's: at the panel, shift and up or down
@@ -2010,6 +2050,7 @@ impl Arcade {
             .or_else(|| self.globe_i_see())
             .or_else(|| self.wrecker_ball_i_see())
             .or_else(|| self.weight_i_see())
+            .or_else(|| self.cubie_i_see())
         {
             return Some(part);
         }
@@ -2061,6 +2102,14 @@ impl Arcade {
             {
                 self.metronome.home()
             }
+            // solved at once, where `worked` solves it by playing every
+            // move of the solution and taking as long as that takes.
+            // Spec 0105.
+            Some(room::Seen::Cubie(_)) | Some(room::Seen::Bench(_))
+                if self.toy_i_see() == Some(kociemba::NAME) =>
+            {
+                self.puzzle.home()
+            }
             // a shape you turned and left turned, squared up again. The
             // row's own slow turn goes on; what comes off is the hand.
             Some(room::Seen::Display(n)) => self.spin.let_it_go(n),
@@ -2083,6 +2132,7 @@ impl Arcade {
             Some(room::Seen::Globe) => Some(globe::NAME),
             Some(room::Seen::Wrecker) => Some(wrecker::NAME),
             Some(room::Seen::Weight) => Some(metronome::NAME),
+            Some(room::Seen::Cubie(_)) => Some(kociemba::NAME),
             _ => None,
         }
     }
@@ -2105,6 +2155,27 @@ impl Arcade {
                 .position(|bench| bench.name == gyro::NAME),
             _ => None,
         }
+    }
+
+    /// Which face of the puzzle the sight is on. Spec 0105.
+    ///
+    /// **One box and then the arithmetic**, rather than twenty six boxes
+    /// and a search: what a hit on a cube tells you is the face it landed
+    /// on, and `face_at` reads that off the point itself. The cube is
+    /// 0.3 across and sits where it is drawn, so the box is the thing.
+    fn cubie_i_see(&self) -> Option<room::Seen> {
+        let bench = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == kociemba::NAME)?;
+        let middle = bench.at + Vec3::Y * (bench.size.y + kociemba::ACROSS * 0.5 + 0.01);
+        let box_ = Aabb::from_center_size(middle, Vec3::splat(kociemba::ACROSS));
+        let (from, way) = (self.looking_from(), self.facing());
+
+        room::slab(from, way, &box_)
+            .filter(|far| *far <= room::BENCH_REACH)
+            .map(|far| room::Seen::Cubie(kociemba::face_at(middle, from + way * far) as usize))
     }
 
     /// Whether the sight is on the weight on the metronome's needle.
@@ -9157,6 +9228,27 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // a facelet: which face you have your hand on, and what the
+            // solver would do next from here. Spec 0105. The hint is the
+            // first move of a whole solution, worked out from the cube
+            // each time it is asked rather than kept.
+            (None, Some(room::Seen::Cubie(face))) => {
+                let face = kociemba::Face::ALL[face.min(kociemba::Face::ALL.len() - 1)];
+                let next = self.puzzle.hint().map(kociemba::says);
+
+                (
+                    Some(format!("{:?}", face).to_lowercase()),
+                    Some(match next {
+                        Some(next) => format!(
+                            "[COPY - Jake] Arrows turn this face. Shift and up plays {}, the next move of the solution",
+                            next
+                        ),
+                        None => String::from(
+                            "[COPY - Jake] Arrows turn this face. Enter scrambles it",
+                        ),
+                    }),
+                )
+            }
             // the weight, which says what its bench says. Spec 0104.
             (None, Some(room::Seen::Weight)) => (
                 Some(String::from(metronome::NAME)),
@@ -15228,8 +15320,7 @@ mod tests {
         // stopping levels it and leaves the weight alone, which is the gap
         one.metronome.stop();
         assert_eq!(
-            one.metronome.notch,
-            slid,
+            one.metronome.notch, slid,
             "stopping put the weight back, so this test checks nothing"
         );
 
@@ -15246,6 +15337,105 @@ mod tests {
         one.yaw = std::f32::consts::FRAC_PI_2;
         assert!(
             !matches!(one.what_i_see(), Some(room::Seen::Weight)),
+            "turned away the sight still found {:?}",
+            one.what_i_see()
+        );
+    }
+
+    /// Spec 0105: the sight names the face you point at, the arrows turn
+    /// it, shift and up plays the solver's next move, and R solves it at
+    /// once.
+    ///
+    /// **Four things on one toy, and each is a different claim.** Naming
+    /// the face is arithmetic on a hit point; turning it is a move queued
+    /// like any other; the hint is a solve from where the cube stands; and
+    /// `home` is the one `worked` never was, since solving by playing
+    /// every move takes as long as it takes.
+    ///
+    /// The control is the last line: turned away, no facelet answers.
+    #[test]
+    fn the_sight_finds_a_face_and_the_arrows_turn_it() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == kociemba::NAME)
+            .copied()
+            .expect("the puzzle is on a bench");
+        let middle = bench.at + Vec3::Y * (bench.size.y + kociemba::ACROSS * 0.5 + 0.01);
+
+        // stood off one side of it, looking along -x at the face that way
+        one.at = vec3(middle.x + 0.6, 0.0, middle.z);
+        one.eye = middle.y - EYE;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        let found = one.what_i_see();
+        let Some(room::Seen::Cubie(face)) = found else {
+            panic!("pointing at the cube finds {:?}", found);
+        };
+        assert_eq!(
+            kociemba::Face::ALL[face],
+            kociemba::Face::Right,
+            "the face toward +x is {:?}",
+            kociemba::Face::ALL[face]
+        );
+
+        // the arrows turn that face and nothing else
+        one.seen = found;
+        let was = one.puzzle.cube;
+        assert!(
+            one.work_a_toy(
+                &KeyboardInput::new(KeyboardKey::Right, KeyboardKeyState::Pressed, false),
+                true
+            ),
+            "the facelet did not want the right arrow"
+        );
+        for _ in 0..(60 * 3) {
+            one.puzzle.advance(1.0 / 60.0);
+        }
+        assert_ne!(one.puzzle.cube, was, "the arrow turned nothing");
+        assert!(!one.puzzle.cube.solved(), "a quarter turn left it solved");
+
+        // the hint is a move, and shift and up plays it, which gets the
+        // cube nearer rather than solving it: the solver does not always
+        // give the shortest solution, and one `R` out comes back as `R`
+        // then `R2`, which is two moves to undo one.
+        let hint = one.puzzle.hint().expect("a scrambled cube has a next move");
+        let was_away = one.puzzle.away();
+        one.shifted = true;
+        assert!(
+            one.work_a_toy(
+                &KeyboardInput::new(KeyboardKey::Up, KeyboardKeyState::Pressed, false),
+                true
+            ),
+            "the facelet did not want shift and up"
+        );
+        for _ in 0..(60 * 3) {
+            one.puzzle.advance(1.0 / 60.0);
+        }
+        assert!(
+            one.puzzle.away() < was_away,
+            "a step of {} left the cube {} moves out, where it was {}",
+            kociemba::says(hint),
+            one.puzzle.away(),
+            was_away
+        );
+
+        // and R is the whole way back, from anywhere
+        one.puzzle.turn(kociemba::Face::Up, 1);
+        for _ in 0..(60 * 3) {
+            one.puzzle.advance(1.0 / 60.0);
+        }
+        assert!(!one.puzzle.cube.solved(), "the setup turn did nothing");
+        assert!(one.put_it_back(), "the cube had nothing to put back");
+        assert!(one.puzzle.cube.solved(), "R left it unsolved");
+
+        // the control
+        one.yaw = std::f32::consts::FRAC_PI_2;
+        assert!(
+            !matches!(one.what_i_see(), Some(room::Seen::Cubie(_))),
             "turned away the sight still found {:?}",
             one.what_i_see()
         );
@@ -16500,13 +16690,35 @@ mod tests {
                             game.on_the_tour(tick);
                         }
 
-                        assert_eq!(
-                            game.what_i_see(),
-                            Some(want),
-                            "looking at {:?} from {:?} works {:?} instead",
-                            toward,
-                            from,
-                            game.what_i_see()
+                        // **A part of a toy counts as its bench.** Spec
+                        // 0105 and its four siblings put the parts in
+                        // front of the benches they stand on, so a route
+                        // aimed at the puzzle now finds a facelet rather
+                        // than the table. What the clip does there is
+                        // press it, and a facelet presses the same thing,
+                        // so what moved is the name and not the work.
+                        let found = game.what_i_see();
+                        let same = found == Some(want)
+                            || match (found, want) {
+                                (Some(found), room::Seen::Bench(n)) => {
+                                    game.room.benches.get(n).map(|bench| bench.name)
+                                        == match found {
+                                            room::Seen::Cubie(_) => Some(kociemba::NAME),
+                                            room::Seen::Ball(_) => Some(cradle::NAME),
+                                            room::Seen::Rotor => Some(gyro::NAME),
+                                            room::Seen::Globe => Some(globe::NAME),
+                                            room::Seen::Wrecker => Some(wrecker::NAME),
+                                            room::Seen::Weight => Some(metronome::NAME),
+                                            _ => None,
+                                        }
+                                }
+                                _ => false,
+                            };
+
+                        assert!(
+                            same,
+                            "looking at {:?} from {:?} works {:?} instead of {:?}",
+                            toward, from, found, want
                         );
                     }
                 }
