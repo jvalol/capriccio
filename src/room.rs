@@ -339,21 +339,21 @@ pub fn gallery_way() -> (f32, f32) {
 /// They hang from the ceiling on the shapes' own line, out from the wall by
 /// the same amount the shapes are, so a shape is lit from in front and above
 /// and throws its shadow back onto the wall rather than at you.
-pub const GALLERY_LAMPS: usize = 3;
 pub const GALLERY_LAMP_UP: f32 = TALL - 0.38;
-pub const GALLERY_SHADE: Vec3 = vec3(0.34, 0.12, 0.26);
+pub const GALLERY_SHADE: Vec3 = vec3(0.26, 0.12, 0.26);
 
 pub fn gallery_lamps(reaches: f32) -> Vec<Vec3> {
     let z = gallery_wall(reaches) + crate::display::OFF_THE_WALL;
-    let span = crate::display::row();
-    let step = span / GALLERY_LAMPS as f32;
 
-    (0..GALLERY_LAMPS)
-        .map(|n| {
-            let along = (n as f32 + 0.5) * step - span * 0.5;
-
-            vec3(along, GALLERY_LAMP_UP, z)
-        })
+    (0..crate::display::count())
+        .map(|n| vec3(crate::display::along(n), GALLERY_LAMP_UP, z))
+/// **One over each exhibit, which is what a gallery does.** Spec 0105.
+/// There were three, spread evenly along the row on the argument that three
+/// covers six without a fitting per shape, and what that bought was a lamp
+/// over a gap and a shape lit from a foot to one side.
+///
+/// Off the row's own places rather than off a division of its span, so a
+/// shape that moves takes its light with it.
         .collect()
 }
 
@@ -2536,6 +2536,42 @@ mod tests {
         let room = super::Room::of(crate::games());
         let (_, _, panels) = room.lattice();
         let (middle, size) = super::nook_floor(room.reaches);
+
+    /// Spec 0105: one lamp over each exhibit, at the exhibit's own place.
+    ///
+    /// **Because the ceiling used to work it out for itself.** The lamps
+    /// were three, spread along a division of `display::row()`, so the row
+    /// and the lights were two accounts of where things stand and a shape
+    /// that moved left its light behind. They come off `display::along`
+    /// now, and this is what says so.
+    #[test]
+    fn a_lamp_hangs_over_each_exhibit() {
+        let reaches = 9.0;
+        let lamps = gallery_lamps(reaches);
+
+        assert_eq!(
+            lamps.len(),
+            crate::display::count(),
+            "{} lamps over {} exhibits",
+            lamps.len(),
+            crate::display::count()
+        );
+
+        for (n, lamp) in lamps.iter().enumerate() {
+            assert!(
+                (lamp.x - crate::display::along(n)).abs() < 1e-4,
+                "the lamp over shape {} hangs at {:.3} and the shape stands at {:.3}",
+                n,
+                lamp.x,
+                crate::display::along(n)
+            );
+            assert!(
+                lamp.y > TALL * 0.5,
+                "a lamp at {:.2} is not on the ceiling",
+                lamp.y
+            );
+        }
+    }
 
         assert!(
             !panels.is_empty(),

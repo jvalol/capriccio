@@ -91,6 +91,12 @@ pub fn sweep() -> f32 {
 }
 
 /// How wide the row actually is, from the outside of one shape to the other.
+///
+/// Measured and not drawn, which is the family three constants above are in
+/// already: it exists so the fit can be checked. The ceiling used to divide
+/// it to place three lamps, and spec 0105 hung one over each exhibit off
+/// `along` instead, so nothing that renders reads this now.
+#[allow(dead_code)]
 pub fn row() -> f32 {
     (inside() + (SHAPES.len() / 2 - 1) as f32 * APART) * 2.0 + ACROSS
 }
@@ -169,6 +175,26 @@ pub fn tesseract() -> usize {
 /// How many stand in the row.
 pub fn count() -> usize {
     SHAPES.len()
+}
+
+/// Where the nth one stands along the row: out from the picture a step at a
+/// time, each half its own way.
+///
+/// **Its own function because the ceiling asks it too.** Spec 0105 hangs a
+/// light over each exhibit, and a lamp that worked out where the plinths
+/// are for itself is the second list this building has learnt not to keep.
+/// `all_of_them` cannot answer it, because building six meshes to find out
+/// where a lamp goes is a question asked every frame and answered with a
+/// Menger sponge.
+pub fn along(n: usize) -> f32 {
+    let each = count() / 2;
+    let (side, out) = if n < each {
+        (-1.0, (each - 1 - n) as f32)
+    } else {
+        (1.0, (n - each) as f32)
+    };
+
+    side * (inside() + out * APART)
 }
 
 /// Which shape stands in a given place.
@@ -255,23 +281,14 @@ pub fn see_through(n: usize, knob: i32) -> bool {
 /// hilbert tube at 0.522, a quarter of each other, while the library hands all
 /// five back within a twentieth of the same size already.
 pub fn all_of_them(wall: f32) -> Vec<Display> {
-    let each = SHAPES.len() / 2;
-
     SHAPES
         .iter()
         .zip(meshes())
         .enumerate()
         .map(|(n, (name, mesh))| {
-            // out from the picture a step at a time, each half its own way
-            let (side, out) = if n < each {
-                (-1.0, (each - 1 - n) as f32)
-            } else {
-                (1.0, (n - each) as f32)
-            };
-
             let mut one = Display {
                 name,
-                at: vec3(side * (inside() + out * APART), HIGH, wall + OFF_THE_WALL),
+                at: vec3(along(n), HIGH, wall + OFF_THE_WALL),
                 scale: 1.0,
                 half: Vec3::ZERO,
             };

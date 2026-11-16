@@ -12402,38 +12402,31 @@ impl Game for Arcade {
         // aisle has one thing in it and these are over that rather than over
         // the middle of the floor.
         //
-        // **The two over the ends of the row cast.** Spec 0093. This room's
-        // own comment already said a shape is lit from in front and above
-        // so that it throws its shadow back onto the wall, and no lamp in
-        // the building asked for one, so it threw nothing: six objects on
-        // six plinths with no shadow under any of them and a sponge whose
-        // holes were as bright inside as its faces. Jake, off the engine's
-        // own menger example, which has a floor for the shadow to land on
-        // and calls that the point of it.
+        // **One over each exhibit, and the same two always cast.** Spec
+        // 0105. The engine carries two shadowing lamps against six here,
+        // so two of the six have to be chosen, and the first go chose the
+        // two nearest the eye. Jake walked the room and sent back a light
+        // sweeping over the floor and into the wall: four metres of
+        // sidestep changes that pair three times, and each change
+        // re-points a shadow map at a different lamp, so a shadow vanishes
+        // from under one plinth and appears under another while you walk.
+        // A shadow is the highest contrast thing in a room and the worst
+        // possible thing to decide per frame.
         //
-        // Two and not three, and named rather than left to the engine. It
-        // carries two shadowing lamps and takes the first two it is given,
-        // so three asking is a draw settled by push order, which is the
-        // thing Valhalla's fires already say in their own comment. The
-        // middle one is over the panel, which has nothing standing in
-        // front of it; the outer two are each over a group of three
-        // plinths.
-        let mut casters = Vec::new();
+        // So it is the middle of each group of three, which is a place and
+        // not a distance. Those two are each directly over one exhibit and
+        // within a step of two more, and nothing about them moves.
+        let lit: Vec<Vec3> = room::gallery_lamps(self.room.reaches);
+        let middles = [1, display::count() - 2];
 
-        for (n, at) in room::gallery_lamps(self.room.reaches)
-            .into_iter()
-            .enumerate()
-        {
-            if n == room::GALLERY_LAMPS / 2 {
-                shades.push((
-                    eye.distance_squared(at),
-                    at,
-                    aim::GALLERY_LAMP,
-                    aim::GALLERY_LIT,
-                    aim::GALLERY_RANGE,
-                ));
-            } else {
-                casters.push(at);
+        let casters: Vec<Vec3> = middles
+            .iter()
+            .filter_map(|n| lit.get(*n).copied())
+            .collect();
+
+        for (n, at) in lit.iter().enumerate() {
+            if middles.contains(&n) {
+                continue;
             }
         }
 
@@ -12475,6 +12468,14 @@ impl Game for Arcade {
 
             let bay = back::bay_lamp(self.room.reaches);
 
+
+            shades.push((
+                eye.distance_squared(*at),
+                *at,
+                aim::GALLERY_LAMP,
+                aim::GALLERY_LIT,
+                aim::GALLERY_RANGE,
+            ));
             shades.push((
                 eye.distance_squared(bay),
                 bay,
@@ -12762,12 +12763,9 @@ impl Game for Arcade {
         });
 
         // the casters first, so that what the engine drops when a building
-        // outgrows its cap is never the lamp a room is built around. They
+        // outgrows its cap is never a lamp a room is built around. They
         // take the same cull as the rest: a shadow map for a room you
-        // cannot see is a shadow map of a room nobody is in. Measured
-        // headless in the gallery looking down the whole row, the pair
-        // takes twenty nine seconds of play from 7.27 seconds to 7.65,
-        // which is five per cent.
+        // cannot see is a shadow map of a room nobody is in.
         for at in casters {
             if !seen.holds_sphere(at, aim::GALLERY_RANGE) {
                 continue;
@@ -12810,6 +12808,13 @@ impl Game for Arcade {
             let placed = Transform::at(marquee)
                 .with_rotation(room::turned_to(stood.facing))
                 .with_scale(vec3(0.02, aim::SIGN_TALL, span));
+                shades.push((
+                    eye.distance_squared(at),
+                    at,
+                    aim::GALLERY_LAMP,
+                    aim::GALLERY_LIT,
+                    aim::GALLERY_RANGE,
+                ));
 
             match self.signs.get(n).copied() {
                 Some(sign) => {
