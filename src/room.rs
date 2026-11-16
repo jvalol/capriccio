@@ -313,6 +313,17 @@ pub fn gallery_deep() -> f32 {
     wants / IN_FRAME + 0.6
 }
 
+/// Whether a point is in the gallery rather than the hall it opens off.
+///
+/// **Asked of the floor it stands on**, which is the one the room is
+/// measured by, and generously in x because the room is as wide as its
+/// floor and a body against a wall is still in it. Spec 0106.
+pub fn in_the_gallery(reaches: f32, at: Vec3) -> bool {
+    let (middle, size) = gallery(reaches);
+
+    at.z < -reaches && at.z > middle.z - size.z * 0.5 && at.x.abs() < size.x * 0.5
+}
+
 /// Where its floor is and how big, with the hall's far wall as its near edge.
 pub fn gallery(reaches: f32) -> (Vec3, Vec3) {
     (
@@ -342,11 +353,6 @@ pub fn gallery_way() -> (f32, f32) {
 pub const GALLERY_LAMP_UP: f32 = TALL - 0.38;
 pub const GALLERY_SHADE: Vec3 = vec3(0.26, 0.12, 0.26);
 
-pub fn gallery_lamps(reaches: f32) -> Vec<Vec3> {
-    let z = gallery_wall(reaches) + crate::display::OFF_THE_WALL;
-
-    (0..crate::display::count())
-        .map(|n| vec3(crate::display::along(n), GALLERY_LAMP_UP, z))
 /// **One over each exhibit, which is what a gallery does.** Spec 0105.
 /// There were three, spread evenly along the row on the argument that three
 /// covers six without a fitting per shape, and what that bought was a lamp
@@ -354,6 +360,11 @@ pub fn gallery_lamps(reaches: f32) -> Vec<Vec3> {
 ///
 /// Off the row's own places rather than off a division of its span, so a
 /// shape that moves takes its light with it.
+pub fn gallery_lamps(reaches: f32) -> Vec<Vec3> {
+    let z = gallery_wall(reaches) + crate::display::OFF_THE_WALL;
+
+    (0..crate::display::count())
+        .map(|n| vec3(crate::display::along(n), GALLERY_LAMP_UP, z))
         .collect()
 }
 
@@ -2525,17 +2536,6 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
-    /// Spec 0012: the lit panels are the hall's and the nook has none.
-    ///
-    /// The two rooms share one ceiling, built by one function, and the nook is
-    /// a study with its own hanging lamps. Strip lighting over the books is an
-    /// office, and it is the kind of thing that arrives by accident when a
-    /// grid is built for one room and reaches into another.
-    #[test]
-    fn no_lit_panel_is_over_the_nook() {
-        let room = super::Room::of(crate::games());
-        let (_, _, panels) = room.lattice();
-        let (middle, size) = super::nook_floor(room.reaches);
 
     /// Spec 0105: one lamp over each exhibit, at the exhibit's own place.
     ///
@@ -2572,6 +2572,17 @@ mod tests {
             );
         }
     }
+    /// Spec 0012: the lit panels are the hall's and the nook has none.
+    ///
+    /// The two rooms share one ceiling, built by one function, and the nook is
+    /// a study with its own hanging lamps. Strip lighting over the books is an
+    /// office, and it is the kind of thing that arrives by accident when a
+    /// grid is built for one room and reaches into another.
+    #[test]
+    fn no_lit_panel_is_over_the_nook() {
+        let room = super::Room::of(crate::games());
+        let (_, _, panels) = room.lattice();
+        let (middle, size) = super::nook_floor(room.reaches);
 
         assert!(
             !panels.is_empty(),

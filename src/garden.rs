@@ -537,6 +537,24 @@ pub fn firelight(since: f32) -> f32 {
 /// Never nought: a storm at midnight is still a lid over the garden and a
 /// garden with no fill at all is a black rectangle. It goes from deep blue to
 /// the daylight fill of `aim::FILL`.
+/// What fills a room the sky cannot reach. Spec 0106.
+///
+/// **The same two colours as the sky's own fill, at the hour it is level.**
+/// Jake: if the light cannot reach a room, it should not make it to that
+/// room. A roofed room was taking `filled` whole, so the gallery ran a
+/// complete day every twenty seconds with no window to run it through, and
+/// standing still you watched the pool on the floor swell and fade.
+///
+/// A number of its own was the other way to write this and would have been
+/// a second palette: this is `filled` at `sun_up` nought, which is the hour
+/// every indoor picture in the suite was blessed under, so the rooms look
+/// like they already did rather than like somebody picked a grey.
+pub fn indoors() -> Vec3 {
+    let night = vec3(0.03, 0.04, 0.09);
+
+    night + (crate::aim::FILL - night) * 0.5f32.powf(1.4)
+}
+
 pub fn filled(since: f32) -> Vec3 {
     let up = (sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
     let night = vec3(0.03, 0.04, 0.09);

@@ -76,6 +76,19 @@ pub enum Room {
     Field,
     /// The space behind the hall's near end wall, per spec 0011.
     Behind,
+    /// The room at the end of the aisle, per spec 0022.
+    ///
+    /// **Its own room because it has no sky**, which is spec 0011's reason
+    /// for `Behind` one room along. Answered as the hall it was given the
+    /// hall's sky, and the hall has one: its door looks into the garden.
+    /// The gallery is roofed and shut, so a whole twenty second day was
+    /// running across its floor with no window to run through, which Jake
+    /// stood still in and watched. Spec 0106.
+    ///
+    /// Everything else about it is the hall's, deliberately: it is carpeted
+    /// like the hall and hears what the hall hears, and the only question
+    /// this variant answers differently is the sky.
+    Gallery,
 }
 
 impl Room {
@@ -100,7 +113,12 @@ impl Room {
             // the garden is open to it, and the hall looks into the garden
             // through its door
             Room::Garden | Room::Hall | Room::Field => true,
-            Room::Nook | Room::Stair | Room::Cellar | Room::Baths | Room::Behind => false,
+            Room::Nook
+            | Room::Stair
+            | Room::Cellar
+            | Room::Baths
+            | Room::Behind
+            | Room::Gallery => false,
         }
     }
 }
@@ -166,6 +184,10 @@ pub fn room_at(reaches: f32, at: Vec3) -> Room {
         return Room::Behind;
     }
 
+    if crate::room::in_the_gallery(reaches, at) {
+        return Room::Gallery;
+    }
+
     Room::Hall
 }
 
@@ -193,7 +215,7 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
         // and the space behind the wall is carpeted like the hall on purpose,
         // per spec 0011: its floor is at the hall's height and the one thing
         // that should not change when you step through is you
-        Room::Hall | Room::Behind => Underfoot::Carpet,
+        Room::Hall | Room::Behind | Room::Gallery => Underfoot::Carpet,
     }
 }
 
@@ -1316,6 +1338,51 @@ mod tests {
         }
 
         assert!(placed > 0, "no voice has a place, so this checked nothing");
+    }
+
+    /// Spec 0106: the gallery is its own room and has no sky.
+    ///
+    /// **The fault, in the building's own numbers.** Answered as the hall
+    /// it was given the hall's sky, and the hall has one: its door looks
+    /// into the garden. So a roofed room at the end of the aisle took the
+    /// whole of the sky's fill and ran a twenty second day across its
+    /// floor, which Jake stood still in the middle of and watched.
+    ///
+    /// The control is the three lines after it: the hall still answers as
+    /// the hall and still has its sky, so a fix that swallowed the aisle
+    /// whole fails here.
+    #[test]
+    fn the_gallery_is_its_own_room_and_has_no_sky() {
+        let reaches = a_room().reaches;
+        let deep = crate::room::gallery_deep();
+        let at = glam::vec3(1.61, 0.0, -reaches - deep * 0.5);
+
+        assert_eq!(
+            room_at(reaches, at),
+            Room::Gallery,
+            "the room at the end of the aisle answers as the {:?}",
+            room_at(reaches, at)
+        );
+        assert!(
+            !room_at(reaches, at).sees_the_sky(),
+            "a room with a roof and no window is taking the sky's light"
+        );
+
+        // and the hall it opens off keeps both
+        let hall = glam::vec3(0.0, 0.0, -reaches * 0.5);
+
+        assert_eq!(room_at(reaches, hall), Room::Hall);
+        assert!(
+            room_at(reaches, hall).sees_the_sky(),
+            "the hall's door looks into the garden and it has lost its sky"
+        );
+
+        // the near edge is the hall's far wall and not a metre either side
+        assert_eq!(
+            room_at(reaches, glam::vec3(0.0, 0.0, -reaches + 0.2)),
+            Room::Hall,
+            "a step short of the wall is already the gallery"
+        );
     }
 
     /// Spec 0009: the garden does not hear the baths through its own floor.

@@ -175,6 +175,11 @@ const TILTS: f32 = 1.6;
 /// against the flat rate still ends up facing where it did. What has to hold
 /// for that is that nothing presses the next key inside this: `play` in
 /// `refresh-examples` waits longer than this on purpose and says so.
+/// How long the sky's fill takes to come in or go out as you cross a
+/// threshold, in seconds. Spec 0106. Long enough not to read as a switch
+/// and short enough that a doorway is not a tunnel.
+const SKY_FILL_LAGS: f32 = 0.6;
+
 const AIM_LAGS: f32 = 0.2;
 
 /// Smoothstep, carried through nought so a turn reversed is as smooth as one
@@ -1167,6 +1172,16 @@ struct Arcade {
     /// key for that put a chore in front of the one trick it has. So the
     /// phase is time, like every other display in the row, and the arrows
     /// went back to turning the person.
+    /// How much of the sky's fill is reaching you, from nought in a roofed
+    /// room to one under the open sky, wound rather than switched so that a
+    /// doorway is a doorway and not a shutter. Spec 0106.
+    ///
+    /// **`None` until the first frame has been through**, because a wind
+    /// has to start somewhere and nought is the wrong place: every picture
+    /// in the suite is rendered before six tenths of a second have passed,
+    /// so a garden starting at nought is a garden lit like a cellar. The
+    /// first frame takes the answer whole and the rest wind toward it.
+    sky_fill: Option<f32>,
     tesseract_phase: f32,
     /// Where each shape's own knob stands, and where the mesh on its plinth
     /// was last built. Spec 0092.
@@ -1587,6 +1602,7 @@ impl Arcade {
             },
             turning: 0.0,
             tilting: 0.0,
+            sky_fill: None,
             tesseract_phase: 0.0,
             knobs: (0..display::count()).map(display::knob_rests).collect(),
             shown_knobs: (0..display::count()).map(display::knob_rests).collect(),
@@ -8505,6 +8521,19 @@ impl Game for Arcade {
                 .room
                 .can_see_outdoors(self.looking_from(), self.room.reaches);
 
+        // how much of the sky's own fill reaches you, wound toward whether
+        // the room you are standing in has any sky at all. Spec 0106.
+        let wants = if noise::room_at(self.room.reaches, self.at).sees_the_sky() {
+            1.0
+        } else {
+            0.0
+        };
+        let most = dt / SKY_FILL_LAGS;
+        self.sky_fill = Some(match self.sky_fill {
+            Some(now) => now + (wants - now).clamp(-most, most),
+            None => wants,
+        });
+
         self.mind_the_threshold();
 
         // the toy on the bench, stepped at its own rate so a slow frame does
@@ -9181,14 +9210,25 @@ impl Game for Arcade {
         scene.light.color = colour;
         // and nothing at all in a room with no sky, per `Room::sees_the_sky`.
         // The sun cannot reach these rooms and the map cannot quite say so.
-        let strength = if noise::room_at(self.room.reaches, self.at).sees_the_sky() {
-            strength
-        } else {
-            0.0
-        };
+        let sky = noise::room_at(self.room.reaches, self.at).sees_the_sky();
+        let strength = if sky { strength } else { 0.0 };
 
         scene.light.intensity = strength;
-        scene.light.ambient = garden::filled(self.since);
+        // and the fill the same way, which it was not. Spec 0106. The sun
+        // is kept out of a roofed room three lines up and the ambient was
+        // handed to every room alike, so the gallery ran a whole twenty
+        // second day with no window to run it through: Jake stood still in
+        // there and watched the light sweep over the floor and into the
+        // wall. If the light cannot reach a room it should not make it to
+        // that room.
+        //
+        // Wound rather than switched, because a doorway is not a shutter.
+        // The sun's own gate above can switch, since a roofed room has no
+        // sun in it either way and nothing moves when it flips; the fill
+        // is on every surface and a step through a door would be a flash.
+        let share = self.sky_fill.unwrap_or(if sky { 1.0 } else { 0.0 });
+
+        scene.light.ambient = garden::indoors().lerp(garden::filled(self.since), share);
 
         // and a strike on top of the day, per spec 0016.
         //
@@ -12428,6 +12468,14 @@ impl Game for Arcade {
             if middles.contains(&n) {
                 continue;
             }
+
+            shades.push((
+                eye.distance_squared(*at),
+                *at,
+                aim::GALLERY_LAMP,
+                aim::GALLERY_LIT,
+                aim::GALLERY_RANGE,
+            ));
         }
 
         // and the corridor of mirrors', one over each frame, per spec 0061.
@@ -12468,14 +12516,6 @@ impl Game for Arcade {
 
             let bay = back::bay_lamp(self.room.reaches);
 
-
-            shades.push((
-                eye.distance_squared(*at),
-                *at,
-                aim::GALLERY_LAMP,
-                aim::GALLERY_LIT,
-                aim::GALLERY_RANGE,
-            ));
             shades.push((
                 eye.distance_squared(bay),
                 bay,
@@ -12768,6 +12808,13 @@ impl Game for Arcade {
         // cannot see is a shadow map of a room nobody is in.
         for at in casters {
             if !seen.holds_sphere(at, aim::GALLERY_RANGE) {
+                shades.push((
+                    eye.distance_squared(at),
+                    at,
+                    aim::GALLERY_LAMP,
+                    aim::GALLERY_LIT,
+                    aim::GALLERY_RANGE,
+                ));
                 continue;
             }
 
@@ -12808,13 +12855,6 @@ impl Game for Arcade {
             let placed = Transform::at(marquee)
                 .with_rotation(room::turned_to(stood.facing))
                 .with_scale(vec3(0.02, aim::SIGN_TALL, span));
-                shades.push((
-                    eye.distance_squared(at),
-                    at,
-                    aim::GALLERY_LAMP,
-                    aim::GALLERY_LIT,
-                    aim::GALLERY_RANGE,
-                ));
 
             match self.signs.get(n).copied() {
                 Some(sign) => {
