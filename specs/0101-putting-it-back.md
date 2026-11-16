@@ -30,6 +30,14 @@ ways to say one thing. What is left is four:
 - A needle still ticking.
 - A shape somebody turned and walked away from, squared to the row again by `Spin::let_it_go`. The row's own slow turn goes on; what comes off is the hand.
 
+**The globe was wrong and spec 0102 took it back.** Its Return stills the
+spin and leaves the ball showing whatever longitude it had got to, so "no
+other way home" was the one thing it did not have: nothing in the building
+could put the Atlantic back in front of you. Return is a hand on it and R is
+the stand it came on, which is two verbs and not one said twice. The test
+this clause was reasoned from was never written; what found it was pointing
+at the thing.
+
 And the panel, which is not a toy and whose Return already goes back to the
 top of the dive. It gets R as well because that is the one place a second key
 costs nothing: your hands are on the arrows and Return is a long way from

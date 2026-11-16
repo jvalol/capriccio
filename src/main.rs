@@ -1683,6 +1683,9 @@ impl Arcade {
             // its bench has always done. Spec 0099. Pointing at the wheel
             // is the change; what the wheel does is not.
             Some(room::Seen::Rotor) => self.gyro.press(),
+            // a hand on the ball, which is the other thing you do to one
+            // and what its bench has always done. Spec 0102.
+            Some(room::Seen::Globe) => self.globe.spin = 0.0,
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
             Some(room::Seen::Mandel) => self.view = mandel::View::default(),
@@ -1863,15 +1866,17 @@ impl Arcade {
         // found by name rather than copied.
         let n = match self.seen {
             Some(room::Seen::Bench(n)) => n,
-            Some(room::Seen::Rotor) => match self
-                .room
-                .benches
-                .iter()
-                .position(|bench| bench.name == gyro::NAME)
-            {
-                Some(n) => n,
-                None => return false,
-            },
+            Some(room::Seen::Rotor) | Some(room::Seen::Globe) => {
+                let name = match self.seen {
+                    Some(room::Seen::Globe) => globe::NAME,
+                    _ => gyro::NAME,
+                };
+
+                match self.room.benches.iter().position(|one| one.name == name) {
+                    Some(n) => n,
+                    None => return false,
+                }
+            }
             _ => return false,
         };
         let name = self.room.benches[n].name;
@@ -1984,7 +1989,11 @@ impl Arcade {
 
         // and the moving parts, which stand in front of the benches they
         // are on and have to be asked about first. Spec 0098 and 0099.
-        if let Some(part) = self.ball_i_see().or_else(|| self.rotor_i_see()) {
+        if let Some(part) = self
+            .ball_i_see()
+            .or_else(|| self.rotor_i_see())
+            .or_else(|| self.globe_i_see())
+        {
             return Some(part);
         }
 
@@ -2009,6 +2018,15 @@ impl Arcade {
                 cradle::settle(&mut self.cradle);
             }
             Some(room::Seen::Rotor) => self.gyro.stop(),
+            // **Home and not merely still**, which is what makes this a
+            // second verb rather than Return again: a globe nobody has
+            // touched shows the Atlantic, and one somebody spun and
+            // stopped shows wherever it stopped. Spec 0102.
+            Some(room::Seen::Globe) | Some(room::Seen::Bench(_))
+                if self.toy_i_see() == Some(globe::NAME) =>
+            {
+                self.globe = globe::Globe::new()
+            }
             Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(gyro::NAME) => self.gyro.stop(),
             Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(metronome::NAME) => {
                 self.metronome.stop()
@@ -2032,6 +2050,7 @@ impl Arcade {
             Some(room::Seen::Bench(n)) => self.room.benches.get(n).map(|bench| bench.name),
             Some(room::Seen::Ball(_)) => Some(cradle::NAME),
             Some(room::Seen::Rotor) => Some(gyro::NAME),
+            Some(room::Seen::Globe) => Some(globe::NAME),
             _ => None,
         }
     }
@@ -2054,6 +2073,21 @@ impl Arcade {
                 .position(|bench| bench.name == gyro::NAME),
             _ => None,
         }
+    }
+
+    /// Whether the sight is on the globe. Spec 0102.
+    fn globe_i_see(&self) -> Option<room::Seen> {
+        let bench = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == globe::NAME)?;
+        let at = bench.at + Vec3::Y * (bench.size.y + globe::HIGH);
+        let box_ = Aabb::from_center_size(at, Vec3::splat(globe::RADIUS * 2.0));
+
+        room::slab(self.looking_from(), self.facing(), &box_)
+            .filter(|far| *far <= room::BENCH_REACH)
+            .map(|_| room::Seen::Globe)
     }
 
     /// Whether the sight is on the gyroscope's rotor. Spec 0099.
@@ -9053,6 +9087,11 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // the globe, which says what its bench says. Spec 0102.
+            (None, Some(room::Seen::Globe)) => (
+                Some(String::from(globe::NAME)),
+                Some(self.about(globe::NAME)),
+            ),
             // the rotor, which says what its bench says: the dial it is set
             // to and what that does. Spec 0099. No copy of its own, because
             // pointing at the wheel does not change what the wheel is.
@@ -14927,6 +14966,68 @@ mod tests {
         assert!(
             !one.put_it_back(),
             "R found something to put back while the sight was on nothing"
+        );
+    }
+
+    /// Spec 0102: the sight finds the globe, and R takes it home where
+    /// Return only stills it.
+    ///
+    /// **The two verbs have to differ or one of them is noise.** Return is
+    /// a hand on the ball and leaves it showing whatever it had got to; R
+    /// is the stand it came on. A reset that only stopped it would be the
+    /// same key twice, which is the thing this building says about the
+    /// wrecker's wall and the globe's own spin.
+    ///
+    /// The control is the last line: turned away, no globe answers.
+    #[test]
+    fn the_sight_finds_the_globe_and_r_takes_it_home() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == globe::NAME)
+            .copied()
+            .expect("the globe is on a bench");
+        let at = bench.at + Vec3::Y * (bench.size.y + globe::HIGH);
+
+        one.at = vec3(at.x + 0.8, 0.0, at.z);
+        one.eye = at.y - EYE;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        assert_eq!(
+            one.what_i_see(),
+            Some(room::Seen::Globe),
+            "pointing at the ball finds {:?}",
+            one.what_i_see()
+        );
+
+        // spun and left somewhere
+        one.seen = one.what_i_see();
+        one.globe.flick(1.0);
+        one.globe.advance(0.5);
+        let turned = one.globe.turned;
+        assert!(turned.abs() > 0.1, "the flick did not turn it");
+
+        // Return is a hand on it: still, but where it stands
+        one.use_what_i_see();
+        assert_eq!(one.globe.spin, 0.0, "a hand on it left it spinning");
+        assert_eq!(
+            one.globe.turned, turned,
+            "a hand on it took it home as well, which is R's job"
+        );
+
+        // R is the stand it came on
+        assert!(one.put_it_back(), "the globe had nothing to put back");
+        assert_eq!(one.globe.turned, 0.0, "R left it where it had got to");
+
+        // the control
+        one.yaw = std::f32::consts::FRAC_PI_2;
+        assert!(
+            !matches!(one.what_i_see(), Some(room::Seen::Globe)),
+            "turned away the sight still found {:?}",
+            one.what_i_see()
         );
     }
 

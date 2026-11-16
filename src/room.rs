@@ -1028,6 +1028,14 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// The globe itself, rather than the bench it stands on. Spec 0102.
+    ///
+    /// **The one part here that does not move**, which is why it is worth
+    /// saying that it belongs with the others anyway: it turns in place on
+    /// a fixed stand, so `Room` could hold it. What `Room` holds is the
+    /// building, and a ball on a toy is the toy's. Where the parts are
+    /// asked about is one place or it is several.
+    Globe,
     /// The gyroscope's rotor, which is the thing that spins. Spec 0099.
     ///
     /// The second moving part this building lets you point at, and sighted
