@@ -6269,10 +6269,19 @@ impl Arcade {
                 self.window.1 - aim::COST_UP - (lines.len() - line) as f32 * aim::COST_STEP,
             )
         };
-        let round: Vec<(Vec2, &str, f32)> = lines
+        // the readout keeps the arcade face, which is what it is drawn in:
+        // this is a row of numbers rather than a sentence. Arcade spec 0110.
+        let round: Vec<(Vec2, &str, f32, blitzkit::text::Face)> = lines
             .iter()
             .enumerate()
-            .map(|(n, line)| (at(n), line.as_str(), aim::COST_SIZE))
+            .map(|(n, line)| {
+                (
+                    at(n),
+                    line.as_str(),
+                    aim::COST_SIZE,
+                    blitzkit::text::Face::default(),
+                )
+            })
             .collect();
 
         plate(geometry, aim::plate_round(&round, false));
@@ -9503,7 +9512,7 @@ impl Game for Arcade {
         let mut lines: Vec<String> = said
             .iter()
             .flat_map(|words| {
-                blitzkit::text::wrapped(words, aim::SAYS_SIZE, room)
+                blitzkit::text::wrapped_in(words, aim::SAYS_SIZE, room, aim::SAYS_FACE)
                     .split('\n')
                     .map(String::from)
                     .collect::<Vec<_>>()
@@ -9519,19 +9528,27 @@ impl Game for Arcade {
         // a plate under them first, because the text is drawn straight over
         // whatever the room is doing and the room is sometimes a neon sign
         // four feet from your face.
-        let laid: Vec<(Vec2, &str, f32)> = lines
+        let laid: Vec<(Vec2, &str, f32, blitzkit::text::Face)> = lines
             .iter()
             .enumerate()
-            .map(|(n, words)| (aim::says_at(n), words.as_str(), aim::SAYS_SIZE))
+            .map(|(n, words)| {
+                (
+                    aim::says_at(n),
+                    words.as_str(),
+                    aim::SAYS_SIZE,
+                    aim::SAYS_FACE,
+                )
+            })
             .collect();
 
         plate(geometry, aim::plate_round(&laid, false));
 
-        for (at_, words, size) in laid {
+        for (at_, words, size, face) in laid {
             text.push_render_text(RenderText {
                 position: at_,
                 text: String::from(words),
                 size,
+                face,
                 ..Default::default()
             });
         }
@@ -9574,15 +9591,15 @@ impl Game for Arcade {
         }
 
         let lines = vec![
-            (name, aim::PROMPT_SIZE, aim::PROMPT_INK),
-            (detail, aim::DETAIL_SIZE, aim::DETAIL_INK),
+            (name, aim::PROMPT_SIZE, aim::PROMPT_INK, aim::NAME_FACE),
+            (detail, aim::DETAIL_SIZE, aim::DETAIL_INK, aim::SAYS_FACE),
         ];
 
         let said = aim::said(
             self.window,
             lines
                 .into_iter()
-                .filter_map(|(say, size, ink)| say.map(|say| (say, size, ink)))
+                .filter_map(|(say, size, ink, face)| say.map(|say| (say, size, ink, face)))
                 .collect(),
         );
 
@@ -9591,9 +9608,9 @@ impl Game for Arcade {
         // answer that with a drop shadow of itself. A shade with a line round
         // it does the job the shadow was doing and does it over a pale table
         // as well as over a dark one.
-        let round: Vec<(Vec2, &str, f32)> = said
+        let round: Vec<(Vec2, &str, f32, blitzkit::text::Face)> = said
             .iter()
-            .map(|line| (line.at, line.say.as_str(), line.size))
+            .map(|line| (line.at, line.say.as_str(), line.size, line.face))
             .collect();
 
         plate(geometry, aim::plate_round(&round, true));
@@ -9605,6 +9622,7 @@ impl Game for Arcade {
                 text: line.say,
                 size: line.size,
                 color: line.ink,
+                face: line.face,
                 centered: true,
                 ..Default::default()
             });

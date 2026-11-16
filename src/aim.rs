@@ -6,6 +6,7 @@
 
 use blitzkit::mesh::Transform;
 use blitzkit::renderer::scene::{MeshId, Scene};
+use blitzkit::text::Face;
 use glam::{vec2, vec3, vec4, Vec2, Vec3, Vec4};
 
 /// The sight itself. A cross, because it is one glyph in the font the engine
@@ -15,7 +16,16 @@ pub const SIGHT: &str = "+";
 /// How big the sight is drawn, the name under it, and the line under that.
 pub const SIGHT_SIZE: f32 = 22.0;
 pub const PROMPT_SIZE: f32 = 22.0;
-pub const DETAIL_SIZE: f32 = 15.0;
+
+/// The line under the name, and the help along the top, both of which are
+/// set in the plain face.
+///
+/// **Bigger than they were, to stay the size they looked.** Arcade spec
+/// 0110. `PressStart2P` fills its em: a cap is the whole of the size it is
+/// asked for. A plain face spends part of its em on ascenders and
+/// descenders, so the same number is a smaller letter, and the sentences
+/// shrank the moment they changed face. 15 and 14 became 19 and 18.
+pub const DETAIL_SIZE: f32 = 19.0;
 
 /// How much of the window's width a line under the sight may use before it
 /// wraps.
@@ -63,14 +73,26 @@ pub fn prompt_bounds(window: (f32, f32)) -> Vec2 {
     vec2(window.0 * PROMPT_WIDTH, crate::aim::UNBOUNDED)
 }
 
-/// One line of the prompt, placed, wrapped and coloured.
+/// One line of the prompt, placed, wrapped, coloured and set in a face.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     pub at: Vec2,
     pub say: String,
     pub size: f32,
     pub ink: Vec4,
+    pub face: Face,
 }
+
+/// Which face a line is set in: the arcade one for a name, the plain one
+/// for a sentence. Engine spec 0106, arcade spec 0110.
+///
+/// **A marquee and a sentence are two jobs.** `PressStart2P` is eight by
+/// eight with no descenders, which is what a cabinet wants over it and the
+/// wrong thing to read a line of instructions in. Jake, playing: even the
+/// font could be better. The name of the thing you are pointing at stays in
+/// it, because that is a marquee and this is an arcade.
+pub const NAME_FACE: Face = Face::Arcade;
+pub const SAYS_FACE: Face = Face::Plain;
 
 /// The lines of the prompt, wrapped as they will be drawn and stacked at the
 /// foot of the window.
@@ -96,29 +118,34 @@ pub struct Line {
 /// `prompt_at` is gone: a per line answer and a block with a bottom edge are
 /// two accounts of where the words are, and this building has been bitten by
 /// two accounts of one thing often enough to stop writing them.
-pub fn said(window: (f32, f32), lines: Vec<(String, f32, Vec4)>) -> Vec<Line> {
+pub fn said(window: (f32, f32), lines: Vec<(String, f32, Vec4, Face)>) -> Vec<Line> {
     let wide = prompt_bounds(window).x;
-    let wrapped: Vec<(String, f32, Vec4, f32)> = lines
+    let wrapped: Vec<(String, f32, Vec4, Face, f32)> = lines
         .into_iter()
-        .map(|(say, size, ink)| {
-            let say = blitzkit::text::wrapped(&say, size, wide);
-            let tall = blitzkit::text::room_for(&say, size).y.max(PROMPT_STEP);
+        .map(|(say, size, ink, face)| {
+            // measured and wrapped in the face it will be drawn in, or the
+            // plate is the shape of a line nobody draws
+            let say = blitzkit::text::wrapped_in(&say, size, wide, face);
+            let tall = blitzkit::text::room_for_in(&say, size, face)
+                .y
+                .max(PROMPT_STEP);
 
-            (say, size, ink, tall)
+            (say, size, ink, face, tall)
         })
         .collect();
 
-    let tall: f32 = wrapped.iter().map(|one| one.3).sum::<f32>()
+    let tall: f32 = wrapped.iter().map(|one| one.4).sum::<f32>()
         + PROMPT_GAP * wrapped.len().saturating_sub(1) as f32;
     let mut down = window.1 - PROMPT_FOOT - tall;
     let mut out = Vec::with_capacity(wrapped.len());
 
-    for (say, size, ink, step) in wrapped {
+    for (say, size, ink, face, step) in wrapped {
         out.push(Line {
             at: vec2(window.0 * 0.5, down),
             say,
             size,
             ink,
+            face,
         });
 
         down += step + PROMPT_GAP;
@@ -1448,7 +1475,7 @@ pub const PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.90);
 pub const PLATE_PAD: f32 = 14.0;
 
 pub const SAYS_AT: Vec2 = vec2(20.0, 20.0);
-pub const SAYS_SIZE: f32 = 14.0;
+pub const SAYS_SIZE: f32 = 18.0;
 pub const SAYS_LINE: f32 = 24.0;
 
 /// Where the nth line of help goes.
@@ -1488,11 +1515,15 @@ pub struct Plate {
 /// than the gap between lines, so plates a line, each padded, lap over one
 /// another, and two see-through quads in the same place are twice as dark as
 /// one: the overlap shows as a band through the middle of the words.
-pub fn plate_round(lines: &[(Vec2, &str, f32)], centred: bool) -> Option<Plate> {
+pub fn plate_round(lines: &[(Vec2, &str, f32, Face)], centred: bool) -> Option<Plate> {
     let (mut low, mut high) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
 
-    for (at, words, size) in lines.iter() {
-        let room = blitzkit::text::room_for(words, *size);
+    // **Measured in the face each line is drawn in.** Arcade spec 0110. The
+    // two faces are not the same width at a size, so a plate measured in one
+    // and filled with the other is the wrong shape, which is the fault
+    // `said`'s own note is about with the wrapping instead of the face.
+    for (at, words, size, face) in lines.iter() {
+        let room = blitzkit::text::room_for_in(words, *size, *face);
         let from = if centred {
             vec2(at.x - room.x * 0.5, at.y)
         } else {
@@ -2425,11 +2456,11 @@ mod tests {
         let window = (1600.0f32, 1200.0f32);
 
         for many in 1..=help.len() {
-            let laid: Vec<(Vec2, &str, f32)> = help[..many]
+            let laid: Vec<(Vec2, &str, f32, Face)> = help[..many]
                 .iter()
                 .copied()
                 .enumerate()
-                .map(|(n, words)| (says_at(n), words, SAYS_SIZE))
+                .map(|(n, words)| (says_at(n), words, SAYS_SIZE, SAYS_FACE))
                 .collect();
 
             inside(&laid, false, "the corner");
@@ -2438,17 +2469,23 @@ mod tests {
         let placed = said(
             window,
             vec![
-                (String::from("ball and chain"), PROMPT_SIZE, PROMPT_INK),
+                (
+                    String::from("ball and chain"),
+                    PROMPT_SIZE,
+                    PROMPT_INK,
+                    NAME_FACE,
+                ),
                 (
                     String::from("27 of 27 standing. Swing the ball with arrow keys."),
                     DETAIL_SIZE,
                     DETAIL_INK,
+                    SAYS_FACE,
                 ),
             ],
         );
-        let laid: Vec<(Vec2, &str, f32)> = placed
+        let laid: Vec<(Vec2, &str, f32, Face)> = placed
             .iter()
-            .map(|line| (line.at, line.say.as_str(), line.size))
+            .map(|line| (line.at, line.say.as_str(), line.size, line.face))
             .collect();
 
         for many in 1..=laid.len() {
@@ -2457,11 +2494,11 @@ mod tests {
     }
 
     /// Every line of a block falls inside the plate, and the line is round it.
-    fn inside(lines: &[(Vec2, &str, f32)], centred: bool, what: &str) {
+    fn inside(lines: &[(Vec2, &str, f32, Face)], centred: bool, what: &str) {
         let plate = plate_round(lines, centred).expect("a plate");
 
-        for (at, words, size) in lines.iter() {
-            let room = blitzkit::text::room_for(words, *size);
+        for (at, words, size, face) in lines.iter() {
+            let room = blitzkit::text::room_for_in(words, *size, *face);
             let from = if centred {
                 vec2(at.x - room.x * 0.5, at.y)
             } else {
@@ -2508,10 +2545,16 @@ mod tests {
     /// a short line is a test that passes on a fault this size: the one above
     /// did.
     ///
+    /// **Repeated until it wraps, which the plain face made necessary.**
+    /// Arcade spec 0110 set this line in a narrower face, and his line then
+    /// fitted one row at 1600 across and wider, where the assertion below
+    /// caught it and said so. His words are still the unit; what is repeated
+    /// is how many of them, because a window this line fits is a window this
+    /// test checks nothing at.
     #[test]
     fn a_wrapped_line_sits_on_its_plate() {
-        let long = "13824 cubes, one mesh. Up and down change how many, enter \
-                    changes how they are drawn. 548 draws, 2.30 ms of work.";
+        let his = "13824 cubes, one mesh. Up and down change how many, enter \
+                   changes how they are drawn. 548 draws, 2.30 ms of work.";
 
         for window in [
             (640.0f32, 480.0f32),
@@ -2519,16 +2562,24 @@ mod tests {
             (1600.0, 1200.0),
             (2560.0, 1440.0),
         ] {
+            let mut long = String::from(his);
+
+            while blitzkit::text::room_for_in(&long, DETAIL_SIZE, SAYS_FACE).x
+                <= prompt_bounds(window).x
+            {
+                long = format!("{} {}", long, his);
+            }
+
             let said = said(
                 window,
                 vec![
-                    (String::from("test rig"), PROMPT_SIZE, PROMPT_INK),
-                    (String::from(long), DETAIL_SIZE, DETAIL_INK),
+                    (String::from("test rig"), PROMPT_SIZE, PROMPT_INK, NAME_FACE),
+                    (long, DETAIL_SIZE, DETAIL_INK, SAYS_FACE),
                 ],
             );
-            let laid: Vec<(Vec2, &str, f32)> = said
+            let laid: Vec<(Vec2, &str, f32, Face)> = said
                 .iter()
-                .map(|line| (line.at, line.say.as_str(), line.size))
+                .map(|line| (line.at, line.say.as_str(), line.size, line.face))
                 .collect();
 
             // it does wrap at this size, or this test is checking nothing
@@ -2542,9 +2593,10 @@ mod tests {
             // to, which is what makes these rows the rows it draws. A plate
             // measured off rows nobody draws is the same fault wearing a
             // different hat.
-            for (_, say, size) in laid.iter() {
+            for (_, say, size, face) in laid.iter() {
                 assert!(
-                    blitzkit::text::room_for(say, *size).x <= prompt_bounds(window).x + 1e-3,
+                    blitzkit::text::room_for_in(say, *size, *face).x
+                        <= prompt_bounds(window).x + 1e-3,
                     "at {:?} the renderer will wrap this again and the plate will not know",
                     window
                 );
@@ -2612,12 +2664,14 @@ mod tests {
         );
 
         // and it fits the words, so it cannot be the width of the window
-        let narrow = plate_round(&[(Vec2::ZERO, "short", SAYS_SIZE)], false).expect("a plate");
+        let narrow =
+            plate_round(&[(Vec2::ZERO, "short", SAYS_SIZE, SAYS_FACE)], false).expect("a plate");
         let wide = plate_round(
             &[(
                 Vec2::ZERO,
                 "a good deal longer than that one was",
                 SAYS_SIZE,
+                SAYS_FACE,
             )],
             false,
         )
@@ -2717,17 +2771,23 @@ mod tests {
         let placed = said(
             window,
             vec![
-                (String::from("a thing with a name"), PROMPT_SIZE, PROMPT_INK),
+                (
+                    String::from("a thing with a name"),
+                    PROMPT_SIZE,
+                    PROMPT_INK,
+                    NAME_FACE,
+                ),
                 (
                     String::from("and a line saying what to press"),
                     DETAIL_SIZE,
                     DETAIL_INK,
+                    SAYS_FACE,
                 ),
             ],
         );
-        let laid: Vec<(Vec2, &str, f32)> = placed
+        let laid: Vec<(Vec2, &str, f32, Face)> = placed
             .iter()
-            .map(|line| (line.at, line.say.as_str(), line.size))
+            .map(|line| (line.at, line.say.as_str(), line.size, line.face))
             .collect();
         let plate = plate_round(&laid, true).expect("a plate");
 
@@ -2784,17 +2844,18 @@ mod tests {
             let placed = said(
                 window,
                 vec![
-                    (String::from("kociemba"), PROMPT_SIZE, PROMPT_INK),
+                    (String::from("kociemba"), PROMPT_SIZE, PROMPT_INK, NAME_FACE),
                     (
                         String::from("Left or right turns this face."),
                         DETAIL_SIZE,
                         DETAIL_INK,
+                        SAYS_FACE,
                     ),
                 ],
             );
-            let laid: Vec<(Vec2, &str, f32)> = placed
+            let laid: Vec<(Vec2, &str, f32, Face)> = placed
                 .iter()
-                .map(|line| (line.at, line.say.as_str(), line.size))
+                .map(|line| (line.at, line.say.as_str(), line.size, line.face))
                 .collect();
             let plate = plate_round(&laid, true).expect("a plate");
             let sight = sight_at(window);
