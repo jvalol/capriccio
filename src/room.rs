@@ -1028,6 +1028,14 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// One of the cradle's balls, by its place in the row. Spec 0098.
+    ///
+    /// **Not in the building's list and it cannot be**, which is the
+    /// watchman's reason one room along. `Room` holds the places this
+    /// building keeps; a ball is a body on a rope that has moved by the
+    /// time you have finished asking. So `Arcade::what_i_see` tests these
+    /// before it asks the room, the way it already tests the watchman.
+    Ball(usize),
     /// The one case that is a door. Spec 0007.
     Case,
     /// The other one, which is the way into the hall of mirrors. Spec 0061.

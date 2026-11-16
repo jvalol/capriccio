@@ -1674,6 +1674,11 @@ impl Arcade {
         }
 
         match self.seen {
+            // a ball on the cradle: lifted out of the row and let go, which
+            // is the demonstration everybody knows. Spec 0098. Pressing it
+            // at the bench still lifts the end one, so the toy answers the
+            // same from a step back as it always did.
+            Some(room::Seen::Ball(n)) => cradle::set_going(&mut self.cradle, n),
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
             Some(room::Seen::Mandel) => self.view = mandel::View::default(),
@@ -1822,6 +1827,32 @@ impl Arcade {
             }
         }
 
+        // **A ball takes the arrows itself.** Spec 0098. Left and right
+        // shove it along the row, which is the chaotic half of what Jake
+        // asked for: `set_going` places a ball and lets gravity do the
+        // rest, and a velocity in a row already touching gets spent on the
+        // contact in front of it instead. Up and down are not a direction
+        // a cradle has.
+        if let Some(room::Seen::Ball(ball)) = self.seen {
+            if !matches!(input.key, KeyboardKey::Left | KeyboardKey::Right) {
+                return false;
+            }
+
+            self.looking[which] = false;
+            self.leaning[which] = false;
+
+            if held && !input.repeat {
+                let along = if input.key == KeyboardKey::Left {
+                    -1.0
+                } else {
+                    1.0
+                };
+                cradle::shove(&mut self.cradle, ball, along);
+            }
+
+            return true;
+        }
+
         let Some(room::Seen::Bench(n)) = self.seen else {
             return false;
         };
@@ -1933,7 +1964,41 @@ impl Arcade {
             return Some(room::Seen::Watchman);
         }
 
+        // and a ball on the cradle, which is in front of the bench it
+        // stands on and has to be asked about first. Spec 0098.
+        if let Some(ball) = self.ball_i_see() {
+            return Some(ball);
+        }
+
         self.room.looking_at(self.looking_from(), self.facing())
+    }
+
+    /// Which of the cradle's balls the sight is on, if any.
+    ///
+    /// **Boxed and not a sphere**, because everything else in this building
+    /// is sighted against a box and a ball of 85 millimetres is inside the
+    /// slop of that either way. Nearest first, so pointing between two
+    /// names the one you would touch.
+    fn ball_i_see(&self) -> Option<room::Seen> {
+        let bench = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == cradle::NAME)?;
+        let top = bench.at + Vec3::Y * bench.size.y;
+        let (from, way) = (self.looking_from(), self.facing());
+
+        (0..cradle::BALLS)
+            .filter_map(|ball| {
+                let at = top + self.cradle[cradle::ball_at(ball)].position;
+                let box_ = Aabb::from_center_size(at, Vec3::splat(cradle::BALL * 2.0));
+
+                room::slab(from, way, &box_)
+                    .filter(|far| *far <= room::BENCH_REACH)
+                    .map(|far| (ball, far))
+            })
+            .min_by(|one, other| one.1.total_cmp(&other.1))
+            .map(|(ball, _)| room::Seen::Ball(ball))
     }
 
     /// The doors of one frame, and you out of their way.
@@ -8888,6 +8953,14 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // a ball, which is a thing on a toy and the first of those this
+            // building has let you point at. Spec 0098.
+            (None, Some(room::Seen::Ball(_))) => (
+                Some(String::from(cradle::NAME)),
+                Some(String::from(
+                    "[COPY - Jake] Click or press enter to pull it back. Arrows to shove it along",
+                )),
+            ),
             // the panel: how far in you are, and nothing else. Spec 0039.
             (None, Some(room::Seen::Mandel)) => (
                 Some(String::from(mandel::NAME)),
@@ -14514,6 +14587,84 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Spec 0098: the sight finds a ball on the cradle, and pressing it
+    /// pulls that ball rather than the end one.
+    ///
+    /// **The whole of what Jake asked for, in one walk.** He wanted to
+    /// point at a ball rather than at the table it stands on, and the balls
+    /// could not be in `Room`'s list because they are bodies that have
+    /// moved by the time the question is answered. So the sight asks about
+    /// them first, and this checks that it does, that it names the one you
+    /// are pointing at, and that the toy answers for that one.
+    ///
+    /// The control is the bench behind them: aimed over the balls, the
+    /// sight still finds the bench, so a ball test that swallowed the whole
+    /// room fails here.
+    #[test]
+    fn the_sight_finds_a_ball_on_the_cradle() {
+        let mut one = Arcade::new();
+        let bench = one
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == cradle::NAME)
+            .copied()
+            .expect("the cradle is on a bench");
+        let top = bench.at + Vec3::Y * bench.size.y;
+
+        // stand off the row and look along it at the far ball
+        let ball = cradle::BALLS - 1;
+        let at = top + one.cradle[cradle::ball_at(ball)].position;
+        let stand = at + vec3(0.9, 0.0, 0.0);
+
+        one.at = vec3(stand.x, 0.0, stand.z);
+        one.eye = at.y - EYE;
+        // yaw nought faces -z and grows toward +x, so this looks back along
+        // -x at the row
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.pitch = 0.0;
+
+        assert_eq!(
+            one.what_i_see(),
+            Some(room::Seen::Ball(ball)),
+            "pointing at the far ball finds {:?}",
+            one.what_i_see()
+        );
+
+        // and pressing it lifts that ball, not the end of the row
+        one.seen = one.what_i_see();
+        let was = one.cradle[cradle::ball_at(ball)].position;
+        let others: Vec<Vec3> = (0..cradle::BALLS)
+            .filter(|n| *n != ball)
+            .map(|n| one.cradle[cradle::ball_at(n)].position)
+            .collect();
+
+        one.use_what_i_see();
+
+        assert!(
+            one.cradle[cradle::ball_at(ball)].position.distance(was) > cradle::BALL,
+            "pressing the ball moved it {:.3}",
+            one.cradle[cradle::ball_at(ball)].position.distance(was)
+        );
+        for (n, was) in (0..cradle::BALLS).filter(|n| *n != ball).zip(others) {
+            assert!(
+                one.cradle[cradle::ball_at(n)].position.distance(was) < 1e-5,
+                "pressing one ball moved ball {} as well",
+                n
+            );
+        }
+
+        // the control: turned away from the row, no ball answers, so a
+        // test that found one for any ray at all fails here
+        one.yaw = std::f32::consts::FRAC_PI_2;
+
+        assert!(
+            !matches!(one.what_i_see(), Some(room::Seen::Ball(_))),
+            "turned away from the cradle the sight still found {:?}",
+            one.what_i_see()
+        );
     }
 
     /// Spec 0051: the two rooms that answer by being reached.

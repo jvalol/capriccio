@@ -115,7 +115,44 @@ pub fn ball_at(ball: usize) -> usize {
     BALLS + ball
 }
 
-/// Swings the end ball up and lets it go.
+/// Which way a ball swings out of the row: toward the end it is nearer.
+///
+/// **Its own function because two verbs want it.** Lifting a ball and
+/// shoving one both need to know which side of the row it belongs to, and
+/// `set_going` used to work it out inline for the one ball it could reach.
+/// Spec 0098.
+pub fn away(ball: usize) -> f32 {
+    if ball * 2 < BALLS {
+        -1.0
+    } else {
+        1.0
+    }
+}
+
+/// Shoves a ball along the row rather than lifting it out of one.
+///
+/// **The chaotic one, and chaotic on purpose.** `set_going` places a ball
+/// on its arc and lets gravity do the rest, which is the demonstration
+/// everybody knows. This gives it a velocity where it hangs, and
+/// `set_going`'s own note says what that does in a row already touching:
+/// the ball spends it on the contact in front of it. What comes out is a
+/// row that rings rather than a row that clicks, which is what Jake asked
+/// for when he said making it chaotic is not bad either. Spec 0098.
+pub fn shove(bodies: &mut [Body], ball: usize, along: f32) {
+    let ball = ball_at(ball.min(BALLS - 1));
+
+    bodies[ball].velocity += vec3(0.0, 0.0, along * SHOVE);
+    bodies[ball].wake();
+}
+
+/// How hard a shove is, in metres a second.
+///
+/// A ball falling from `LIFTED` arrives at about 0.9, so this is a little
+/// under what the cradle does to itself: a shove is a hand on a ball and
+/// not a bat.
+pub const SHOVE: f32 = 0.7;
+
+/// Swings a ball up and lets it go.
 ///
 /// Placed rather than shoved: a ball given a velocity in a row that is already
 /// touching spends it on the contact in front of it before it has anywhere to
@@ -123,7 +160,7 @@ pub fn ball_at(ball: usize) -> usize {
 pub fn set_going(bodies: &mut [Body], from_the_end: usize) {
     let ball = ball_at(from_the_end.min(BALLS - 1));
     let hook = hook(from_the_end.min(BALLS - 1));
-    let away = if from_the_end == 0 { -1.0 } else { 1.0 };
+    let away = away(from_the_end.min(BALLS - 1));
 
     bodies[ball].position = hook + vec3(0.0, -ROPE * LIFTED.cos(), away * ROPE * LIFTED.sin());
     bodies[ball].velocity = Vec3::ZERO;
