@@ -325,6 +325,16 @@ fn done_already() -> bool {
 /// The one gate flight does open is the field's, because a tool for looking
 /// at the outside of a building that draws no ground and no sky the moment
 /// you leave the grass is not a tool.
+///
+/// **Read once, into `Arcade::flying`.** Spec 0087 put flight on `G` as
+/// well, so what the run is doing now is state and this only says what it
+/// starts as. Nothing else asks the command line.
+///
+/// And one of the seven is no longer a pop. Spec 0085 took the near wall
+/// and the lit way out off a half space, which is what made flying over
+/// the hall's end wall hang a portal on an exterior wall; the solar system
+/// above still appears, on `behind::inside`, and is the price this
+/// paragraph is about.
 fn flying() -> bool {
     blitzkit::asked_for("--fly")
 }
@@ -1147,6 +1157,13 @@ struct Arcade {
     /// and the curve is the speed, so a turn leans into itself and out again.
     turning: f32,
     tilting: f32,
+    /// Whether this run is flying rather than walking, per spec 0041.
+    ///
+    /// **State and not a flag read where it is wanted.** `--fly` says what
+    /// it starts as and `G` changes it, so the answer has to live
+    /// somewhere: a function asking the command line can only give the
+    /// same answer for the whole run. Spec 0087.
+    flying: bool,
     /// Whether every collider is outlined over the scene, per spec 0013 and
     /// spec 0046 of the engine. Off until somebody asks.
     showing_solid: bool,
@@ -1550,6 +1567,7 @@ impl Arcade {
             },
             turning: 0.0,
             tilting: 0.0,
+            flying: flying(),
             showing_solid: false,
             showing_cost: false,
             rig_step: 2,
@@ -1838,7 +1856,7 @@ impl Arcade {
         // thing you are doing is flying: the pitch is the only way up there
         // is, and a flight that only goes along the ground is a walk that
         // ignores walls.
-        let flight = flying();
+        let flight = self.flying;
         let ahead = if flight {
             self.facing()
         } else {
@@ -12707,8 +12725,27 @@ impl Game for Arcade {
             // you, which is not a thing this building does, and R is next to
             // nothing anybody presses by accident but the walk is not worth
             // the risk.
-            KeyboardKey::R if held && !input.repeat && flying() => {
+            KeyboardKey::R if held && !input.repeat && self.flying => {
                 self.back_to_the_door();
+            }
+            // and flight itself, on and off. Jake asked for it: `--fly` is a
+            // decision taken before the window opens, and what you actually
+            // want is to walk a room, go up to look at the roof of it, and
+            // come back down without starting again. Spec 0087.
+            //
+            // **G, because F is the frame cost.** The letter nearest the
+            // word was taken by spec 0056's counter, and the rest of this
+            // family is already arbitrary: O outlines the colliders, L
+            // swings the solar system out, M says where you are. One more
+            // undocumented inspection key is the convention here rather
+            // than an exception to it.
+            //
+            // Nothing is done about where you are when it goes off. The
+            // next frame calls `gone` instead of `flown` and `gone` is the
+            // one that knows about gravity, so you fall, which is what
+            // Jake asked for in as many words.
+            KeyboardKey::G if held && !input.repeat => {
+                self.flying = !self.flying;
             }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
