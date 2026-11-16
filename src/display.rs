@@ -514,6 +514,19 @@ impl Spin {
             * Quat::from_axis_angle(right.normalize_or(Vec3::X), by.y)
     }
 
+    /// Takes a hand's turn off one, so it is square to the row again.
+    /// Spec 0101. The row's own slow turn goes on; what comes off is
+    /// whatever somebody left it at.
+    pub fn let_it_go(&mut self, n: usize) {
+        if self.holding() == Some(n) {
+            self.held = None;
+        }
+
+        if let Some(by_hand) = self.by_hand.get_mut(n) {
+            *by_hand = Quat::IDENTITY;
+        }
+    }
+
     /// Let go, leaving it where you left it rather than where it would have
     /// been. It carries on from there.
     pub fn let_go(&mut self, seconds: f32) {

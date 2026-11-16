@@ -1991,6 +1991,51 @@ impl Arcade {
         self.room.looking_at(self.looking_from(), self.facing())
     }
 
+    /// Puts back whatever the sight is on, and says whether there was
+    /// anything to put back. Spec 0101.
+    ///
+    /// **Only what can drift and has no other way home.** A cabinet, a
+    /// door and the watchman have no state to lose; the wrecker's wall and
+    /// the globe's spin are already what their own Return does, and giving
+    /// them a second key would be two ways to say one thing. What is left
+    /// is the four that a hand leaves changed: a row still swinging, a
+    /// rotor still up, a needle still ticking, and a shape somebody turned
+    /// and walked away from.
+    fn put_it_back(&mut self) -> bool {
+        match self.seen {
+            Some(room::Seen::Ball(_)) | Some(room::Seen::Bench(_))
+                if self.toy_i_see() == Some(cradle::NAME) =>
+            {
+                cradle::settle(&mut self.cradle);
+            }
+            Some(room::Seen::Rotor) => self.gyro.stop(),
+            Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(gyro::NAME) => self.gyro.stop(),
+            Some(room::Seen::Bench(_)) if self.toy_i_see() == Some(metronome::NAME) => {
+                self.metronome.stop()
+            }
+            // a shape you turned and left turned, squared up again. The
+            // row's own slow turn goes on; what comes off is the hand.
+            Some(room::Seen::Display(n)) => self.spin.let_it_go(n),
+            // and the dive, which Return already does and which is the one
+            // place a second key costs nothing: you are holding the arrows
+            // and Return is a long way from them.
+            Some(room::Seen::Mandel) => self.view = mandel::View::default(),
+            _ => return false,
+        }
+
+        true
+    }
+
+    /// Which toy the sight is on, by name, if it is on one at all.
+    fn toy_i_see(&self) -> Option<&'static str> {
+        match self.seen {
+            Some(room::Seen::Bench(n)) => self.room.benches.get(n).map(|bench| bench.name),
+            Some(room::Seen::Ball(_)) => Some(cradle::NAME),
+            Some(room::Seen::Rotor) => Some(gyro::NAME),
+            _ => None,
+        }
+    }
+
     /// Which bench a held arrow is leaning on, if any.
     ///
     /// **Its own function because two things answer to one bench.** Spec
@@ -13139,8 +13184,18 @@ impl Game for Arcade {
             // you, which is not a thing this building does, and R is next to
             // nothing anybody presses by accident but the walk is not worth
             // the risk.
-            KeyboardKey::R if held && !input.repeat && self.flying => {
-                self.back_to_the_door();
+            // **R puts back whatever you are pointing at.** Spec 0101, and
+            // the shape is the arrows': they work the toy the sight is on
+            // and walk you when it is on nothing. A toy you have wound up,
+            // spun, swung or turned has no other way back, and every one of
+            // them had its own, which is to say none of them did.
+            //
+            // It keeps the door, which it had while flying and nothing
+            // else wanted: looking at nothing is what that always meant.
+            KeyboardKey::R if held && !input.repeat => {
+                if !self.put_it_back() && self.flying {
+                    self.back_to_the_door();
+                }
             }
             // and flight itself, on and off. Jake asked for it: `--fly` is a
             // decision taken before the window opens, and what you actually
@@ -14813,6 +14868,65 @@ mod tests {
             !matches!(one.what_i_see(), Some(room::Seen::Rotor)),
             "turned away the sight still found {:?}",
             one.what_i_see()
+        );
+    }
+
+    /// Spec 0101: R puts back whatever the sight is on, and keeps the door
+    /// for when it is on nothing.
+    ///
+    /// **Four toys and the thing that is not a toy**, because the value of
+    /// one key is that it means one thing everywhere, and the way that
+    /// fails is quietly: an arm that forgets a toy takes the press and
+    /// leaves it swinging.
+    ///
+    /// The control is the last part: on nothing at all, R is still the
+    /// door, which is what it was before this and what it stays.
+    #[test]
+    fn r_puts_back_what_the_sight_is_on() {
+        let mut one = Arcade::new();
+
+        // a row still swinging
+        cradle::set_going(&mut one.cradle, 0);
+        one.seen = Some(room::Seen::Ball(0));
+        assert!(one.put_it_back(), "a ball had nothing to put back");
+        assert!(
+            cradle::stirring(&one.cradle) < 1e-4,
+            "the row is still stirring at {:.4}",
+            cradle::stirring(&one.cradle)
+        );
+
+        // a rotor still up
+        one.gyro.set_going();
+        one.seen = Some(room::Seen::Rotor);
+        assert!(one.put_it_back(), "the rotor had nothing to put back");
+        assert!(!one.gyro.going, "the rotor is still going");
+
+        // a shape somebody turned and walked away from
+        let shape = 0;
+        one.spin.take(shape, 0.0);
+        one.spin
+            .turn(display::Spin::drag(glam::vec2(90.0, 0.0), Vec3::X));
+        one.spin.let_go(0.0);
+        let turned = one.spin.facing(shape, 0.0);
+        one.seen = Some(room::Seen::Display(shape));
+        assert!(one.put_it_back(), "a shape had nothing to put back");
+        assert!(
+            one.spin.facing(shape, 0.0).angle_between(turned) > 0.5,
+            "the shape is still where the hand left it"
+        );
+
+        // and the panel, which Return also does
+        one.view = one.view.moved((0.3, 0.1), 1.0, 1.0);
+        one.seen = Some(room::Seen::Mandel);
+        assert!(one.put_it_back(), "the panel had nothing to put back");
+        assert_eq!(one.view, mandel::View::default(), "the dive did not reset");
+
+        // the control: on nothing, R has nothing of its own to do and the
+        // door is what is left
+        one.seen = None;
+        assert!(
+            !one.put_it_back(),
+            "R found something to put back while the sight was on nothing"
         );
     }
 

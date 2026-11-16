@@ -128,6 +128,22 @@ pub fn ball_at(ball: usize) -> usize {
     BALLS + ball
 }
 
+/// Puts every ball back where it hangs, still. Spec 0101.
+///
+/// **Placed and stilled rather than left to the drag.** A row set going
+/// takes the better part of half a minute to be quiet, which is right when
+/// you are watching it and wrong when you want to start again.
+pub fn settle(bodies: &mut [Body]) {
+    for ball in 0..BALLS {
+        let body = &mut bodies[ball_at(ball)];
+
+        body.position = hook(ball) + Vec3::NEG_Y * ROPE;
+        body.velocity = Vec3::ZERO;
+        body.spin = Vec3::ZERO;
+        body.wake();
+    }
+}
+
 /// Which way a ball swings out of the row: toward the end it is nearer.
 ///
 /// **Its own function because two verbs want it.** Lifting a ball and
@@ -181,22 +197,6 @@ pub fn set_going(bodies: &mut [Body], from_the_end: usize) {
     bodies[ball].wake();
 }
 
-/// A solver set up the way a cradle wants one.
-pub fn solver() -> Solver {
-    Solver::new().with_passes(PASSES)
-}
-
-/// How much of the row is moving, which is what says whether it has settled.
-pub fn stirring(bodies: &[Body]) -> f32 {
-    (0..BALLS)
-        .map(|ball| bodies[ball_at(ball)].velocity.length())
-        .fold(0.0f32, f32::max)
-}
-
-/// Nothing to collide with: the balls meet each other and the ropes hold them.
-/// The bench is below them and they never reach it.
-pub const NO_WORLD: [Aabb; 0] = [];
-
 /// How much of its speed a ball keeps each second, to air and to the rope.
 ///
 /// **Because nothing here was taking any.** Spec 0100. Measured over twenty
@@ -237,6 +237,22 @@ fn drags(bodies: &mut [Body], dt: f32) {
         body.spin *= keeps;
     }
 }
+
+/// A solver set up the way a cradle wants one.
+pub fn solver() -> Solver {
+    Solver::new().with_passes(PASSES)
+}
+
+/// How much of the row is moving, which is what says whether it has settled.
+pub fn stirring(bodies: &[Body]) -> f32 {
+    (0..BALLS)
+        .map(|ball| bodies[ball_at(ball)].velocity.length())
+        .fold(0.0f32, f32::max)
+}
+
+/// Nothing to collide with: the balls meet each other and the ropes hold them.
+/// The bench is below them and they never reach it.
+pub const NO_WORLD: [Aabb; 0] = [];
 
 #[cfg(test)]
 mod tests {
@@ -336,22 +352,6 @@ mod tests {
         assert!(worst < BALL * 2.0, "the middle swung {}", worst);
     }
 
-    #[test]
-    fn it_runs_down_rather_than_on_forever() {
-        let (mut bodies, links) = strung();
-        set_going(&mut bodies, 0);
-        run(&mut bodies, &links, 30.0);
-
-        assert!(
-            stirring(&bodies) < 0.4,
-            "still going at {} after half a minute",
-            stirring(&bodies)
-        );
-    }
-
-    #[test]
-    fn a_swinging_ball_never_reaches_an_upright() {
-        let upright = upright_at();
     /// Spec 0100: it is still swinging to watch after six seconds, and the
     /// swing keeps falling rather than settling on a buzz.
     ///
@@ -404,6 +404,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn it_runs_down_rather_than_on_forever() {
+        let (mut bodies, links) = strung();
+        set_going(&mut bodies, 0);
+        run(&mut bodies, &links, 30.0);
+
+        assert!(
+            stirring(&bodies) < 0.4,
+            "still going at {} after half a minute",
+            stirring(&bodies)
+        );
+    }
+
+    #[test]
+    fn a_swinging_ball_never_reaches_an_upright() {
+        let upright = upright_at();
 
         for end in [0, BALLS - 1] {
             let (mut bodies, links) = strung();
