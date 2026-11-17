@@ -1254,6 +1254,9 @@ struct Arcade {
     wants_lock: bool,
     locked: bool,
     quitting: bool,
+    /// The fluted shaft every pedestal in the gallery is drawn with, which is
+    /// one mesh because they are all the same one. Spec 0111.
+    shaft: Option<MeshId>,
 }
 
 /// Lays a plate and its line under a block of text, if there is one.
@@ -1399,6 +1402,7 @@ impl Arcade {
                 was: (doorway, 0.0, 0.0),
             }),
             cube: None,
+            shaft: None,
             glass_targets: Vec::new(),
             dumped: false,
             pane: None,
@@ -8159,6 +8163,7 @@ impl Game for Arcade {
         renderer.set_contact_shadows(false);
 
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
+        self.shaft = Some(renderer.add_mesh(&display::shaft_mesh()));
         // The carpet covers the aisle alone now, which is less than half the
         // width of the quad it used to be, so its count comes down with it. The
         // plain eight across a quad that narrow is a weave half the size it has
@@ -12823,8 +12828,21 @@ impl Game for Arcade {
                 continue;
             };
 
-            let (plinth, size) = display::plinth_under(one);
-            scene.push_plain(cube, &Transform::at(plinth).with_scale(size), aim::PLINTH);
+            // the pedestal: three square courses and a turned shaft between
+            // the lower two and the top one. Spec 0111.
+            for (at, size) in display::courses(one) {
+                scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::PLINTH);
+            }
+
+            if let Some(shaft) = self.shaft {
+                let (foot, tall) = display::shaft_at(one);
+
+                scene.push_plain(
+                    shaft,
+                    &Transform::at(foot).with_scale(vec3(display::ACROSS, tall, display::ACROSS)),
+                    aim::PLINTH,
+                );
+            }
             // where its middle goes is one number and `fitted` settled it,
             // lifted by how far the shape reaches rather than by how far it
             // reaches this frame. Spec 0093.

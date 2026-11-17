@@ -398,9 +398,195 @@ pub fn sits_at(one: &Display) -> f32 {
 /// over the edge.
 pub fn plinth_under(one: &Display) -> (Vec3, Vec3) {
     let top = stands_at();
-    let wide = ACROSS * 1.15;
+    // the widest course and not the shaft, because what holds you off is the
+    // thing you would walk into, which is the base block at its foot. Spec
+    // 0111 made a pedestal of this and the box stayed as its footprint.
+    let wide = ACROSS * BASE_BLOCK_WIDE;
 
     (vec3(one.at.x, top * 0.5, one.at.z), vec3(wide, top, wide))
+}
+
+/// A pedestal's five courses, as fractions of its whole height: the two that
+/// make its base, the shaft, the echinus that flares out of it and the
+/// abacus the shape stands on.
+///
+/// **Greco-Roman, because Jake asked for it and a box is a box.** What makes
+/// a pedestal read as classical is the silhouette: something wider at the
+/// foot, something wider again at the head, and a shaft between them that is
+/// neither. One grey box has none of those and the room had six of them.
+///
+/// They sum to one, and `the_courses_fill_the_pedestal` holds them to it: a
+/// course taken out of the middle would otherwise leave the shape standing
+/// on air or sunk into its own abacus.
+pub const BASE_BLOCK: f32 = 0.085;
+pub const BASE_TORUS: f32 = 0.055;
+pub const SHAFT: f32 = 0.735;
+pub const ECHINUS: f32 = 0.040;
+pub const CYMA: f32 = 0.035;
+pub const ABACUS: f32 = 0.050;
+
+/// And how wide each is, against the shaft's own width at its foot.
+///
+/// The widest is the base block, which is what sets how close two pedestals
+/// come: at 1.24 of a shaft they stand 0.27 apart, where a plain box left
+/// 0.32.
+///
+/// **It was 1.30 and 0.06 tall, and Jake read that as a plate.** A base
+/// course is a block you could stub a toe on, so it lost width and gained
+/// height rather than one or the other. The torus over it stopped being a
+/// square step at the same time: it is turned now, with the bulge a torus
+/// has, because a square step under a round shaft is a box pretending to be
+/// a moulding.
+pub const BASE_BLOCK_WIDE: f32 = 1.24;
+pub const BASE_TORUS_WIDE: f32 = 1.10;
+pub const ECHINUS_WIDE: f32 = 1.00;
+pub const CYMA_WIDE: f32 = 1.08;
+pub const ABACUS_WIDE: f32 = 1.20;
+
+/// How wide the shaft is at its foot, against the course it is measured in,
+/// and how much narrower it is under its echinus.
+///
+/// **Narrower than its own courses, which is what makes it a column.** At
+/// the full width it came out half a metre across and 0.84 tall, which is a
+/// drum: a classical shaft is many diameters tall and this one can only be
+/// two, so what it can do is be slim against the base and the abacus rather
+/// than flush with them.
+///
+/// A classical shaft is not a cylinder either. It narrows upward, and
+/// `shaft_wide` puts a little of the swell back in so the taper is a curve
+/// rather than a cone.
+pub const SHAFT_WIDE: f32 = 0.80;
+pub const SHAFT_TAPER: f32 = 0.12;
+
+/// How deep the flutes are cut into the shaft and how many there are.
+///
+/// Sixteen rather than a Doric twenty, because the shaft is half a metre
+/// across and read from a metre away: twenty at this size is a texture and
+/// not a fluting.
+pub const FLUTES: f32 = 16.0;
+pub const FLUTE_DEEP: f32 = 0.055;
+
+/// How wide the shaft is at a given height up it, as a fraction of its foot.
+pub fn shaft_wide(up: f32) -> f32 {
+    // the swell: a cone would read as a funnel, and the entasis every
+    // classical shaft carries is what stops it
+    let swell = (up * std::f32::consts::PI).sin() * 0.04;
+
+    SHAFT_WIDE * (1.0 - SHAFT_TAPER * up + swell)
+}
+
+/// The three square courses of a pedestal, each as its middle and its size:
+/// the two of the base and the abacus on top.
+///
+/// The shaft and the echinus are not here. Those two are turned, so they are
+/// one mesh drawn once per pedestal rather than boxes.
+pub fn courses(one: &Display) -> [(Vec3, Vec3); 3] {
+    // the block at the foot, then the cyma and the abacus at the head. The
+    // torus, the shaft and the echinus are turned and are one mesh.
+    let tall = stands_at();
+    let wide = ACROSS;
+    let (x, z) = (one.at.x, one.at.z);
+    let mut up = 0.0;
+    let mut out = [(Vec3::ZERO, Vec3::ZERO); 3];
+
+    for (n, (share, across)) in [
+        (BASE_BLOCK, BASE_BLOCK_WIDE),
+        (CYMA, CYMA_WIDE),
+        (ABACUS, ABACUS_WIDE),
+    ]
+    .iter()
+    .copied()
+    .enumerate()
+    {
+        // the two at the head are measured down from the top rather than up
+        // through the turned courses under them: two accounts of where they
+        // sit would come apart the first time a share changed
+        let from = match n {
+            0 => up,
+            1 => 1.0 - ABACUS - CYMA,
+            _ => 1.0 - ABACUS,
+        };
+        let high = share * tall;
+
+        out[n] = (
+            vec3(x, (from + share * 0.5) * tall, z),
+            vec3(wide * across, high, wide * across),
+        );
+
+        if n == 0 {
+            up += share;
+        }
+    }
+
+    out
+}
+
+/// Where the turned part begins and how tall it is: the torus, the shaft and
+/// the echinus together.
+pub fn shaft_at(one: &Display) -> (Vec3, f32) {
+    let tall = stands_at();
+    let foot = BASE_BLOCK * tall;
+
+    (
+        vec3(one.at.x, foot, one.at.z),
+        (BASE_TORUS + SHAFT + ECHINUS) * tall,
+    )
+}
+
+/// The shaft and the echinus over it, as one turned and fluted mesh a unit
+/// tall and a unit across at its foot.
+///
+/// **Fluted from the surface rather than cut into it.** `MeshData::surface`
+/// is handed both ways round the mesh, so the flutes are what the radius
+/// does with the angle and cost nothing but the steps to draw them. Boxes
+/// stood in the face would be two surfaces in one plane, which this building
+/// has written down seven times under other names.
+pub fn shaft_mesh() -> blitzkit::mesh::MeshData {
+    let whole = BASE_TORUS + SHAFT + ECHINUS;
+    let torus = BASE_TORUS / whole;
+    let shaft = torus + SHAFT / whole;
+    let mut mesh = blitzkit::mesh::MeshData::surface(64, 72, |u, v| {
+        let round = -u * std::f32::consts::TAU;
+
+        let (wide, fluted) = if v <= torus {
+            // the torus, which is a moulding and so bulges rather than
+            // stepping: widest across its own middle and meeting the shaft
+            // at the shaft's own width
+            let up = (v / torus).clamp(0.0, 1.0);
+            let bulge = (up * std::f32::consts::PI).sin();
+            let from = SHAFT_WIDE + (BASE_TORUS_WIDE - SHAFT_WIDE) * 0.35;
+
+            (
+                from + (BASE_TORUS_WIDE - from) * bulge - (from - shaft_wide(0.0)) * up,
+                false,
+            )
+        } else if v <= shaft {
+            let up = (v - torus) / (shaft - torus);
+
+            (shaft_wide(up), true)
+        } else {
+            // the echinus, which flares out of the shaft's own top width
+            let out = (v - shaft) / (1.0 - shaft);
+            let from = shaft_wide(1.0);
+
+            (from + (ECHINUS_WIDE - from) * (out * out).min(1.0), false)
+        };
+
+        // the flutes, which stop where the echinus starts: a moulding that
+        // carried them would read as a frill rather than as a capital
+        let cut = if fluted {
+            1.0 - FLUTE_DEEP * (0.5 + 0.5 * (round * FLUTES).cos())
+        } else {
+            1.0
+        };
+
+        let round_at = wide * cut * 0.5;
+
+        vec3(round.cos() * round_at, v, round.sin() * round_at)
+    });
+    mesh.compute_normals();
+
+    mesh
 }
 
 /// How far round the row has turned by now. All of them together, because five
@@ -684,6 +870,91 @@ mod tests {
     /// **Both halves, because either alone is met by something wrong.**
     /// Spec 0005 lifted each shape by how far it reached that frame, which
     /// never collides and moves the shape twice a revolution, and Jake read
+    /// Spec 0111: the six courses fill the pedestal exactly, in order, and
+    /// the shape stands on the top of the abacus.
+    ///
+    /// **Because a course is a share of a whole and nothing checks arithmetic
+    /// that is spread over six constants.** Take one out of the middle and
+    /// the shape is left standing on air or sunk into its own abacus, and
+    /// the only thing that would say so is a picture.
+    ///
+    /// The turned part is checked against the boxes either side of it rather
+    /// than against its own constants, because what has to be true is that
+    /// they meet: an open-ended skin that stops short of the block leaves a
+    /// gap you can see under the torus.
+    #[test]
+    fn the_courses_fill_the_pedestal() {
+        let shares = BASE_BLOCK + BASE_TORUS + SHAFT + ECHINUS + CYMA + ABACUS;
+
+        assert!(
+            (shares - 1.0).abs() < 1e-4,
+            "the six courses come to {} of a pedestal",
+            shares
+        );
+
+        let one = Display {
+            name: "teapot",
+            at: vec3(1.0, HIGH, -2.0),
+            scale: 1.0,
+            half: Vec3::ZERO,
+        };
+        let tall = stands_at();
+        let [block, cyma, abacus] = courses(&one);
+        let (foot, turned) = shaft_at(&one);
+
+        let bottom = |(at, size): (Vec3, Vec3)| at.y - size.y * 0.5;
+        let top = |(at, size): (Vec3, Vec3)| at.y + size.y * 0.5;
+
+        assert!(
+            bottom(block).abs() < 1e-4,
+            "the base block starts {} off the floor",
+            bottom(block)
+        );
+        assert!(
+            (top(abacus) - tall).abs() < 1e-4,
+            "the abacus tops out at {} where a shape stands at {}",
+            top(abacus),
+            tall
+        );
+        assert!(
+            (bottom(abacus) - top(cyma)).abs() < 1e-4,
+            "the cyma and the abacus do not meet"
+        );
+
+        // and the turned part fills the whole of what is left between them
+        assert!(
+            (foot.y - top(block)).abs() < 1e-4,
+            "the turned part starts at {} and the block tops out at {}",
+            foot.y,
+            top(block)
+        );
+        assert!(
+            (foot.y + turned - bottom(cyma)).abs() < 1e-4,
+            "the turned part ends at {} and the cyma starts at {}",
+            foot.y + turned,
+            bottom(cyma)
+        );
+
+        // the base block is the widest, which is what `plinth_under` hands
+        // out as the footprint and what decides how close two of them stand
+        let (_, box_) = plinth_under(&one);
+
+        for (what, course) in [("cyma", cyma), ("abacus", abacus)] {
+            assert!(
+                course.1.x <= block.1.x + 1e-4,
+                "the {} is wider than the base block, so the footprint is wrong",
+                what
+            );
+        }
+
+        assert!(
+            (box_.x - block.1.x).abs() < 1e-4,
+            "the footprint is {} and the widest course is {}",
+            box_.x,
+            block.1.x
+        );
+    }
+
     /// that off the screen as bouncing. Leaving it where it stands never
     /// moves it and sinks it a seventh of a unit in when it tips, which is
     /// the fault spec 0005 was written for. The lift that does both is the
