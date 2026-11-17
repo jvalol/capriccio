@@ -565,6 +565,24 @@ pub fn stands(stood: &Stood, part: Vec3) -> Vec3 {
     stood.at + turned
 }
 
+/// How far a tree's crown reaches from its own trunk, as a radius on the
+/// ground at a given size.
+///
+/// **Off the sprigs it is drawn with**, so the keep-out below and the
+/// drawing cannot come apart. A number written here would be a second
+/// account of how wide a tree is, and the first one is three planes and a
+/// scale.
+///
+/// A radius and not a reach along `x`, because a tree is turned by
+/// `stands` and a keep-out that only held for one turn would hold for
+/// almost none of them.
+pub fn crown_reach(tree: &crate::garden::Tree, size: f32) -> f32 {
+    crate::garden::sprigs(tree)
+        .into_iter()
+        .map(|sprig| (glam::vec2(sprig.at.x, sprig.at.z).length() + sprig.wide * 0.5) * size)
+        .fold(0.0f32, f32::max)
+}
+
 /// The trees of a cell.
 pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
     let mut rolls = Rolls::of(cell, 0x7EE5);
@@ -578,8 +596,27 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         }
 
         let at = rolls.somewhere(cell);
+        let turn = rolls.next() * std::f32::consts::TAU;
+        let size = 0.75 + rolls.next() * 0.55;
+        let what = What::Tree((rolls.next() * TREES as f32) as usize % TREES);
 
-        if !open(reaches, at) {
+        // **Asked of the crown and not of the trunk.** This is a line in
+        // `x` and a tree is three and a half metres wide: one planted 1.76
+        // west of it reached 3.60 east of its own trunk and put a sprig
+        // inside the hall of mirrors' south wall, where Jake found it from
+        // the roof on 2026-11-17.
+        //
+        // The note below says this list has only ever kept trees out of the
+        // building, and the answer each time has been another named thing
+        // to avoid. The fault is not which things are named. It is that a
+        // tree was being asked about as a point.
+        let What::Tree(kind) = what else { continue };
+        let reach = kinds()
+            .get(kind)
+            .map(|tree| crown_reach(tree, size))
+            .unwrap_or(0.0);
+
+        if !open(reaches, at + Vec3::X * reach) {
             continue;
         }
 
@@ -601,9 +638,9 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
 
         out.push(Stood {
             at,
-            turn: rolls.next() * std::f32::consts::TAU,
-            size: 0.75 + rolls.next() * 0.55,
-            what: What::Tree((rolls.next() * TREES as f32) as usize % TREES),
+            turn,
+            size,
+            what,
         });
     }
 
@@ -1103,6 +1140,88 @@ mod tests {
     }
 
     use super::*;
+
+    /// Spec 0040: a tree's crown stays out of the building, and not only its
+    /// trunk.
+    ///
+    /// **Jake found one from the nook's roof on 2026-11-17**: a sprig of the
+    /// tree at (-20.61, -8.03) standing inside the hall of mirrors' south
+    /// wall. Its trunk cleared the keep-out line by 1.76 and its crown
+    /// reaches 3.60 past its own trunk, because the line was asked of a
+    /// point and a tree is not one.
+    ///
+    /// Walked over every cell round the building, and every sprig of every
+    /// tree in them against every box the building stands in. That is the
+    /// claim as Jake made it: nothing of a tree is inside anything.
+    #[test]
+    fn no_crown_reaches_into_the_building() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+        let solid = room.solid();
+        let kinds = kinds();
+        let mut sprigs_checked = 0;
+
+        for cx in -6..3 {
+            for cz in -5..4 {
+                for stood in trees(reaches, (cx, cz)) {
+                    let What::Tree(kind) = stood.what else {
+                        continue;
+                    };
+                    let Some(tree) = kinds.get(kind) else {
+                        continue;
+                    };
+
+                    for sprig in crate::garden::sprigs(tree) {
+                        let at = stands(&stood, sprig.at);
+                        let half = vec3(
+                            sprig.wide * stood.size * 0.5,
+                            sprig.tall * stood.size * 0.5,
+                            sprig.wide * stood.size * 0.5,
+                        );
+                        let (low, high) = (at - half, at + half);
+                        sprigs_checked += 1;
+
+                        for piece in solid.iter() {
+                            // only what stands up out of the ground. A
+                            // sprig hanging low over a buried slab is
+                            // nothing anybody can see, and the floors out
+                            // here are all under the grass.
+                            if piece.max.y < 0.1 {
+                                continue;
+                            }
+
+                            let meets = low.x < piece.max.x
+                                && high.x > piece.min.x
+                                && low.y < piece.max.y
+                                && high.y > piece.min.y
+                                && low.z < piece.max.z
+                                && high.z > piece.min.z;
+
+                            assert!(
+                                !meets,
+                                "a sprig of the tree at {:.2} {:.2} is inside the box \
+                                 x {:.2}..{:.2} y {:.2}..{:.2} z {:.2}..{:.2}",
+                                stood.at.x,
+                                stood.at.z,
+                                piece.min.x,
+                                piece.max.x,
+                                piece.min.y,
+                                piece.max.y,
+                                piece.min.z,
+                                piece.max.z
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(
+            sprigs_checked > 100,
+            "only {} sprigs were looked at, so this proves nothing",
+            sprigs_checked
+        );
+    }
 
     /// A building the size of the one that ships, for the tests to measure
     /// the field off.
