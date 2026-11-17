@@ -12319,6 +12319,26 @@ impl Game for Arcade {
 
         // the plan of the building, cut from the building, on the one wall
         // of this room with nothing on it. Spec 0115.
+        // and the mark that says where you are standing and which way you
+        // are looking, which is the thing that makes a plan a map. Drawn
+        // rather than cut, because it moves.
+        for bar in plan::here(
+            &self.room,
+            self.room.reaches,
+            self.looking_from(),
+            self.facing(),
+        ) {
+            scene.push_plain(
+                cube,
+                &Transform::at(bar.center()).with_scale(bar.size().max(Vec3::splat(0.004))),
+                // **Brighter than it could be lit**, since colour is an
+                // unclamped multiplier and past one a thing gives off its
+                // own: this wall is a dim one and a mark the room has to
+                // light is a mark you hunt for.
+                aim::BRASS * 2.2,
+            );
+        }
+
         for bar in self.plan.iter() {
             scene.push_plain(
                 cube,

@@ -281,6 +281,65 @@ fn laid_out(room: &Room, reaches: f32) -> (f32, f32, Vec3) {
     (scale, step, vec3(first, board.center().y, board.min.z))
 }
 
+/// Which of the three a height belongs to: the lowest floor at or under it.
+pub fn storey_at(y: f32) -> usize {
+    floors()
+        .iter()
+        .rposition(|floor| y >= *floor - 0.6)
+        .unwrap_or(0)
+}
+
+/// Where a place in the building lands on the wall.
+///
+/// **One mapping, used by the drawing and by whatever reads it.** The plan
+/// and the mark that says where you are standing have to agree about where
+/// a metre goes, and the way to be sure of that is for there to be one
+/// answer rather than two.
+pub fn onto(room: &Room, reaches: f32, storey: usize, at: Vec3) -> Vec3 {
+    let (scale, step, first) = laid_out(room, reaches);
+    let middle = footprint(room).center();
+
+    vec3(
+        first.x + step * storey as f32 - (at.x - middle.x) * scale,
+        first.y + (at.z - middle.z) * scale,
+        first.z,
+    )
+}
+
+/// How big the mark that says where you are standing is, on the wall.
+///
+/// **Big enough to find without hunting.** The first go was half this and
+/// read as a speck of grit on a drawing, which is worse than nothing: a
+/// you-are-here you have to look for does not answer where you are.
+pub const MARK: f32 = 0.055;
+
+/// That mark: where you are, and which way you are facing.
+///
+/// **Two boxes and not one.** Jake, looking at the plan: how do I know
+/// where I am or what I am looking at. A dot answers the first and a nose
+/// out in front of it answers the second, and a plan with neither is a
+/// drawing of a building you have no way into.
+pub fn here(room: &Room, reaches: f32, at: Vec3, facing: Vec3) -> Vec<Aabb> {
+    let storey = storey_at(at.y);
+    let on = onto(room, reaches, storey, at);
+    let way = glam::vec2(facing.x, facing.z);
+    let way = if way.length_squared() > 1e-6 {
+        way.normalize()
+    } else {
+        glam::vec2(0.0, 1.0)
+    };
+    // the mapping turns x round and leaves z alone, so the nose does too
+    let nose = vec3(on.x - way.x * MARK * 2.2, on.y + way.y * MARK * 2.2, on.z);
+    let square = |middle: Vec3, half: f32| {
+        Aabb::new(
+            vec3(middle.x - half, middle.y - half, middle.z - RELIEF * 2.0),
+            vec3(middle.x + half, middle.y + half, middle.z),
+        )
+    };
+
+    vec![square(on, MARK), square(nose, MARK * 0.55)]
+}
+
 /// The whole relief, as boxes in the world, with the storey each came from.
 ///
 /// **The rooms are raised and the walls are the grooves between them.** The
@@ -298,14 +357,10 @@ fn laid_out(room: &Room, reaches: f32) -> (f32, f32, Vec3) {
 /// rather than how the room lies behind it: stood in the nook facing this
 /// wall, east is on your left. A plan is a page, not a window.
 pub fn relief(room: &Room, reaches: f32) -> Vec<(Aabb, usize)> {
-    let (scale, step, first) = laid_out(room, reaches);
     let whole = footprint(room);
-    let middle = whole.center();
     let mut out = Vec::new();
 
     for (n, floor) in floors().iter().copied().enumerate() {
-        let home = vec3(first.x + step * n as f32, first.y, first.z);
-
         for box_ in filled(room, floor)
             .into_iter()
             .filter(|box_| within(&whole, box_))
@@ -339,16 +394,10 @@ pub fn relief(room: &Room, reaches: f32) -> Vec<(Aabb, usize)> {
             // inner face is the board's z and the room is on the near side
             // of that, which is the smaller z: the first build put the
             // relief inside the plaster, where it was drawn and invisible.
-            let low = vec3(
-                home.x - (box_.max.x - middle.x) * scale,
-                home.y + (box_.min.z - middle.z) * scale,
-                home.z - RELIEF,
-            );
-            let high = vec3(
-                home.x - (box_.min.x - middle.x) * scale,
-                home.y + (box_.max.z - middle.z) * scale,
-                home.z,
-            );
+            let one = onto(room, reaches, n, box_.min);
+            let two = onto(room, reaches, n, box_.max);
+            let low = vec3(one.x.min(two.x), one.y.min(two.y), one.z - RELIEF);
+            let high = vec3(one.x.max(two.x), one.y.max(two.y), one.z);
 
             out.push((Aabb::new(low, high), n));
         }
@@ -555,6 +604,97 @@ mod tests {
             east - west,
             wide
         );
+    }
+
+    /// Spec 0115: east is on the right as the wall is read.
+    ///
+    /// **Nothing else here can catch a mirrored plan.** The drawing and the
+    /// mark both go through `onto`, so turning its x round turns both and
+    /// every other test still passes: the mark lands on the same room, the
+    /// three keep one scale, the board still holds it. What a mirror breaks
+    /// is the one thing none of those ask, which is whether the drawing
+    /// agrees with the building it is in.
+    ///
+    /// Facing this wall you are facing north, so your right hand points
+    /// west, and the right-hand side of anything hung on it is the wall's
+    /// own smaller x. A plan is read east on the right, so east belongs
+    /// there.
+    ///
+    /// **Written backwards first.** The assertion said west, on the thought
+    /// that west is what is physically to your right, which is a map held
+    /// up to the room rather than a drawing read as a page.
+    #[test]
+    fn east_is_on_the_right_as_it_is_read() {
+        let room = building();
+        let middle = footprint(&room).center();
+        let west = onto(&room, room.reaches, 1, vec3(middle.x - 10.0, 0.0, middle.z));
+        let east = onto(&room, room.reaches, 1, vec3(middle.x + 10.0, 0.0, middle.z));
+
+        assert!(
+            east.x < west.x,
+            "east draws at {:.2} and west at {:.2}, so the plan is mirrored: \
+             facing north your right hand points west, so the side of this \
+             wall a reader calls the right is its smaller x",
+            east.x,
+            west.x
+        );
+
+        // and north is up, which is the half of it that needs no turning
+        let north = onto(&room, room.reaches, 1, vec3(middle.x, 0.0, middle.z + 10.0));
+        let south = onto(&room, room.reaches, 1, vec3(middle.x, 0.0, middle.z - 10.0));
+
+        assert!(
+            north.y > south.y,
+            "north draws at {:.2} and south at {:.2}, so the plan is upside down",
+            north.y,
+            south.y
+        );
+    }
+
+    /// Spec 0115: the mark lands on the room you are standing in.
+    ///
+    /// **Which is the whole of what a you-are-here is for.** The mapping
+    /// turns the building's x round, because facing this wall you face
+    /// north and your right hand points west, and a sign wrong anywhere in
+    /// that puts the mark in the room opposite the one you are in. Nothing
+    /// you could see from a screenshot would tell you which.
+    #[test]
+    fn the_mark_lands_on_the_room_you_are_in() {
+        let room = building();
+        let standing = [
+            ("the nook", vec3(-7.7, 1.0, 1.0)),
+            ("the nook's south end", vec3(-7.7, 1.0, -8.0)),
+            ("the hall", vec3(0.0, 1.0, 0.0)),
+        ];
+
+        for (name, at) in standing.iter() {
+            let storey = storey_at(at.y);
+            let floor = filled(&room, floors()[storey]);
+
+            assert!(
+                floor.iter().any(|bar| {
+                    bar.min.x <= at.x && bar.max.x >= at.x && bar.min.z <= at.z && bar.max.z >= at.z
+                }),
+                "{} is not open floor, so this tests nothing",
+                name
+            );
+
+            let mark = here(&room, room.reaches, *at, glam::Vec3::Z);
+            let dot = mark[0].center();
+            let under = relief(&room, room.reaches).into_iter().any(|(bar, which)| {
+                which == storey
+                    && bar.min.x <= dot.x
+                    && bar.max.x >= dot.x
+                    && bar.min.y <= dot.y
+                    && bar.max.y >= dot.y
+            });
+
+            assert!(
+                under,
+                "standing in {} the mark lands at {:.2}, {:.2}, which is on no room of that storey",
+                name, dot.x, dot.y
+            );
+        }
     }
 
     /// Spec 0115: a wall that moves moves the plan, which is the whole claim.

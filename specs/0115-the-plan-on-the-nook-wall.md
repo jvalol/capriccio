@@ -95,9 +95,18 @@ than you have seen, and it says that without a word on it. What names would
 cost is a sign in a building that has decided signs are `aim`'s business, and
 that is spec 0113's question rather than this one.
 
-**No state, and nothing to work.** Spec 0036's trail records what each room
-has given up and nothing in the building draws any of it. A room picked out
-in a different stone is still a plan, so this leaves the door open for that
+**One thing that moves: where you are standing, and which way you face.**
+A dot on the storey you are on, with a nose out in front of it, in brass
+against the stone. Jake, looking at the plan without it: this is unreadable,
+how do I know where I am or what I am looking at. A plan of a building you
+only ever see from the inside has nothing a reader can match it against, and
+the mark is what it is matched against.
+
+Drawn rather than cut, because it moves. The rest is cut once at startup.
+
+**And no other state.** Spec 0036's trail records what each room has given
+up and nothing in the building draws any of it. A room picked out in a
+different stone is still a plan, so this leaves the door open for that
 without opening it: whoever builds the trail's end can colour a room here,
 and someone who never finds the trail sees an ornament either way.
 
@@ -112,6 +121,11 @@ and someone who never finds the trail sees an ornament either way.
   `plan::tests::it_fits_the_wall_it_is_on`
 - Moving a wall moves the plan, which is the claim this spec is built on. —
   `plan::tests::a_wall_that_moves_moves_the_plan`
+- The mark lands on the room you are standing in. — `plan::tests::the_mark_lands_on_the_room_you_are_in`
+- East is on the right as the wall is read, which is the only thing a
+  mirrored plan breaks: the drawing and the mark go through one mapping, so
+  turning it round turns both and everything else still agrees. —
+  `plan::tests::east_is_on_the_right_as_it_is_read`
 - And the drawing fills the board rather than sitting in the middle of it as
   a smudge, which is what holds the bound: without one, `room_at` calls the
   long way out to the village the hall and the whole building draws at
@@ -136,4 +150,8 @@ and someone who never finds the trail sees an ornament either way.
 **The trail.** Spec 0036's, and this only leaves room for it.
 
 **Anything to press.** The panel of spec 0112 is the thing in this building
-you work; this is a thing you look at.
+you work; this is a thing you look at, and the mark on it is not worked
+either.
+
+**Names on the rooms.** Still the open one. The mark says where you are and
+the nose says which way you face, and neither says what a room is for.
