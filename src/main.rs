@@ -241,6 +241,34 @@ fn inside_its_reach(how_far: f32, reach: f32) -> f32 {
     how_far / (reach * reach).max(1e-6)
 }
 
+/// Whether the glass sphere is inside a lamp's reach, which is a question
+/// the eye's own frustum has no opinion about.
+///
+/// `traced` is where the ball is when it is being traced this frame, and
+/// `None` when it is not, so nothing off the ball's own list is kept for it
+/// while nobody is looking at it.
+fn the_ball_is_under(at: Vec3, reach: f32, traced: Option<Vec3>) -> bool {
+    traced.is_some_and(|ball| ball.distance(at) <= reach)
+}
+
+/// How deep inside a lamp's reach whatever can see it is: the eye, or the
+/// ball when the ball is being traced.
+///
+/// **Keeping a lamp is not enough on its own, and that is measured.** The
+/// note at the cull records what adding the mirrors' frustums did: the
+/// lamps kept went from 43 to 135 against a cap of 64 and the ranking threw
+/// the extra ninety away again, so not one pixel moved. A lamp kept for the
+/// ball has to be ranked for the ball too or it is dropped by the thing
+/// that decides what the cap loses.
+fn how_deep_inside(at: Vec3, from_eye: f32, reach: f32, traced: Option<Vec3>) -> f32 {
+    let mine = inside_its_reach(from_eye, reach);
+
+    match traced {
+        Some(ball) => mine.min(inside_its_reach(ball.distance_squared(at), reach)),
+        None => mine,
+    }
+}
+
 /// A tour of the building, walked rather than replayed. Spec 0049.
 ///
 /// **It drives the same keys a player would**, rather than setting the
@@ -13391,9 +13419,26 @@ impl Game for Arcade {
         // extra ninety away again and not one pixel moves. What that floor
         // wants is a ranking that knows about mirrors, which is the cap's
         // problem rather than the cull's.
+        //
+        // **And what the glass sphere can see, which is the same fault one
+        // room along.** Jake, 2026-11-17: there's a light that disappears
+        // and comes back in the reflection when I move back and forth.
+        // Logged at two camera positions four tenths of a metre apart, the
+        // scene got 23 lamps and then 25, the two extra entering as the
+        // frustum swept over them, with nothing in the room moved. Spec
+        // 0098 exists so a surface can show what no camera is pointed at,
+        // and this cull was dropping exactly those lamps.
+        //
+        // The ball only, and not the mirrors, which the note above measured
+        // and left out. The ball is one place and is traced from its own
+        // middle, so it costs the lamps within reach of one point.
         let seen = camera.frustum();
+        let ball = glass::ball(self.room.reaches).0;
+        let traced = (eye.distance(ball) <= glass::SEES).then_some(ball);
 
-        shades.retain(|(_, at, _, _, reach)| seen.holds_sphere(*at, *reach));
+        shades.retain(|(_, at, _, _, reach)| {
+            seen.holds_sphere(*at, *reach) || the_ball_is_under(*at, *reach, traced)
+        });
         // deepest inside its own reach first, so what the engine drops when a
         // building outgrows it is the lamp that could not have lit you
         // anyway. Not a ration: every fitting in the building is pushed and
@@ -13401,7 +13446,8 @@ impl Game for Arcade {
         // the nook's walls took six of those whether or not you were standing
         // in the nook. Spec 0020 of the engine.
         shades.sort_by(|one, other| {
-            inside_its_reach(one.0, one.4).total_cmp(&inside_its_reach(other.0, other.4))
+            how_deep_inside(one.1, one.0, one.4, traced)
+                .total_cmp(&how_deep_inside(other.1, other.0, other.4, traced))
         });
 
         // the casters first, so that what the engine drops when a building
@@ -18912,6 +18958,64 @@ mod tests {
     /// reaches everything.
     ///
     /// Each place is taken from the thing that stands in it rather than typed,
+    /// Spec 0098: a lamp the ball can see is kept whatever the eye's own
+    /// frustum thinks, and is ranked so the cap does not throw it away.
+    ///
+    /// **Jake, 2026-11-17, in the glass room:** there's a light that
+    /// disappears and comes back in the reflection when I move back and
+    /// forth. The scene got 23 lamps at one camera position and 25 four
+    /// tenths of a metre along, the two extra entering as the frustum swept
+    /// over them, with nothing in the room moved.
+    ///
+    /// Both halves, because keeping alone is measured not to be enough: the
+    /// note at the cull records the mirrors' frustums taking the lamps from
+    /// 43 to 135 against a cap of 64 and the ranking throwing the extra
+    /// ninety away again.
+    #[test]
+    fn a_lamp_the_ball_can_see_is_kept_and_ranked_for_it() {
+        let room = room::Room::of(crate::games());
+        let ball = glass::ball(room.reaches).0;
+        let reach = glass::LAMP_RANGE;
+        // one lamp just inside the ball's reach of it and one just outside,
+        // both of them a long way from any eye
+        let under = ball + Vec3::X * (reach - 0.2);
+        let past = ball + Vec3::X * (reach + 0.2);
+
+        assert!(
+            the_ball_is_under(under, reach, Some(ball)),
+            "a lamp {:.2} from the ball, reaching {:.2}, is not kept for it",
+            ball.distance(under),
+            reach
+        );
+        assert!(
+            !the_ball_is_under(past, reach, Some(ball)),
+            "a lamp past its own reach of the ball is kept for it"
+        );
+        assert!(
+            !the_ball_is_under(under, reach, None),
+            "a lamp is kept for a ball nobody is tracing"
+        );
+
+        // and it ranks by whichever viewer is deepest inside it, so the cap
+        // keeps it over a lamp neither of them is under
+        let far_from_the_eye = 400.0;
+        let mine = how_deep_inside(under, far_from_the_eye, reach, Some(ball));
+        let theirs = how_deep_inside(past, far_from_the_eye, reach, Some(ball));
+
+        assert!(
+            mine < theirs,
+            "the lamp the ball is under ranks {:.3} and the one it is not \
+             ranks {:.3}, so the cap would drop the wrong one",
+            mine,
+            theirs
+        );
+        assert_eq!(
+            how_deep_inside(under, far_from_the_eye, reach, None),
+            inside_its_reach(far_from_the_eye, reach),
+            "with nothing traced the ranking is the eye's own"
+        );
+    }
+
     /// so a room that moves takes its own anchor with it.
     #[test]
     fn the_fill_gets_to_the_rooms_that_are_open() {
