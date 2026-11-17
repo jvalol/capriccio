@@ -879,13 +879,31 @@ pub fn nook_floor(reaches: f32) -> (Vec3, Vec3) {
 /// **In exactly the place the borrowed one stood**, so that nothing else in
 /// this room moves. It ran a thickness into the nook's own span and the
 /// furniture was fitted around it.
-pub fn nook_south(reaches: f32) -> Aabb {
+///
+/// **Three pieces, because spec 0114's wing is through it.** The way up to
+/// the glass room starts on the nook's floor and climbs south out of this
+/// wall, so there is a doorway in it on the flight's own line with a lintel
+/// over it. `glass::way` is the only place that says where.
+pub fn nook_south(reaches: f32) -> Vec<Aabb> {
     let (at, size) = nook_floor(reaches);
+    let (west, east) = (at.x - size.x * 0.5 - THICK, at.x + size.x * 0.5 + THICK);
+    let (near, far) = (-reaches, -reaches + THICK);
+    let openings = crate::glass::openings(reaches);
+    let mut out = Vec::new();
+    let mut from = west;
 
-    Aabb::new(
-        vec3(at.x - size.x * 0.5 - THICK, 0.0, -reaches),
-        vec3(at.x + size.x * 0.5 + THICK, TALL, -reaches + THICK),
-    )
+    for (cut, to) in openings {
+        out.push(Aabb::new(vec3(from, 0.0, near), vec3(cut, TALL, far)));
+        out.push(Aabb::new(
+            vec3(cut, crate::glass::WAY_HIGH, near),
+            vec3(to, TALL, far),
+        ));
+        from = to;
+    }
+
+    out.push(Aabb::new(vec3(from, 0.0, near), vec3(east, TALL, far)));
+
+    out
 }
 
 /// How much bare floor shows round the rug.
@@ -1031,24 +1049,10 @@ pub fn pendant_shades(reaches: f32) -> Vec<Vec3> {
                 .into_iter()
                 .map(move |along| vec3(across, up, along))
         })
-        // **Not one over the flight.** Spec 0064 put a stair up to the room
-        // over this one, and the pendant grid had one hanging in the middle
-        // of it at the head height of anybody climbing. The lamps come off
-        // this list, so dropping the shade drops the light with it, and the
-        // flight carries two sconces of its own instead.
-        //
-        // The flight and not the well, which are two questions with similar
-        // answers. The well is the whole north strip of this ceiling and
-        // most of it is a void you look up through, which still wants its
-        // lamps; only the part with steps under it is a place a head goes.
-        .filter(|shade| {
-            let flight = crate::glass::flight(reaches);
-
-            !(shade.x > flight.min.x
-                && shade.x < flight.max.x
-                && shade.z > flight.min.z
-                && shade.z < flight.max.z)
-        })
+        // and the storey under spec 0114's wing, which is lit on this same
+        // grid. One list, so what is drawn and what is lit are the same
+        // question: `nook_lamps` reads this and so does the drawing.
+        .chain(crate::glass::under_shades(reaches))
         .collect()
 }
 
@@ -1295,15 +1299,9 @@ impl Room {
             // The right piece reaches past the hall's own right wall, because
             // the gallery is wider than the hall and this is its near side as
             // well as the hall's far one.
-            {
-                let (left, _) = gallery_way();
-                let from = -side - NOOK_DEEP;
-
-                Aabb::new(
-                    vec3(from, 0.0, -reaches - thick * 0.5),
-                    vec3(left, TALL, -reaches + thick * 0.5),
-                )
-            },
+            // Its left piece is not here. It reaches across the nook, and
+            // spec 0114's wing is through it twice, so it comes in pieces
+            // round `glass::openings` below.
             {
                 let (_, right) = gallery_way();
                 let to = GALLERY_WIDE * 0.5 + thick;
@@ -1346,7 +1344,26 @@ impl Room {
         ];
 
         let mut walls = walls;
-        walls.push(nook_south(reaches));
+        walls.extend(nook_south(reaches));
+
+        // the hall's far end carried across the nook, cut for the way up to
+        // the glass room and for the door into the storey under it
+        {
+            let (left, _) = gallery_way();
+            let (near, far) = (-reaches - thick * 0.5, -reaches + thick * 0.5);
+            let mut from = -side - NOOK_DEEP;
+
+            for (cut, to) in crate::glass::openings(reaches) {
+                walls.push(Aabb::new(vec3(from, 0.0, near), vec3(cut, TALL, far)));
+                walls.push(Aabb::new(
+                    vec3(cut, crate::glass::WAY_HIGH, near),
+                    vec3(to, TALL, far),
+                ));
+                from = to;
+            }
+
+            walls.push(Aabb::new(vec3(from, 0.0, near), vec3(left, TALL, far)));
+        }
 
         let benches = benches(-reaches);
         let bookcases = bookcases(-reaches);
@@ -1379,12 +1396,12 @@ impl Room {
     ///
     /// Its top is at nought, which is where everything else in the room already
     /// sits.
-    pub fn floors(&self) -> [Aabb; 3] {
+    pub fn floors(&self) -> Vec<Aabb> {
         let side = WALL + CABINET.x;
         // where the nook stops, which is where the floor under it stops too
         let shut = -self.reaches + NOOK_SPAN + THICK * 0.5;
 
-        [
+        let mut out = vec![
             // the hall, end to end
             Aabb::from_center_size(
                 vec3(0.0, -THICK * 0.5, 0.0),
@@ -1415,7 +1432,13 @@ impl Room {
 
                 Aabb::from_center_size(vec3(at.x, -THICK * 0.5, at.z), vec3(size.x, THICK, size.z))
             },
-        ]
+        ];
+
+        // and the south wing's ground storey, which is two slabs round the
+        // gallery's own corner. Spec 0114.
+        out.extend(crate::glass::under(self.reaches));
+
+        out
     }
 
     /// The box a bench fills, which is what you cannot walk through and what
@@ -1708,7 +1731,7 @@ impl Room {
     /// them, so it is built now as well as tested with.
     pub fn grounds(&self) -> Vec<(&'static str, Aabb)> {
         let reaches = self.reaches;
-        let [hall, nook, gallery] = self.floors();
+        let (hall, nook, gallery) = (self.floors()[0], self.floors()[1], self.floors()[2]);
         let mut out = vec![
             ("the hall", hall),
             ("the nook", nook),
@@ -1720,6 +1743,13 @@ impl Room {
             ("the hall of mirrors", crate::mirrors::floor()),
             ("the space beyond the door", crate::beyond::solid(reaches)),
         ];
+
+        // and spec 0114's wing, in two slabs round the gallery's corner
+        out.extend(
+            crate::glass::under(reaches)
+                .iter()
+                .map(|slab| ("the south wing", *slab)),
+        );
 
         out.extend(
             crate::spa::floors(reaches)
@@ -2367,7 +2397,20 @@ impl Room {
                 })
                 .collect()
         };
-        bars = clipped(&bars);
+        // **A sliver of a bar is not a bar.** The well's edge falls where
+        // the stair puts it, and when that is inside a bar's own width the
+        // cut leaves a couple of centimetres of it hanging over the
+        // stairwell, centred half a bar off the line it was laid to.
+        // `the_lid_is_one_grid_laid_to_the_world` reads that as a bar laid
+        // to its own piece of the lid, and it is right to: it is not laid
+        // to anything, it is what is left of one. A bar cut along its
+        // length is still a bar and stays.
+        let cut: Vec<Hung> = clipped(&bars);
+
+        bars = cut
+            .into_iter()
+            .filter(|(_, size)| size.x.min(size.z) >= CEIL_BAR - 1e-4)
+            .collect();
         tiles = clipped(&tiles);
         // the lit ones too, though none of them is near the well today: the
         // panels are the hall's and the stair comes up through the nook. A
@@ -2435,8 +2478,32 @@ impl Room {
     /// case: a corridor built to outrun the far plane is a hundred and ten
     /// metres of indoor building, and with it in the bounds the garden's
     /// shadows moved in half a per cent of that room's pixels.
+    ///
+    /// **And spec 0114's south wing is out of it too, from 2026-11-17**, for
+    /// the reason the two above are out: it is enclosed, it has no sky in
+    /// it, and with it in the bounds the box grows ten metres south, so
+    /// every texel of the one map coarsens to pay for a room the sun cannot
+    /// reach.
+    ///
+    /// Kept out on that reasoning and not on a measurement. The field's own
+    /// picture did move the day the wing went in, and this is not why: what
+    /// moved there is the building's outline, the upper storey having left
+    /// the nook's roof.
     pub fn under_the_sun(&self) -> Aabb {
-        Self::round(self.built(false))
+        let wing = crate::glass::the_whole_wing(self.reaches);
+        let inside = |piece: &Aabb| {
+            piece.min.x >= wing.min.x - 1e-3
+                && piece.max.x <= wing.max.x + 1e-3
+                && piece.min.z >= wing.min.z - 1e-3
+                && piece.max.z <= wing.max.z + 1e-3
+        };
+
+        Self::round(
+            self.built(false)
+                .into_iter()
+                .filter(|piece| !inside(piece))
+                .collect(),
+        )
     }
 
     fn round(boxes: Vec<Aabb>) -> Aabb {

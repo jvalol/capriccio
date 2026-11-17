@@ -2894,7 +2894,21 @@ impl Arcade {
         // Spec 0063 parked the hotel and `room::nook_south` builds this
         // wall for the nook, in the nook's own place, so there is nothing
         // left to clamp to.
-        out.push((-self.room.reaches + room::THICK, 1.0, false, back, front));
+        //
+        // **And in pieces round spec 0114's two openings.** That same rule
+        // is why: the wing's stair climbs south out of this wall and the
+        // storey under it has a door beside the stair, and panelling across
+        // a doorway is a door. `glass::openings` is the only place that
+        // says where.
+        let face = -self.room.reaches + room::THICK;
+        let mut run = back;
+
+        for (cut, to) in glass::openings(self.room.reaches) {
+            out.push((face, 1.0, false, run, cut));
+            run = to;
+        }
+
+        out.push((face, 1.0, false, run, front));
 
         out
     }
@@ -9812,6 +9826,27 @@ impl Game for Arcade {
         {
             let (at, size) = room::gallery(self.room.reaches);
             let laid = Transform::at(vec3(at.x, 0.0, at.z)).with_scale(vec3(size.x, 1.0, size.z));
+
+            match self.carpet {
+                Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
+                None => scene.push_plain(floor, &laid, aim::FLOOR),
+            }
+        }
+
+        // and the storey under spec 0114's wing, which is the aisle's
+        // carpet carried on again.
+        //
+        // **A room with no floor drawn is a room standing on black**, which
+        // is what the gallery's own note above records from its first
+        // build. This one had the same fault on its first build and it is
+        // the same answer: the wing is reached off the nook and its floor
+        // is the building's, until it is given a purpose of its own.
+        for slab in glass::under(self.room.reaches) {
+            let laid = Transform::at(vec3(slab.center().x, 0.0, slab.center().z)).with_scale(vec3(
+                slab.size().x,
+                1.0,
+                slab.size().z,
+            ));
 
             match self.carpet {
                 Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),

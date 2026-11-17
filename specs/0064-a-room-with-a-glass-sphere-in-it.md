@@ -606,15 +606,22 @@ window. It sat behind the lamp panel and so was never seen.
 - The plinth stands in the middle of the room's length, within a tread of it, and not against either end. — `glass::tests::the_sphere_has_length_behind_it_either_way`
 - The frames run the room's length at the corridor's own pitch, so the cone finds something different at every angle. — `glass::tests::the_room_is_a_colonnade`
 - You can walk its length and all the way round the plinth with the passage this project has settled on. — `glass::tests::you_can_walk_round_it`
-- The stair's foot is inside the nook's end wall and its head is clear of the garden's way. — `glass::tests::the_stair_fits_the_nook`
-- The room does not stand over anything that is already there. — `glass::tests::nothing_of_the_building_is_under_it`
-- A body pushed at either open side of the flight is stopped by that side's balustrade rather than ending up on the nook's floor. — `glass::tests::you_cannot_walk_off_the_side_of_the_flight`
+- The flight stands inside the wing, end to end, and its top tread is level with the floor it arrives at. — `glass::tests::the_stair_fits_the_wing`
+- The room stands over the wing and over nothing else. — `glass::tests::the_room_stands_over_the_wing`
+- A body pushed at either open side of the flight is stopped by that side's balustrade rather than ending up on the floor below. — `glass::tests::you_cannot_walk_off_the_side_of_the_flight`
 - And the balustrade costs the flight none of its going, because it stands outside the tread ends. — `glass::tests::the_balustrade_costs_the_flight_none_of_its_going`
-- Nothing of the room below hangs in the flight. — `glass::tests::nothing_of_the_nook_hangs_in_the_flight`
 - One piece of the plinth draws its top, and only one, so no two faces of it fight for the same pixels. — `glass::tests::one_piece_of_the_plinth_draws_its_top`
 - The building's skin leaves the bays open rather than plastering over them. — `glass::tests::the_skin_leaves_the_bays_open`
 - And the glazing stands in the opening rather than proud of the skin. — `glass::tests::the_glazing_is_in_the_opening`
-- Every part of the nook's open floor still has a lamp on it with the pendant over the flight gone. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
+- Every part of the nook's open floor has a lamp on it. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
+
+**Three of these moved on 2026-11-17 and one went.** Spec 0114 took this
+room off the nook's ceiling and put it in a wing of its own, so the stair
+fits the wing rather than the nook and the room stands over the wing rather
+than over nothing. What went is the claim that nothing of the room below
+hangs in the flight: the nook has no stairwell in it any more, so there is
+nothing for a pendant to hang in and a test of it would pass on an empty
+question.
 - And the room over the nook is drawn. — `tests::the_glass_room_is_drawn`
 
 ### Verified by hand

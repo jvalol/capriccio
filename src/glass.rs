@@ -20,7 +20,7 @@ use blitzkit::mesh::Transform;
 use blitzkit::renderer::scene::{MeshId, Scene, Traced};
 use glam::{vec3, Vec3};
 
-use crate::room::{self, NOOK_SPAN, THICK};
+use crate::room::{self, THICK};
 
 /// The top of this room's floor, which is the nook's ceiling plus a slab.
 ///
@@ -42,10 +42,26 @@ pub const TALL: f32 = room::TALL;
 /// flight is in the building and has been climbed since spec 0007. Fourteen
 /// risers is `UP` exactly, and the going is 4.2 metres.
 pub const STEPS: usize = (UP / crate::cellar::RISER) as usize;
+
 pub const GOING: f32 = STEPS as f32 * crate::cellar::TREAD;
 
 /// How wide the flight is, which is the cellar's passage again.
 pub const FLIGHT: f32 = crate::cellar::PASSAGE;
+
+/// How far the wing runs south of the wall it shares with the nook.
+///
+/// **The room left the nook's ceiling on 2026-11-17, per spec 0114.** Six
+/// walks in one night failed to place a stair inside the nook, and the
+/// reason is arithmetic rather than taste: a straight flight that lands you
+/// facing the sphere climbs towards it, so its head is on the far side of
+/// the room from the sphere; the sphere stands four metres off an end wall
+/// by the bar this room already had; and the nook is sixteen long. Those
+/// three put the flight in the middle of the library whichever way it
+/// faces.
+///
+/// Sixteen, which is what this room has had since it was built, so nothing
+/// inside it had to be resized to move it.
+pub const SPAN: f32 = 16.0;
 
 /// What the room is drawn and walked inside, as the nook's own footprint less
 /// a wall all round.
@@ -55,20 +71,185 @@ pub const FLIGHT: f32 = crate::cellar::PASSAGE;
 /// reading a neighbour's numbers and both were wrong the first time.
 pub fn inside(reaches: f32) -> Aabb {
     let (at, size) = room::nook_floor(reaches);
-    let half = vec3(size.x * 0.5 - THICK, 0.0, size.z * 0.5 - THICK);
-    // the nook's floor slab runs to `shut`, past the end wall, so the room
-    // takes the wall's inner face as its north end rather than the slab's
-    let shut = -reaches + NOOK_SPAN - THICK * 0.5;
+    let half = size.x * 0.5 - THICK;
+    // the south face of the wall this wing shares with the nook, which is
+    // that slab's own south edge
+    let shut = at.z - size.z * 0.5;
 
     Aabb::new(
-        vec3(at.x - half.x, UP, at.z - half.z),
-        vec3(at.x + half.x, UP + TALL, shut),
+        vec3(at.x - half, UP, shut - SPAN),
+        vec3(at.x + half, UP + TALL, shut),
     )
 }
 
 /// How wide the cut in the floor is: the flight, and a balustrade each side
 /// of it.
 pub const WELL_WIDE: f32 = FLIGHT + GUARD * 2.0;
+
+/// The wing's own ground storey, which is what this room stands on.
+///
+/// **An L and not a rectangle.** Spec 0022's gallery is already on the
+/// ground at x -5.2 to 5.2 and runs south to its own end, so the wing takes
+/// the ground west of the gallery's wall for that stretch and the full width
+/// south of it. Two slabs rather than one that overlaps the gallery's: two
+/// floors in a plane is the fault this building has found five times.
+///
+/// The room above is the whole rectangle, since above 3.2 metres there is
+/// nothing south of the nook at all. It overhangs the gallery by 2.2 metres
+/// for its first six, which spec 0114 names and accepts.
+pub fn under(reaches: f32) -> [Aabb; 2] {
+    let room = inside(reaches);
+    let (west, east) = (room.min.x - THICK, room.max.x + THICK);
+    let (south, north) = (room.min.z - THICK, room.max.z);
+    // up to the gallery's own floor, which is the one thing on this ground
+    // already. To its slab's edge and not to the west face of the wall on
+    // it: stopped a thickness short, the strip the wall stands on has no
+    // floor under it at all, which `no_two_rooms_leave_a_hole_between_their
+    // _floors` reads as a hole between two rooms and is right to.
+    let (at, size) = room::gallery(reaches);
+    let beside = at.x - size.x * 0.5;
+
+    [
+        Aabb::new(
+            vec3(west, -THICK, at.z - size.z * 0.5),
+            vec3(beside, 0.0, north),
+        ),
+        Aabb::new(
+            vec3(west, -THICK, south),
+            vec3(east, 0.0, at.z - size.z * 0.5),
+        ),
+    ]
+}
+
+/// How wide and how high the way through the shared wall is.
+///
+/// A doorway and not a stairwell: the bottom tread is at floor level where
+/// the wall stands, so what the wall needs is a way through rather than a
+/// hole over a drop. Wide enough for the flight and its two balustrades,
+/// and high enough to walk under at the foot of a climb.
+pub const WAY_WIDE: f32 = 2.1;
+pub const WAY_HIGH: f32 = 2.1;
+
+/// Where that way is, as the two `x` it runs between.
+///
+/// On the flight's own line, named here so the wall it is cut in and the
+/// stair that goes through it cannot come apart.
+pub fn way(reaches: f32) -> (f32, f32) {
+    let at = stair_foot(reaches).x;
+
+    (at - WAY_WIDE * 0.5, at + WAY_WIDE * 0.5)
+}
+
+/// How wide the door beside it is: the way into the wing's ground storey.
+///
+/// **The stair's own way through is not a way past it.** It is 2.1 wide and
+/// the flight is 1.8, so what is left either side is 0.15 and a body is 0.9:
+/// cut only for the stair, the room under this one had no way in at all.
+/// Widening that opening until you could pass beside the flight would take
+/// it to 3.4 and make an arch of what is a doorway, so the ground storey
+/// gets a door of its own instead, which is what a building does.
+pub const DOOR_WIDE: f32 = 1.2;
+
+/// Where that door is, as the two `x` it runs between: west of the stair,
+/// a clear body's width off it.
+pub fn door(reaches: f32) -> (f32, f32) {
+    let (way, _) = way(reaches);
+    let east = way - crate::RADIUS * 2.0 - 0.4;
+
+    (east - DOOR_WIDE, east)
+}
+
+/// Both openings in the wall the wing shares with the nook, west to east.
+///
+/// One list, because three places cut this wall: its collider, the hall's
+/// far end which reaches across the nook, and the nook's own panelling.
+pub fn openings(reaches: f32) -> [(f32, f32); 2] {
+    [door(reaches), way(reaches)]
+}
+
+/// The wing's own walls on the ground storey.
+///
+/// Three and not four. The north one is the wall it shares with the nook,
+/// which is spec 0022's far end carried across the nook and is built there
+/// with this wing's way cut in it.
+///
+/// The east one stops at the gallery's south face, because from there north
+/// the gallery's own west wall is this wing's east side: a second box in the
+/// same place is two surfaces in one plane.
+pub fn wing_walls(reaches: f32) -> Vec<Aabb> {
+    let room = inside(reaches);
+    let tall = room::TALL;
+    let (west, east) = (room.min.x - THICK, room.max.x + THICK);
+    let south = room.min.z - THICK;
+
+    vec![
+        Aabb::new(vec3(west, 0.0, south), vec3(room.min.x, tall, room.max.z)),
+        Aabb::new(vec3(west, 0.0, south), vec3(east, tall, room.min.z)),
+        Aabb::new(
+            vec3(room.max.x, 0.0, south),
+            vec3(east, tall, room::gallery_wall(reaches) - THICK),
+        ),
+    ]
+}
+
+/// The shades over the wing's ground storey.
+///
+/// **A room with a floor, a ceiling and no light in it is a dark shell**,
+/// and spec 0114 leaves what goes in this one to a later spec rather than
+/// leaving it unlit. The nook's own grid and pitch, on each of the two
+/// slabs `under` lays, so the storey under this room is lit the way the
+/// room beside it is.
+///
+/// None over the stair, which is solid from the floor up: a shade there
+/// hangs inside the flight.
+pub fn under_shades(reaches: f32) -> Vec<Vec3> {
+    use crate::study::{pendants, PENDANT_DROP, PENDANT_ROWS, PENDANT_SHADE};
+
+    let up = room::soffit() - PENDANT_DROP;
+    let flight = Aabb::new(
+        vec3(treads(reaches)[0].min.x, 0.0, well(reaches).min.z),
+        vec3(treads(reaches)[0].max.x, UP, well(reaches).max.z),
+    );
+    let half = PENDANT_SHADE * 0.5;
+    let mut out = Vec::new();
+
+    for slab in under(reaches) {
+        let (from, to) = (slab.min.x + THICK, slab.max.x - THICK);
+
+        for n in 0..PENDANT_ROWS {
+            let across = from + (to - from) * ((n as f32 + 0.5) / PENDANT_ROWS as f32);
+
+            for along in pendants(slab.min.z + THICK, slab.max.z - THICK) {
+                let at = vec3(across, up, along);
+
+                if at.x + half.x > flight.min.x
+                    && at.x - half.x < flight.max.x
+                    && at.z + half.z > flight.min.z
+                    && at.z - half.z < flight.max.z
+                {
+                    continue;
+                }
+
+                out.push(at);
+            }
+        }
+    }
+
+    out
+}
+
+/// The whole wing, both storeys, as one box.
+///
+/// For the sun, which gets one map over whatever it is given and wants as
+/// little of it spent on rooms with no sky in them as possible.
+pub fn the_whole_wing(reaches: f32) -> Aabb {
+    let room = inside(reaches);
+
+    Aabb::new(
+        vec3(room.min.x - THICK, -THICK, room.min.z - THICK),
+        vec3(room.max.x + THICK, room.max.y + THICK, room.max.z + THICK),
+    )
+}
 
 /// The well: the slot the flight comes down, on the room's own axis.
 ///
@@ -86,11 +267,11 @@ pub const WELL_WIDE: f32 = FLIGHT + GUARD * 2.0;
 /// outside it, runs the room's whole length.
 pub fn well(reaches: f32) -> Aabb {
     let room = inside(reaches);
-    let foot = stair_foot(reaches);
+    let middle = (room.min.x + room.max.x) * 0.5;
 
     Aabb::new(
-        vec3(foot.x - WELL_WIDE * 0.5, -THICK, stair_head(reaches).z),
-        vec3(foot.x + WELL_WIDE * 0.5, room.max.y, foot.z + LANDING),
+        vec3(middle - WELL_WIDE * 0.5, -THICK, stair_head(reaches).z),
+        vec3(middle + WELL_WIDE * 0.5, room.max.y, room.max.z),
     )
 }
 
@@ -103,7 +284,7 @@ pub fn floors(reaches: f32) -> Vec<Aabb> {
     let (south, north) = (room.min.z - THICK, room.max.z + THICK);
 
     vec![
-        // west of the slot, the room's whole length
+        // west of the stair, the room's whole length
         Aabb::new(
             vec3(room.min.x - THICK, under, south),
             vec3(well.min.x, top, north),
@@ -113,13 +294,13 @@ pub fn floors(reaches: f32) -> Vec<Aabb> {
             vec3(well.max.x, under, south),
             vec3(room.max.x + THICK, top, north),
         ),
-        // the width of the slot south of it, which is where you walk at the
-        // stair head
+        // the width of the stair south of it, which is the room you step
+        // off into and the whole of its length
         Aabb::new(
             vec3(well.min.x, under, south),
             vec3(well.max.x, top, well.min.z),
         ),
-        // and the same north of it
+        // and north of it, which is the strip the end wall stands on
         Aabb::new(
             vec3(well.min.x, under, well.max.z),
             vec3(well.max.x, top, north),
@@ -127,8 +308,8 @@ pub fn floors(reaches: f32) -> Vec<Aabb> {
     ]
 }
 
-/// Where the flight stands: its foot, at the north end of the room's own
-/// axis, with the flight climbing south from it.
+/// Where the flight stands: its foot, with the flight climbing north away
+/// from it to the room's far end.
 ///
 /// **It runs along the room now and not across it.** Jake walked it on
 /// 2026-11-12: *it should be a linear way out, not a left turn.* Crossing
@@ -136,37 +317,41 @@ pub fn floors(reaches: f32) -> Vec<Aabb> {
 /// turned ninety degrees to go down, which is what a fire escape does and
 /// not what the way out of a room with one thing in it should do.
 ///
+/// **And it climbs away from the way in, which it did not.** Jake walked it
+/// again on 2026-11-17: *not something I have to walk around to in order to
+/// walk up.* A flight climbing south met you with its blank flank and its
+/// high end: you passed it down one side, walked the room's whole length,
+/// and turned through a hundred and eighty degrees to climb back the way
+/// you had come.
+///
+/// **And it is at the far end and not in the middle.** Turned round it was
+/// still a flight standing in open floor with carpet on all four sides, and
+/// Jake read that off the same walk: *it's still in the middle of the room
+/// which makes it feel cramped, far wall would be better.* At the north end
+/// it divides nothing. Ten metres of library are clear in front of it and
+/// the way up is the end of the walk rather than something standing in it.
+///
+/// Not against a long wall, which was the other reading of that and is not
+/// available. The nook's west wall carries the cellar's swinging bookcase
+/// and the way into the hall of mirrors, and the 5.5 metres between them is
+/// less than the going plus anywhere to stand at its foot.
+///
 /// On the middle of the width, which is the plinth's own line, so coming up
-/// the stair puts the sphere straight ahead of you and walking at the sphere
-/// and past it walks you out.
+/// the stair and turning puts the sphere straight down the room.
 pub fn stair_foot(reaches: f32) -> Vec3 {
     let room = inside(reaches);
 
-    vec3(
-        (room.min.x + room.max.x) * 0.5,
-        0.0,
-        room.max.z - CLEAR_AT_THE_FOOT,
-    )
+    vec3((room.min.x + room.max.x) * 0.5, 0.0, room.max.z)
 }
 
-/// How much nook is left in front of the bottom tread.
+/// **Nothing is left past the top of the stair, and nothing needs to be.**
+/// Two constants stood here while the stair was one straight flight: how
+/// much floor there was past the top tread before the end wall, and how
+/// much well was left past the bottom one. The stair turns back on itself
+/// now, so the thing against the end wall is the half landing, whose own
+/// depth is the room to turn in, and the thing you step off onto at the top
+/// is the room's whole length.
 ///
-/// **The flight is not at the end of the room, and that is the whole of
-/// this.** Put at the north end it came down to a wall four tenths of a
-/// metre away: Jake walked it and said the stairs end at a wall, which is
-/// the same turn he had asked to have taken out, moved to the bottom. The
-/// nook's open floor runs its whole length, so the fix is simply to stop
-/// the flight short of the end and let it arrive in the room rather than
-/// at its wall.
-///
-/// It is the number that trades against the sphere's own depth, one metre
-/// for one metre, and sixteen metres of room has to do both jobs now.
-pub const CLEAR_AT_THE_FOOT: f32 = 3.2;
-
-/// How much of the well is left past the bottom tread, which is a step off
-/// and not a landing: the landing is the nook, under this room's floor.
-pub const LANDING: f32 = 0.3;
-
 /// The treads, as the boxes you actually stand on.
 ///
 /// Each one is a slab from the floor up to its own top, rather than a step
@@ -228,19 +413,9 @@ pub fn tread_boards(reaches: f32) -> Vec<Aabb> {
         .collect()
 }
 
-/// The volume the steps stand in: what a head passes through on the way up.
-pub fn flight(reaches: f32) -> Aabb {
-    let foot = stair_foot(reaches);
-    let head = stair_head(reaches);
-    let half = FLIGHT * 0.5;
-
-    Aabb::new(
-        vec3(foot.x - half, 0.0, head.z),
-        vec3(foot.x + half, UP, foot.z),
-    )
-}
-
-/// Where the flight arrives, which is the south end of it.
+/// Where the stair arrives, which is beside where it starts: the second
+/// flight comes back down the room and steps off on the same line across it
+/// as the first flight's bottom tread.
 pub fn stair_head(reaches: f32) -> Vec3 {
     let foot = stair_foot(reaches);
 
@@ -430,6 +605,55 @@ pub fn guard(reaches: f32) -> Vec<Aabb> {
 /// and every bit of it has the top tread under it, which is level with the
 /// floor.
 pub const RAIL_UP: f32 = 1.05;
+
+/// And the balustrades that stand level rather than on a rake: round the
+/// well on the floor above, and along the half landing's two open sides.
+///
+/// **Named here since spec 0064 and never built.** `RAIL_UP` has said all
+/// along how high the balustrade round the well stands, and the head newel
+/// is made tall enough for a level rail to die into it, and nothing ever
+/// stood one up. The upper floor's edge along the well was open for its
+/// whole length. Walked across at the well's middle it dropped you onto the
+/// treads two and a half metres down, and from the head the sphere is
+/// straight down the slot, so walking at it walked you back down the
+/// stairs. That is what Jake found on 2026-11-17: *now it's hard to get to
+/// the sphere.* It was not hard, it was a hole.
+///
+/// Three runs and not four. The north end is where the flight arrives and
+/// is the way through.
+///
+/// On the flight's own balustrade line rather than on the floor's cut
+/// edge, which is the whole reason `BALUSTRADE` is thinner than the gap it
+/// stands in. A rail whose outer face is in the plane of the slab's cut
+/// edge is two faces in one plane, and `aloft`'s check finds exactly that.
+pub fn level_rails(reaches: f32) -> Vec<Aabb> {
+    let well = well(reaches);
+    let half = BALUSTRADE * 0.5;
+    let (low, high) = (UP, UP + RAIL_UP);
+
+    // The two long sides and no run across either end. The north one is the
+    // wing's own wall, and the south one is where the flight arrives and is
+    // the way through.
+    SIDES
+        .map(|side| {
+            let at = rake(reaches, side).0.x;
+
+            Aabb::new(
+                vec3(at - half, low, well.min.z),
+                vec3(at + half, high, well.max.z),
+            )
+        })
+        .to_vec()
+}
+
+/// Which way one of those runs lies, and how long it is.
+fn run_along(run: &Aabb) -> (Vec3, f32) {
+    if run.size().x > run.size().z {
+        (Vec3::X, run.size().x)
+    } else {
+        (Vec3::Z, run.size().z)
+    }
+}
 
 /// The frames down the long walls, as where each one stands and how big it
 /// is.
@@ -679,10 +903,13 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     let room = inside(reaches);
     let mut out = floors(reaches);
 
+    out.extend(wing_walls(reaches));
+
     out.push(plinth(reaches));
 
     out.extend(treads(reaches));
     out.extend(guard(reaches));
+    out.extend(level_rails(reaches));
     // **The colonnade is solid and not only drawn.** A pilaster you walk
     // through is a painting of a pilaster, and there is a second reason
     // here: what the glass traces is `solid`, so a frame that is only drawn
@@ -789,17 +1016,17 @@ pub fn over(reaches: f32) -> Aabb {
     )
 }
 
-/// The nook's own footprint, for the test that this room stands over nothing
-/// else. Off `nook_floor` and the side the hall's wall is on, which is what
-/// the nook is.
+/// The wing's own footprint, walls and all, for the test that this room
+/// stands over it and over nothing else.
 #[cfg(test)]
-pub fn the_nook(reaches: f32) -> Aabb {
-    let side = crate::room::WALL + crate::room::CABINET.x;
-    let shut = -reaches + NOOK_SPAN + THICK * 0.5;
+pub fn the_wing(reaches: f32) -> Aabb {
+    let room = inside(reaches);
 
     Aabb::new(
-        vec3(-side - crate::room::NOOK_DEEP, 0.0, -reaches),
-        vec3(-side, UP, shut),
+        vec3(room.min.x - THICK, 0.0, room.min.z - THICK),
+        // north to the far face of the wall it shares with the nook, which
+        // this room's own north wall stands on
+        vec3(room.max.x + THICK, UP, room.max.z + THICK),
     )
 }
 
@@ -959,6 +1186,14 @@ pub fn stair_sconces(reaches: f32) -> Vec<Vec3> {
     // of the stair that is a lamp on one post and a bare post facing it,
     // and Jake asked why there was a light on the right and not on the
     // left. A pair of newels is a pair.
+    //
+    // **On the outer post of each flight, which is the corner posts and
+    // four lamps still.** The stair turns back on itself, so there are
+    // eight posts now and the inner pair at each end stands 0.14 apart
+    // across the gap between the flights. A bowl is 0.34 across: lit on
+    // every post, those two sat inside each other, which is what Jake saw
+    // on 2026-11-17. The four that are left are the four corners of the
+    // stairwell, which is where a lamp on a stair belongs anyway.
     let posts: Vec<Aabb> = SIDES
         .iter()
         .flat_map(|side| newels(reaches, *side))
@@ -1238,6 +1473,43 @@ pub fn draw_the_stair(
                 scene.push_material(
                     baluster,
                     &Transform::at(at + Vec3::Y * tall * 0.5)
+                        .with_scale(vec3(BALUSTER, tall, BALUSTER)),
+                    crate::aim::GLASS_BALUSTER,
+                    crate::aim::MATTE,
+                );
+            }
+        }
+    }
+
+    // and the level balustrade round the well, which is the same joinery
+    // standing on the floor instead of on a rake. One handrail a run, and
+    // balusters at the going, so the two read as one balustrade turning
+    // the corner at the head.
+    for run in &level_rails(reaches) {
+        let (along, long) = run_along(run);
+        let across = Vec3::X + Vec3::Z - along;
+        let middle = run.center();
+        let tall = RAIL_UP - HANDRAIL * 0.5;
+
+        scene.push_material(
+            cube,
+            &Transform::at(vec3(middle.x, run.max.y - HANDRAIL * 0.5, middle.z))
+                .with_scale(along * long + across * (HANDRAIL * 1.4) + Vec3::Y * HANDRAIL),
+            crate::aim::GLASS_RAIL,
+            crate::aim::MATTE,
+        );
+
+        if let Some(baluster) = baluster {
+            let gap = crate::cellar::TREAD;
+            let count = (long / gap).floor().max(1.0);
+            let from = middle - along * (count * gap * 0.5);
+
+            for n in 0..=count as u32 {
+                let at = from + along * (n as f32 * gap);
+
+                scene.push_material(
+                    baluster,
+                    &Transform::at(vec3(at.x, run.min.y + tall * 0.5, at.z))
                         .with_scale(vec3(BALUSTER, tall, BALUSTER)),
                     crate::aim::GLASS_BALUSTER,
                     crate::aim::MATTE,
@@ -1629,6 +1901,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
     // joinery; the plinth stands there as one box and is drawn as a base, a
     // die and a cap. What is walked into here is not what is looked at.
     let guard = guard(reaches);
+    let rail = level_rails(reaches);
     let treads = treads(reaches);
     // the colonnade stands in `solid` as boxes, for the walk and for the
     // glass, and is drawn as turned columns
@@ -1643,6 +1916,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
         .chain([lid(reaches), cornice(reaches)])
         .filter(|piece| {
             !guard.contains(piece)
+                && !rail.contains(piece)
                 && !treads.contains(piece)
                 && *piece != plinth
                 && !(column.is_some() && shafts.contains(piece))
@@ -2022,32 +2296,6 @@ mod tests {
         }
     }
 
-    /// Spec 0064: nothing of the room below hangs in the flight.
-    ///
-    /// **The nook's pendant grid had one in the middle of it.** That ceiling
-    /// was solid when the grid was laid out and this spec cut a well through
-    /// it, so the lamp was left hanging from nothing at the head height of
-    /// anybody climbing. It is dropped where the list is made, which is what
-    /// takes its light with it.
-    #[test]
-    fn nothing_of_the_nook_hangs_in_the_flight() {
-        let reaches = reaches();
-        let flight = flight(reaches);
-
-        for shade in crate::room::pendant_shades(reaches) {
-            let inside = shade.x > flight.min.x
-                && shade.x < flight.max.x
-                && shade.z > flight.min.z
-                && shade.z < flight.max.z;
-
-            assert!(
-                !inside,
-                "a pendant hangs at {:?}, which is in the flight",
-                shade
-            );
-        }
-    }
-
     /// You can walk its length and all the way round the plinth.
     #[test]
     fn you_can_walk_round_it() {
@@ -2060,7 +2308,7 @@ mod tests {
         // plinth, which is what the first go did
         let aisle = middle.x - PLINTH * 0.5 - crate::RADIUS - 0.5;
         let south = walked(
-            vec3(aisle, UP + 0.2, floor.max.z - 1.0),
+            vec3(aisle, UP + 0.2, floor.min.z - 1.0),
             vec3(aisle, UP, room.min.z),
             12.0,
         );
@@ -2184,27 +2432,27 @@ mod tests {
     /// flight running north; this one runs across the nook, so nothing of it
     /// is north of the end wall at all.
     #[test]
-    fn the_stair_fits_the_nook() {
+    fn the_stair_fits_the_wing() {
         let reaches = reaches();
-        let nook = the_nook(reaches);
+        let wing = the_wing(reaches);
         let treads = treads(reaches);
 
         for (n, tread) in treads.iter().enumerate() {
             assert!(
-                tread.min.x >= nook.min.x && tread.max.x <= nook.max.x,
-                "tread {} runs from {:.2} to {:.2} and the nook is {:.2} to {:.2}",
+                tread.min.x >= wing.min.x && tread.max.x <= wing.max.x,
+                "tread {} runs from {:.2} to {:.2} and the wing is {:.2} to {:.2}",
                 n,
                 tread.min.x,
                 tread.max.x,
-                nook.min.x,
-                nook.max.x
+                wing.min.x,
+                wing.max.x
             );
             assert!(
-                tread.max.z <= nook.max.z,
-                "tread {} reaches z {:.2} and the nook ends at {:.2}",
+                tread.min.z >= wing.min.z,
+                "tread {} reaches z {:.2} and the wing ends at {:.2}",
                 n,
-                tread.max.z,
-                nook.max.z
+                tread.min.z,
+                wing.min.z
             );
         }
 
@@ -2218,23 +2466,232 @@ mod tests {
         );
     }
 
-    /// And the room stands over the nook and over nothing else.
+    /// And you walk in, through the wall, up the stair and out at the top.
+    ///
+    /// **This is the walk spec 0114 exists for.** You come into the nook at
+    /// its south-east corner, walk down the library to the way through its
+    /// end wall, and climb straight south. Walked as three legs, because a
+    /// body pointed at the stair head from the nook's doorway cuts the
+    /// corner into the wall beside the opening.
     #[test]
-    fn nothing_of_the_building_is_under_it() {
+    fn you_walk_in_and_walk_up() {
         let reaches = reaches();
-        let over = over(reaches);
-        let nook = the_nook(reaches);
+        let foot = stair_foot(reaches);
+        let head = stair_head(reaches);
+        let (at, size) = crate::room::nook_floor(reaches);
+        // inside the gap in the hall's wall, which is the nook's own south
+        // east corner: `room::NOOK_DOOR` is where that gap stops
+        let way_in = vec3(
+            at.x + size.x * 0.5 - crate::RADIUS - 0.4,
+            0.2,
+            -reaches + crate::room::NOOK_DOOR - 1.0,
+        );
+
+        let lined_up = walked(way_in, vec3(foot.x, 0.0, foot.z + 1.6), 9.0);
+        let up = walked(lined_up, vec3(head.x, head.y, head.z), 10.0);
 
         assert!(
-            over.min.x >= nook.min.x - 1e-3
-                && over.max.x <= nook.max.x + 1e-3
-                && over.min.z >= nook.min.z - 1e-3
-                && over.max.z <= nook.max.z + 1e-3,
-            "the room covers {:?} to {:?} and the nook is {:?} to {:?}",
+            (lined_up.y).abs() < 0.3,
+            "walking in from {:?} ended at y {:.2} rather than on the nook's floor",
+            way_in,
+            lined_up.y
+        );
+        assert!(
+            (up.y - UP).abs() < 0.3,
+            "the climb ended at {:?}, which is {:.2} up rather than {:.2}",
+            up,
+            up.y,
+            UP
+        );
+    }
+
+    /// And the stair is out of the library, per spec 0114.
+    ///
+    /// **Six walks in one night failed to place it inside the nook**, and
+    /// the reason is arithmetic: a straight flight that lands you facing
+    /// the sphere climbs towards it, so its head is on the far side of the
+    /// room from the sphere; the sphere stands four metres off an end wall;
+    /// and the nook is sixteen long. Those three put the flight in the
+    /// middle of the library whichever way it faces.
+    ///
+    /// So nothing of it is north of the wall the two rooms share. The
+    /// bottom tread is on that wall's own line and everything else is south
+    /// of it.
+    #[test]
+    fn the_stair_is_out_of_the_library() {
+        let reaches = reaches();
+        let shared = inside(reaches).max.z;
+
+        for (n, tread) in treads(reaches).iter().enumerate() {
+            assert!(
+                tread.max.z <= shared + 1e-3,
+                "tread {} reaches z {:.2}, north of the wall at {:.2}",
+                n,
+                tread.max.z,
+                shared
+            );
+        }
+
+        for post in guard(reaches) {
+            assert!(
+                post.max.z <= shared + crate::room::THICK,
+                "a post reaches z {:.2}, which is in the nook",
+                post.max.z
+            );
+        }
+    }
+
+    /// And the floor up here has a rail where it has a hole.
+    ///
+    /// **The well was unguarded when this room was built**, and nothing
+    /// said so: the flight's own balustrade steps down with the flight, so
+    /// at the well's far end the only rail was below the floor you were
+    /// standing on. Walked across at its middle a body went over the edge
+    /// and landed on the treads.
+    ///
+    /// Three places along it, because the fault was in how far down the
+    /// raking rail had got rather than in the rail being absent.
+    #[test]
+    fn the_well_is_fenced_and_you_can_get_round_it() {
+        let reaches = reaches();
+        let well = well(reaches);
+        let middle = middle(reaches);
+
+        for share in [0.2f32, 0.5, 0.8] {
+            let z = well.min.z + (well.max.z - well.min.z) * share;
+            let at = walked(
+                vec3(well.max.x + 1.2, UP + 0.2, z),
+                vec3(well.min.x - 1.2, UP, z),
+                6.0,
+            );
+
+            assert!(
+                (at.y - UP).abs() < 0.3,
+                "walking west across the well at z {:.2} ended at y {:.2}, \
+                 which is off the floor at {:.2}",
+                z,
+                at.y,
+                UP
+            );
+        }
+
+        // and the walk this room is for: off the top tread, straight at the
+        // sphere, with floor the whole way
+        let head = stair_head(reaches);
+        let there = walked(
+            vec3(head.x, UP + 0.2, head.z - 0.8),
+            vec3(middle.x, UP, middle.z),
+            10.0,
+        );
+
+        assert!(
+            (there.y - UP).abs() < 0.3,
+            "walking at the sphere ended at y {:.2} rather than on the floor",
+            there.y
+        );
+        assert!(
+            glam::vec2(there.x - middle.x, there.z - middle.z).length() < 1.2,
+            "it ended {:.2} from the plinth",
+            glam::vec2(there.x - middle.x, there.z - middle.z).length()
+        );
+    }
+
+    /// And no two lamps on this stair are inside one another.
+    ///
+    /// **Jake, 2026-11-17: the lights have overlaps with each other.** The
+    /// stair turned back on itself and went from four newels to eight, and
+    /// the rule that lit every one of them put two bowls 0.23 apart with
+    /// 0.34 of bowl to fit in the gap.
+    ///
+    /// Measured against the fitting's own width, so it is the drawing that
+    /// is checked and not a number somebody picked: a bowl is `SCONCE_WIDE`
+    /// across wherever it is drawn.
+    #[test]
+    fn no_two_lamps_on_the_stair_are_in_each_other() {
+        let reaches = reaches();
+        let bowls = stair_sconces(reaches);
+
+        for (n, at) in bowls.iter().enumerate() {
+            for other in bowls.iter().skip(n + 1) {
+                assert!(
+                    at.distance(*other) >= SCONCE_WIDE,
+                    "two bowls stand {:.3} apart at {:?} and {:?}, and a bowl \
+                     is {:.2} across",
+                    at.distance(*other),
+                    at,
+                    other,
+                    SCONCE_WIDE
+                );
+            }
+        }
+
+        assert!(bowls.len() >= 4, "only {} lamps on the stair", bowls.len());
+    }
+
+    /// And the storey under it has a way in, per spec 0114.
+    ///
+    /// **The stair's own opening is not one.** It is `WAY_WIDE` across and
+    /// the flight is `FLIGHT`, so what is left either side is 0.15 against
+    /// a body of 0.9: cut for the stair alone, the room under this one
+    /// could not be got into at all. The door beside it is what this walks.
+    #[test]
+    fn you_can_walk_past_the_stair_below() {
+        let reaches = reaches();
+        let room = inside(reaches);
+        let (from, to) = door(reaches);
+        let shared = room.max.z;
+        let at = (from + to) * 0.5;
+
+        // the stair's own opening is too tight to pass beside, which is the
+        // whole reason the door is there
+        let (way_from, way_to) = way(reaches);
+        let beside = (way_to - way_from - FLIGHT) * 0.5;
+
+        assert!(
+            beside < crate::RADIUS * 2.0,
+            "the stair's opening leaves {:.2} beside the flight, so the door \
+             beside it is not needed and this test is guarding nothing",
+            beside
+        );
+
+        // in from the nook, through the door, and on into the room
+        let inside_it = walked(
+            vec3(at, 0.2, shared + 1.5),
+            vec3(at, 0.0, shared - 3.0),
+            8.0,
+        );
+
+        assert!(
+            inside_it.z < shared - 1.5,
+            "walking at the door from the nook got to z {:.2}, and the wall \
+             is at {:.2}",
+            inside_it.z,
+            shared
+        );
+        assert!(
+            inside_it.y.abs() < 0.3,
+            "it ended at y {:.2} rather than on the wing's floor",
+            inside_it.y
+        );
+    }
+
+    /// And the room stands over the nook and over nothing else.
+    #[test]
+    fn the_room_stands_over_the_wing() {
+        let reaches = reaches();
+        let over = over(reaches);
+        let wing = the_wing(reaches);
+
+        assert!(
+            over.min.x >= wing.min.x - 1e-3
+                && over.max.x <= wing.max.x + 1e-3
+                && over.min.z >= wing.min.z - 1e-3
+                && over.max.z <= wing.max.z + 1e-3,
+            "the room covers {:?} to {:?} and the wing is {:?} to {:?}",
             over.min,
             over.max,
-            nook.min,
-            nook.max
+            wing.min,
+            wing.max
         );
     }
 }

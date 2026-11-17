@@ -2211,13 +2211,19 @@ mod tests {
         let room = crate::room::Room::of(crate::games());
         let solid = room.solid();
         let from = room.doorway();
-        // **The far end of the nook, which the stair used to stand at.**
-        // The journey that sent this wrong went to the top of the way up
-        // to the imaginarium, and spec 0063 parked that stair. What made
-        // the fault was the region, not the stair: a box from the front
-        // door to anything at the nook's far end stops short of the gap
-        // the nook opens through, and that is still true of this one.
-        let to = vec3(-7.85, 0.0, 2.2);
+        // **The far end of the nook, at the foot of the way up.** The
+        // journey that sent this wrong went to the top of the way up to
+        // the imaginarium, and spec 0063 parked that stair. What made the
+        // fault was the region, not the stair: a box from the front door
+        // to anything at the nook's far end stops short of the gap the
+        // nook opens through, and that is still true of this one.
+        //
+        // Taken off the stair rather than written down, since it moved out
+        // of this room altogether on 2026-11-17 and a point that used to be
+        // clear floor is now a wall. Its foot is in the wall's own line, so
+        // the place to walk to is the nook's floor in front of it.
+        let foot = crate::glass::stair_foot(room.reaches);
+        let to = vec3(foot.x, 0.0, foot.z + 1.5);
 
         let ways = ways(&room.grounds(), &solid, between(from, to));
 
