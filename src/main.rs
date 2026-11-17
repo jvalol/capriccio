@@ -33,6 +33,7 @@ mod noise;
 mod orrery;
 mod parked;
 mod people;
+mod plan;
 mod roofing;
 mod room;
 mod says;
@@ -731,6 +732,10 @@ struct Inside {
 
 struct Arcade {
     room: Room,
+    /// The relief plan on the nook's north wall, per spec 0115. Cut once:
+    /// it walks every collider in the building against a grid, which is
+    /// five milliseconds at startup and is not a thing to do per frame.
+    plan: Vec<Aabb>,
     playing: Playing,
     /// cascada's binary. It has no cabinet, and a bench is not one, but what
     /// starts it is the same thing that starts a game.
@@ -1323,6 +1328,10 @@ fn plate(geometry: &mut Geometry, plate: Option<aim::Plate>) {
 impl Arcade {
     fn new() -> Self {
         let room = Room::of(games());
+        let plan = plan::relief(&room, room.reaches)
+            .into_iter()
+            .map(|(bar, _)| bar)
+            .collect();
         let spin = display::Spin::of(room.displays.len());
         let (cradle, ropes) = cradle::strung();
 
@@ -1420,6 +1429,7 @@ impl Arcade {
             falling: 0.0,
             eye: 0.0,
             room,
+            plan,
             spin,
             playing: Playing::new(),
             cascada: Cabinet::found(cascada::NAME, &beside()),
@@ -12305,6 +12315,21 @@ impl Game for Arcade {
                     }
                 }
             }
+        }
+
+        // the plan of the building, cut from the building, on the one wall
+        // of this room with nothing on it. Spec 0115.
+        for bar in self.plan.iter() {
+            scene.push_plain(
+                cube,
+                &Transform::at(bar.center()).with_scale(bar.size().max(Vec3::splat(0.004))),
+                // **One stone for all three**, since a plan is cut and not
+                // painted: what tells them apart is that they are three
+                // drawings with air between them. The first build gave the
+                // ground floor its own colour and the wall read as one
+                // drawing with two shadows of it either side.
+                aim::GLASS_TRIM,
+            );
         }
 
         // the panelling. Every wall of the nook you can actually see, which is
