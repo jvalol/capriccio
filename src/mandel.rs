@@ -313,11 +313,19 @@ impl View {
 }
 
 /// What the readout calls it, and what it says underneath.
+///
+/// **Two of them, because the panel is modal now.** Spec 0112: the arrows
+/// do not dive until you have taken hold of it, so the line has to say
+/// which of those you are in. A plate that promised the arrows while they
+/// were walking you is the fault spec 0106 went in under, one wall along.
 pub const NAME: &str = "A Window";
-pub const KEYS: &str = "Arrows to move, shift with up or down to zoom";
+pub const KEYS: &str = "Enter to take hold of it";
+pub const HELD_KEYS: &str = "Arrows to move, shift with up or down to zoom. Enter to let go";
 
-pub fn says(view: View) -> String {
-    format!("{}. {:.0} times in", KEYS, view.deep())
+pub fn says(view: View, held: bool) -> String {
+    let keys = if held { HELD_KEYS } else { KEYS };
+
+    format!("{}. {:.0} times in", keys, view.deep())
 }
 
 /// The picture itself: where its middle is and how big it is drawn.

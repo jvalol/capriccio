@@ -1254,6 +1254,9 @@ struct Arcade {
     wants_lock: bool,
     locked: bool,
     quitting: bool,
+    /// Whether the panel has been taken hold of, which is what lets the
+    /// arrows dive it. Spec 0112.
+    diving: bool,
     /// The fluted shaft every pedestal in the gallery is drawn with, which is
     /// one mesh because they are all the same one. Spec 0111.
     shaft: Option<MeshId>,
@@ -1403,6 +1406,7 @@ impl Arcade {
             }),
             cube: None,
             shaft: None,
+            diving: false,
             glass_targets: Vec::new(),
             dumped: false,
             pane: None,
@@ -1712,9 +1716,17 @@ impl Arcade {
             // a scrambled one. Spec 0105 leaves that where it was: what a
             // facelet adds is the hand, and the hand is on the arrows.
             Some(room::Seen::Cubie(_)) => self.puzzle.worked(),
-            // the panel: back to the top of the dive. Thirty four steps out
-            // is a long hold and nothing is learned on the way. Spec 0039.
-            Some(room::Seen::Mandel) => self.view = mandel::View::default(),
+            // the panel: take hold of it, or let it go. Spec 0112. Until
+            // you have, the arrows are the room's and not the dive's, which
+            // is what Jake asked for: they should just be motion in the room
+            // until the user wants them to interact with it.
+            //
+            // It reset the dive before this, which R already did and still
+            // does. Spec 0101 gave R that job on the grounds that Return
+            // already had it and a second key cost nothing; what cost
+            // something was the arrows, so Return has the hold and R has the
+            // reset, one key an idea.
+            Some(room::Seen::Mandel) => self.diving = !self.diving,
             Some(room::Seen::Cabinet(n)) => {
                 let stood = self.room.stood[n].clone();
                 if self.playing.start(&stood.cabinet) {
@@ -2409,7 +2421,12 @@ impl Arcade {
         // the one row of toys in the building that are not on a bench they
         // did not.
         let turning_a_shape = self.spin.holding().is_some();
-        let diving = self.seen == Some(room::Seen::Mandel);
+        // **Taken hold of, and still looked at.** Spec 0112. The mode is
+        // what says the arrows are the dive's; the sight is what says you
+        // can see what they are doing. Walking off while holding it would
+        // otherwise leave the arrows diving a wall behind you, which is the
+        // stranding this was meant to stop rather than move.
+        let diving = self.diving && self.seen == Some(room::Seen::Mandel);
         let (turn, tilt) = if turning_a_shape {
             self.moving_the_view = false;
             let across = self.forward().cross(Vec3::Y);
@@ -9352,7 +9369,7 @@ impl Game for Arcade {
             // the panel: how far in you are, and nothing else. Spec 0039.
             (None, Some(room::Seen::Mandel)) => (
                 Some(String::from(mandel::NAME)),
-                Some(mandel::says(self.view)),
+                Some(mandel::says(self.view, self.diving)),
             ),
             // the book: what you have taken off the diagonal so far. Spec
             // the watchman, who keeps the threshold and lets you through.
@@ -14116,17 +14133,32 @@ mod tests {
     }
 
     /// Spec 0042: a staged route may not go on past a turn that was eaten.
+    /// Spec 0112: and the panel only eats one once you have taken hold.
     ///
     /// The route walks the gallery's centre line until the panel takes the
     /// sight, which is the thing that happened in October: the left arrow
     /// goes into the panel instead of turning, and the walk after it is
     /// aimed by a turn that never happened.
+    ///
+    /// **It took no key to get there until spec 0112.** Standing in front
+    /// of it was enough, which is what Jake asked to be rid of, so the first
+    /// of these is the modal gate and the second is the fault the checker is
+    /// for. Without the second this test would pass against a panel that had
+    /// stopped eating turns altogether, and the checker would be guarding
+    /// nothing.
     #[test]
     fn a_turn_the_panel_eats_is_a_fault_when_the_route_carries_on() {
+        let up = up_to_the_panel();
+
+        assert!(
+            walked(&format!("hold:w:{:.2} hold:left:0.655 hold:w:1.0", up)),
+            "the panel ate a turn from somebody who had not taken hold of it"
+        );
+
         assert!(
             !walked(&format!(
-                "hold:w:{:.2} hold:left:0.655 hold:w:1.0",
-                up_to_the_panel()
+                "hold:w:{:.2} hold:return:0.05 hold:left:0.655 hold:w:1.0",
+                up
             )),
             "a route whose turn was swallowed was let through"
         );
