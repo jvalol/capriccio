@@ -241,32 +241,37 @@ fn inside_its_reach(how_far: f32, reach: f32) -> f32 {
     how_far / (reach * reach).max(1e-6)
 }
 
-/// Whether the glass sphere is inside a lamp's reach, which is a question
-/// the eye's own frustum has no opinion about.
+/// Whether a lamp can light anything the glass sphere traces, which is a
+/// question the eye's own frustum has no opinion about.
 ///
-/// `traced` is where the ball is when it is being traced this frame, and
-/// `None` when it is not, so nothing off the ball's own list is kept for it
-/// while nobody is looking at it.
-fn the_ball_is_under(at: Vec3, reach: f32, traced: Option<Vec3>) -> bool {
-    traced.is_some_and(|ball| ball.distance(at) <= reach)
-}
-
-/// How deep inside a lamp's reach whatever can see it is: the eye, or the
-/// ball when the ball is being traced.
+/// **Its own reach plus what the sphere is given, not its reach alone.**
+/// The tracer spends the lamps twice: on the sphere's own skin, and on
+/// whatever a ray meets. A lamp 6.05 from the sphere with a reach of 4
+/// lights the skin not at all, the falloff cutting hard at the range, and
+/// lights the stair head the sphere reflects perfectly well. Asked only of
+/// the skin, the pair on the stair's newels was dropped the moment Jake
+/// stepped 1.26 further off and the reflected stair went dark with them.
 ///
-/// **Keeping a lamp is not enough on its own, and that is measured.** The
-/// note at the cull records what adding the mirrors' frustums did: the
-/// lamps kept went from 43 to 135 against a cap of 64 and the ranking threw
-/// the extra ninety away again, so not one pixel moved. A lamp kept for the
-/// ball has to be ranked for the ball too or it is dropped by the thing
-/// that decides what the cap loses.
-fn how_deep_inside(at: Vec3, from_eye: f32, reach: f32, traced: Option<Vec3>) -> f32 {
-    let mine = inside_its_reach(from_eye, reach);
+/// **The room the sphere stands in, grown by the lamp's own reach**, and
+/// not everything within `glass::SEES` of it. The sphere is given every box
+/// within 25 metres, which is most of the south half of the building: asked
+/// that way the cull kept 119 lamps where it had kept 18, and took the hall
+/// to 128, which is the engine's cap exactly. What the sphere shows is this
+/// room and what is through its openings, so a lamp that reaches into this
+/// room is one that can be seen in it.
+///
+/// `traced` is true only while the sphere is being traced, so nothing is
+/// kept for a sphere nobody is looking at.
+fn the_ball_can_use(room: &Aabb, at: Vec3, reach: f32, traced: bool) -> bool {
+    let grown = Aabb::new(room.min - Vec3::splat(reach), room.max + Vec3::splat(reach));
 
-    match traced {
-        Some(ball) => mine.min(inside_its_reach(ball.distance_squared(at), reach)),
-        None => mine,
-    }
+    traced
+        && at.x > grown.min.x
+        && at.x < grown.max.x
+        && at.y > grown.min.y
+        && at.y < grown.max.y
+        && at.z > grown.min.z
+        && at.z < grown.max.z
 }
 
 /// A tour of the building, walked rather than replayed. Spec 0049.
@@ -6652,6 +6657,27 @@ impl Arcade {
     /// wireframe at any angle is not available to it at all. So it is held
     /// at a fixed offset from the eye and turns slowly, which reads as an
     /// object in the hand rather than a diagram pinned to the window.
+    /// Whether the glass sphere is being traced this frame.
+    ///
+    /// **Three questions, because no one of them is enough**, which is the
+    /// reason `mirrors::draw`'s own note gives: the frustum knows nothing
+    /// about the walls in the way, the distance knows nothing about which
+    /// way you face, and neither knows you are outdoors.
+    ///
+    /// Named here rather than asked twice. The lamp cull keeps the lamps
+    /// that sphere needs, and a cull that disagreed with the drawing would
+    /// keep them while nobody was looking or drop them while somebody was:
+    /// asked as a distance alone it kept 119 lamps standing in the hall,
+    /// where the sphere is through a wall and a floor.
+    fn the_ball_is_traced(&self, camera: &Camera) -> bool {
+        let (middle, across) = glass::ball(self.room.reaches);
+        let eye = self.looking_from();
+
+        !self.room.out_of_doors(eye)
+            && eye.distance(middle) <= glass::SEES
+            && camera.frustum().holds_sphere(middle, across)
+    }
+
     fn draw_the_held_map(&mut self, scene: &mut Scene, camera: &Camera, cube: MeshId) {
         let Some(inside) = self.inside.as_ref() else {
             return;
@@ -9917,11 +9943,7 @@ impl Game for Arcade {
         // pass traces every box it is given for every pixel of the sphere,
         // so a ball nobody is looking at is a bill nobody asked for.
         {
-            let (middle, across) = glass::ball(self.room.reaches);
-            let eye = self.looking_from();
-            let seen = !self.room.out_of_doors(eye)
-                && eye.distance(middle) <= glass::SEES
-                && camera.frustum().holds_sphere(middle, across);
+            let seen = self.the_ball_is_traced(camera);
 
             glass::draw(
                 scene,
@@ -13433,11 +13455,11 @@ impl Game for Arcade {
         // and left out. The ball is one place and is traced from its own
         // middle, so it costs the lamps within reach of one point.
         let seen = camera.frustum();
-        let ball = glass::ball(self.room.reaches).0;
-        let traced = (eye.distance(ball) <= glass::SEES).then_some(ball);
+        let aloft = glass::inside(self.room.reaches);
+        let traced = self.the_ball_is_traced(camera);
 
         shades.retain(|(_, at, _, _, reach)| {
-            seen.holds_sphere(*at, *reach) || the_ball_is_under(*at, *reach, traced)
+            seen.holds_sphere(*at, *reach) || the_ball_can_use(&aloft, *at, *reach, traced)
         });
         // deepest inside its own reach first, so what the engine drops when a
         // building outgrows it is the lamp that could not have lit you
@@ -13446,8 +13468,7 @@ impl Game for Arcade {
         // the nook's walls took six of those whether or not you were standing
         // in the nook. Spec 0020 of the engine.
         shades.sort_by(|one, other| {
-            how_deep_inside(one.1, one.0, one.4, traced)
-                .total_cmp(&how_deep_inside(other.1, other.0, other.4, traced))
+            inside_its_reach(one.0, one.4).total_cmp(&inside_its_reach(other.0, other.4))
         });
 
         // the casters first, so that what the engine drops when a building
@@ -18967,52 +18988,42 @@ mod tests {
     /// tenths of a metre along, the two extra entering as the frustum swept
     /// over them, with nothing in the room moved.
     ///
-    /// Both halves, because keeping alone is measured not to be enough: the
-    /// note at the cull records the mirrors' frustums taking the lamps from
-    /// 43 to 135 against a cap of 64 and the ranking throwing the extra
-    /// ninety away again.
+    /// Keeping only, with no ranking of its own: the note at the cull warns
+    /// that keeping without ranking bought nothing when the mirrors'
+    /// frustums were tried, but that was against a cap of 64 and the engine
+    /// carries 128 now. A ranking that knows about the sphere is a thing to
+    /// build when a measurement asks for one.
     #[test]
-    fn a_lamp_the_ball_can_see_is_kept_and_ranked_for_it() {
+    fn a_lamp_the_ball_can_use_is_kept_whatever_the_eye_sees() {
         let room = room::Room::of(crate::games());
-        let ball = glass::ball(room.reaches).0;
+        let aloft = glass::inside(room.reaches);
         let reach = glass::LAMP_RANGE;
-        // one lamp just inside the ball's reach of it and one just outside,
-        // both of them a long way from any eye
-        let under = ball + Vec3::X * (reach - 0.2);
-        let past = ball + Vec3::X * (reach + 0.2);
+        // one lamp just inside the room the sphere stands in, grown by its
+        // own reach, and one just outside it
+        let under = vec3(
+            aloft.max.x + reach - 0.2,
+            aloft.center().y,
+            aloft.center().z,
+        );
+        let past = vec3(
+            aloft.max.x + reach + 0.2,
+            aloft.center().y,
+            aloft.center().z,
+        );
 
         assert!(
-            the_ball_is_under(under, reach, Some(ball)),
-            "a lamp {:.2} from the ball, reaching {:.2}, is not kept for it",
-            ball.distance(under),
+            the_ball_can_use(&aloft, under, reach, true),
+            "a lamp {:.2} past the room's east wall, reaching {:.2}, is not kept for the sphere",
+            under.x - aloft.max.x,
             reach
         );
         assert!(
-            !the_ball_is_under(past, reach, Some(ball)),
-            "a lamp past its own reach of the ball is kept for it"
+            !the_ball_can_use(&aloft, past, reach, true),
+            "a lamp that cannot reach anything the ball traces is kept for it"
         );
         assert!(
-            !the_ball_is_under(under, reach, None),
+            !the_ball_can_use(&aloft, under, reach, false),
             "a lamp is kept for a ball nobody is tracing"
-        );
-
-        // and it ranks by whichever viewer is deepest inside it, so the cap
-        // keeps it over a lamp neither of them is under
-        let far_from_the_eye = 400.0;
-        let mine = how_deep_inside(under, far_from_the_eye, reach, Some(ball));
-        let theirs = how_deep_inside(past, far_from_the_eye, reach, Some(ball));
-
-        assert!(
-            mine < theirs,
-            "the lamp the ball is under ranks {:.3} and the one it is not \
-             ranks {:.3}, so the cap would drop the wrong one",
-            mine,
-            theirs
-        );
-        assert_eq!(
-            how_deep_inside(under, far_from_the_eye, reach, None),
-            inside_its_reach(far_from_the_eye, reach),
-            "with nothing traced the ranking is the eye's own"
         );
     }
 
