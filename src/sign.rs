@@ -81,6 +81,102 @@ pub fn at(reaches: f32) -> Vec3 {
     glam::vec3(0.0, HANGS, -reaches + crate::room::END)
 }
 
+/// One plank: what it says, where it hangs, and which way its point looks.
+///
+/// `points` is minus one for a point cut to the left, plus one for the right
+/// and nought for a plank with no point at all. A room you walk straight on
+/// into does not want an arrow: the point is the whole of the direction, and
+/// a direction of "onward" is the one an arrow cannot draw.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Plank {
+    pub says: &'static str,
+    pub at: Vec3,
+    pub points: f32,
+}
+
+/// What the other two say. Spec 0113.
+pub const GARDEN: &str = "GARDEN";
+pub const GALLERY: &str = "GALLERY";
+
+/// How low the gallery's plank hangs, against the other two.
+///
+/// **Because two planks at one height on one line are one plank.** Spec
+/// 0113: the nook's hangs over the middle of the aisle and so did this, and
+/// from the whole length of the hall the nearer covered the farther exactly.
+/// Jake, shown it: hang the gallery lower.
+///
+/// It cannot clear the nook's altogether. The nook's reaches down to 2.06
+/// and anything whose top is under that hangs at 1.78, which is a plank you
+/// walk into. This is as low as it goes with a head's room under it, and
+/// what it buys is the lower edge showing below the nearer plank rather
+/// than the whole of it.
+pub const GALLERY_HANGS: f32 = 2.10;
+
+/// How far short of the hall's far end the gallery's plank hangs.
+///
+/// Inside the hall rather than in the gallery, for the nook's own reason one
+/// room along: a sign in the room it names is read by somebody already
+/// standing in it. It is also what keeps one ceiling over all three, since
+/// the chains are cut to `room::soffit` and the gallery's is not that.
+pub const BEFORE_THE_GALLERY: f32 = 0.5;
+
+/// Every plank hung in the hall, in the order you meet them walking in.
+///
+/// **Only the ways that announce themselves.** Spec 0113: the cellar is
+/// behind the bookcase that swings, the mirrors behind the other one, and
+/// the room behind the wall is called that for a reason. A sign over any of
+/// those is the secret given away by the building itself, so the three that
+/// are found stay found and the two that are open get a plank.
+pub fn planks(reaches: f32) -> Vec<Plank> {
+    vec![
+        Plank {
+            says: SAYS,
+            at: at(reaches),
+            points: -1.0,
+        },
+        Plank {
+            says: GALLERY,
+            at: glam::vec3(0.0, GALLERY_HANGS, -reaches + BEFORE_THE_GALLERY),
+            points: 0.0,
+        },
+    ]
+}
+
+/// The garden's name, on the hall's wall beside its way in rather than on a
+/// plank over the aisle.
+///
+/// **Because that opening has no head to hang a name over.** Spec 0113: the
+/// garden's lintel was taken out on purpose and the opening stops at the
+/// hall's own ceiling, so there is no wall above it and a plank hung at its
+/// own z lands among the entrance's neon with its blank back to you.
+///
+/// Beside it, on the aisle side of the wall, which is the baths' own pattern
+/// one room along. Jake, shown the plank: the wall pattern for the garden.
+///
+/// Comes back as the middle of the board and how big it is. The board's face
+/// looks into the hall along +x, since the wall it is on is the left one.
+pub fn garden_board(reaches: f32) -> (Vec3, Vec3) {
+    let way = crate::garden::way(reaches);
+    let wall = crate::garden::wall_at();
+
+    (
+        glam::vec3(
+            wall + BOARD_OUT * 0.5 + crate::room::THICK * 0.5,
+            BOARD_UP,
+            way.0 - BOARD_OFF - BOARD_WIDE * 0.5,
+        ),
+        glam::vec3(BOARD_OUT, BOARD_TALL, BOARD_WIDE),
+    )
+}
+
+/// How big the garden's board is, how far it stands off the wall, how far
+/// along from the opening it sits and how high its middle is.
+pub const BOARD_WIDE: f32 = 1.5;
+pub const BOARD_TALL: f32 = 0.46;
+pub const BOARD_OUT: f32 = 0.05;
+pub const BOARD_OFF: f32 = 0.18;
+pub const BOARD_UP: f32 = 2.05;
+
 /// How many links it takes to reach the ceiling from the top of the plank.
 pub fn links(ceiling: f32) -> usize {
     let gap = ceiling - (HANGS + TALL * 0.5);
@@ -245,5 +341,83 @@ mod tests {
         assert_eq!(out, -1.0, "the wedge does not come to a point");
         // the nook is behind the left wall, which is -x
         assert!(at(9.4).x - WIDE * 0.5 > -(crate::room::WALL + crate::room::CABINET.x));
+    }
+
+    /// Spec 0113: every plank clears a head and hangs under the ceiling, the
+    /// gallery's hangs below the nook's, and the garden's board is beside
+    /// its opening rather than over it.
+    ///
+    /// **The second of those is the whole of what Jake sent back.** Two
+    /// planks over the middle of one aisle at one height are one plank from
+    /// anywhere along it, and the farther was the one nobody could see.
+    ///
+    /// **And the third is why the garden has a board at all.** That opening
+    /// stops at the hall's own ceiling, so there is no head to hang a name
+    /// over: a board that overlapped it would be hanging in the doorway.
+    #[test]
+    fn every_sign_clears_a_head_and_none_hides_another() {
+        let reaches = 9.5;
+        let planks = planks(reaches);
+        let soffit = crate::room::soffit();
+
+        // 1.7 is a body, and a plank you walk into is worse than no plank
+        for plank in planks.iter() {
+            let under = plank.at.y - TALL * 0.5;
+
+            assert!(
+                under > 1.7,
+                "{} hangs at {:.2}, which is a plank you walk into",
+                plank.says,
+                under
+            );
+            assert!(
+                plank.at.y + TALL * 0.5 < soffit,
+                "{} hangs through the ceiling",
+                plank.says
+            );
+        }
+
+        let nook = planks
+            .iter()
+            .find(|plank| plank.says == SAYS)
+            .expect("the nook's plank");
+        let gallery = planks
+            .iter()
+            .find(|plank| plank.says == GALLERY)
+            .expect("the gallery's plank");
+
+        assert!(
+            gallery.at.y < nook.at.y,
+            "the gallery's plank hangs at {} and the nook's at {}, so the \
+             nearer hides the farther",
+            gallery.at.y,
+            nook.at.y
+        );
+
+        // and they are on the same line down the aisle, which is what makes
+        // the height the only thing separating them
+        assert!(
+            (gallery.at.x - nook.at.x).abs() < 1e-4,
+            "they are not over the same line, so this test is checking nothing"
+        );
+
+        // the garden's board: on the wall, and clear of the way through it
+        let (at, size) = garden_board(reaches);
+        let way = crate::garden::way(reaches);
+        let (near, far) = (at.z - size.z * 0.5, at.z + size.z * 0.5);
+
+        assert!(
+            far < way.0 || near > way.1,
+            "the board runs {:.2} to {:.2} and the opening {:.2} to {:.2}, so \
+             it is hanging in the doorway",
+            near,
+            far,
+            way.0,
+            way.1
+        );
+        assert!(
+            at.x < 0.0 && at.x > crate::garden::wall_at(),
+            "the board is not on the hall's side of its own wall"
+        );
     }
 }

@@ -762,7 +762,10 @@ struct Arcade {
     stirred: f32,
     /// How full of steam the sauna is, from nought to one. Spec 0008.
     steamy: f32,
-    says: Option<TextureId>,
+    /// The lettering for each plank, in `sign::planks`' own order. Spec 0113.
+    says: Vec<Option<TextureId>>,
+    /// And the garden's, which is on a wall rather than a plank. Spec 0113.
+    garden_says: Option<TextureId>,
     /// The room's own name, for the neon over the near end of the aisle.
     named: Option<TextureId>,
     /// And the baths', for the tiled panel over their door. Spec 0008.
@@ -1418,7 +1421,8 @@ impl Arcade {
             thundered: None,
             rug: None,
             rug_mesh: None,
-            says: None,
+            says: Vec::new(),
+            garden_says: None,
             named: None,
             baths: None,
             point_mesh: None,
@@ -8657,7 +8661,14 @@ impl Game for Arcade {
             .collect();
         self.stave =
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
-        self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
+        self.garden_says =
+            Some(renderer.add_texture(&blitzkit::text::drawn(sign::GARDEN, sign::TEXELS)));
+        self.says = sign::planks(self.room.reaches)
+            .into_iter()
+            .map(|plank| {
+                Some(renderer.add_texture(&blitzkit::text::drawn(plank.says, sign::TEXELS)))
+            })
+            .collect();
 
         // and the eight things the tesseract's rooms hold, in `Thing::ALL`
         // order. Five come from the shape library the nook already draws
@@ -10340,88 +10351,119 @@ impl Game for Arcade {
         // the sign hung over the aisle, which is the only thing in the hall
         // that says the nook is there at all. Spec 0006.
         if let (Some(hung), Some(point)) = (self.hung, self.point_mesh) {
-            let at = sign::at(self.room.reaches);
-            // the gilt rim is the whole plank and the painted face stands proud
-            // of it, so the gold shows round the edge rather than being four
-            // more things to place
+            // one of these a way out, in the order you meet them. Spec 0113.
+            for (which, plank) in sign::planks(self.room.reaches).into_iter().enumerate() {
+                let at = plank.at;
+                // the gilt rim is the whole plank and the painted face stands proud
+                // of it, so the gold shows round the edge rather than being four
+                // more things to place
+                scene.push_plain(
+                    cube,
+                    &Transform::at(at).with_scale(vec3(sign::WIDE, sign::TALL, sign::THICK)),
+                    aim::SIGN_GILT,
+                );
+                scene.push_plain(
+                    cube,
+                    &Transform::at(at).with_scale(vec3(
+                        sign::WIDE - sign::BORDER * 2.0,
+                        sign::TALL - sign::BORDER * 2.0,
+                        sign::THICK + sign::PROUD,
+                    )),
+                    aim::SIGN_BOARD,
+                );
+
+                // the end cut to a point, which is the direction. The wedge runs
+                // out along its own -x, so a plank pointing that way needs no
+                // turning and one pointing the other is the same wedge scaled
+                // through nought. A plank with no point at all is a room you
+                // walk straight on into, which an arrow cannot say. Spec 0113.
+                if plank.points != 0.0 {
+                    scene.push_plain(
+                        point,
+                        &Transform::at(at + Vec3::X * plank.points * sign::WIDE * 0.5)
+                            .with_scale(vec3(sign::POINT * plank.points, sign::TALL, sign::THICK)),
+                        aim::SIGN_GILT,
+                    );
+                }
+
+                // the lettering, on both faces and reading forwards from both
+                let letters = Transform::at(at + Vec3::Z * (sign::THICK * 0.5 + sign::PROUD * 2.0))
+                    .with_rotation(glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2))
+                    .with_scale(vec3(0.02, sign::LETTERS, sign::WIDE - sign::BORDER * 4.0));
+
+                match self.says.get(which).copied().flatten() {
+                    Some(says) => scene.push_textured(hung, says, &letters, aim::SIGN_LETTERS, 8.0),
+                    None => scene.push_plain(hung, &letters, aim::SIGN_LETTERS),
+                }
+
+                // two chains to the ceiling, each link turned across the one under
+                // it, which is what makes a stack of blocks read as a chain
+                let links = sign::links(room::soffit());
+                for side in [-1.0f32, 1.0] {
+                    let foot = at + Vec3::X * side * sign::CHAIN_AT + Vec3::Y * sign::TALL * 0.5;
+
+                    for n in 0..links {
+                        let turn = glam::Quat::from_rotation_y(if n % 2 == 0 {
+                            0.0
+                        } else {
+                            std::f32::consts::FRAC_PI_2
+                        });
+
+                        scene.push_plain(
+                            cube,
+                            &Transform::at(foot + Vec3::Y * (n as f32 + 0.5) * sign::LINK)
+                                .with_rotation(turn)
+                                .with_scale(vec3(sign::RING, sign::LINK, sign::LINK * 0.62)),
+                            aim::SIGN_CHAIN,
+                        );
+                    }
+                }
+
+                // and the pendant over it, which is why you can read it
+                let shade = at + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP);
+                scene.push_fitting(
+                    cube,
+                    &Transform::at(shade).with_scale(sign::SHADE),
+                    aim::fitting(sign::LAMP_COLOUR, sign::LAMP_LIT),
+                );
+                let stem = (room::soffit() + shade.y + sign::SHADE.y * 0.5) * 0.5;
+                scene.push_plain(
+                    cube,
+                    &Transform::at(vec3(shade.x, stem, shade.z)).with_scale(vec3(
+                        0.016,
+                        room::soffit() - shade.y - sign::SHADE.y * 0.5,
+                        0.016,
+                    )),
+                    aim::SIGN_CHAIN,
+                );
+            }
+        }
+
+        // the garden's name, on the wall beside its way in. That opening has
+        // no head to hang a plank over, so this is the baths' pattern one
+        // room along: a board on the side you walk past. Spec 0113.
+        if let Some(hung) = self.hung {
+            let (at, size) = sign::garden_board(self.room.reaches);
+
+            scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::SIGN_GILT);
             scene.push_plain(
                 cube,
-                &Transform::at(at).with_scale(vec3(sign::WIDE, sign::TALL, sign::THICK)),
-                aim::SIGN_GILT,
-            );
-            scene.push_plain(
-                cube,
-                &Transform::at(at).with_scale(vec3(
-                    sign::WIDE - sign::BORDER * 2.0,
-                    sign::TALL - sign::BORDER * 2.0,
-                    sign::THICK + sign::PROUD,
+                &Transform::at(at + Vec3::X * sign::PROUD).with_scale(vec3(
+                    size.x + sign::PROUD,
+                    size.y - sign::BORDER * 2.0,
+                    size.z - sign::BORDER * 2.0,
                 )),
                 aim::SIGN_BOARD,
             );
 
-            // the end cut to a point, which is the direction. The wedge runs
-            // out along its own -x, so it needs no turning: the nook is that
-            // way from here.
-            scene.push_plain(
-                point,
-                &Transform::at(at - Vec3::X * sign::WIDE * 0.5).with_scale(vec3(
-                    sign::POINT,
-                    sign::TALL,
-                    sign::THICK,
-                )),
-                aim::SIGN_GILT,
-            );
+            // the lettering, facing into the hall along +x
+            let letters = Transform::at(at + Vec3::X * (size.x * 0.5 + sign::PROUD * 2.0))
+                .with_scale(vec3(0.02, sign::LETTERS, size.z - sign::BORDER * 4.0));
 
-            // the lettering, on both faces and reading forwards from both
-            let letters = Transform::at(at + Vec3::Z * (sign::THICK * 0.5 + sign::PROUD * 2.0))
-                .with_rotation(glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2))
-                .with_scale(vec3(0.02, sign::LETTERS, sign::WIDE - sign::BORDER * 4.0));
-
-            match self.says {
+            match self.garden_says {
                 Some(says) => scene.push_textured(hung, says, &letters, aim::SIGN_LETTERS, 8.0),
                 None => scene.push_plain(hung, &letters, aim::SIGN_LETTERS),
             }
-
-            // two chains to the ceiling, each link turned across the one under
-            // it, which is what makes a stack of blocks read as a chain
-            let links = sign::links(room::soffit());
-            for side in [-1.0f32, 1.0] {
-                let foot = at + Vec3::X * side * sign::CHAIN_AT + Vec3::Y * sign::TALL * 0.5;
-
-                for n in 0..links {
-                    let turn = glam::Quat::from_rotation_y(if n % 2 == 0 {
-                        0.0
-                    } else {
-                        std::f32::consts::FRAC_PI_2
-                    });
-
-                    scene.push_plain(
-                        cube,
-                        &Transform::at(foot + Vec3::Y * (n as f32 + 0.5) * sign::LINK)
-                            .with_rotation(turn)
-                            .with_scale(vec3(sign::RING, sign::LINK, sign::LINK * 0.62)),
-                        aim::SIGN_CHAIN,
-                    );
-                }
-            }
-
-            // and the pendant over it, which is why you can read it
-            let shade = at + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP);
-            scene.push_fitting(
-                cube,
-                &Transform::at(shade).with_scale(sign::SHADE),
-                aim::fitting(sign::LAMP_COLOUR, sign::LAMP_LIT),
-            );
-            let stem = (room::soffit() + shade.y + sign::SHADE.y * 0.5) * 0.5;
-            scene.push_plain(
-                cube,
-                &Transform::at(vec3(shade.x, stem, shade.z)).with_scale(vec3(
-                    0.016,
-                    room::soffit() - shade.y - sign::SHADE.y * 0.5,
-                    0.016,
-                )),
-                aim::SIGN_CHAIN,
-            );
         }
 
         // the room's own sign, hung over the near end of the aisle, which is
