@@ -17,7 +17,7 @@
 
 use blitzkit::collision::Aabb;
 use blitzkit::mesh::Transform;
-use blitzkit::renderer::scene::{MeshId, Scene, Traced};
+use blitzkit::renderer::scene::{MeshId, Scene};
 use glam::{vec3, Vec3};
 
 use crate::room::{self, THICK};
@@ -1039,50 +1039,6 @@ pub fn the_wing(reaches: f32) -> Aabb {
 /// twenty-five metres reaches both with room to spare.
 pub const SEES: f32 = 25.0;
 
-/// What the glass is given to trace: the building's own boxes, near enough
-/// to be worth it.
-///
-/// **`solid` and `lids` and not a list of its own.** Every room here is a
-/// list of axis-aligned boxes because that is what `walk` needs, and that is
-/// already the scene a tracer wants. A second account of the room would be
-/// the fault this building has written down under five other names, and it
-/// would be the one that shows: the glass would stop agreeing with the room
-/// round it the first time a wall moved.
-pub fn traced(room: &crate::room::Room, since: f32) -> Vec<Traced> {
-    let (ball, _) = ball(room.reaches);
-    let mut out = Vec::new();
-
-    // **The glazing is not in here**, and that is the point of a slot: a ray
-    // that leaves through one meets nothing and comes back as the room's
-    // ambient, which is what a window looks like from inside a marble. The
-    // list stays exactly `solid` and `lids`, which
-    // `it_traces_the_building_itself` holds.
-    let named = named(room.reaches);
-    let round: Vec<Aabb> = column_boxes(room.reaches)
-        .into_iter()
-        .filter(|(_, round)| *round)
-        .map(|(box_, _)| box_)
-        .collect();
-
-    for box_ in room.solid().into_iter().chain(room.lids()) {
-        if box_.center().distance(ball) > SEES {
-            continue;
-        }
-
-        let said = colour(box_, &named, ball.y, since);
-
-        // **The colonnade is turned and the glass can say so now**, per the
-        // engine's spec 0098. What a body walks into is still the box.
-        out.push(if round.contains(&box_) {
-            Traced::round(box_, said)
-        } else {
-            Traced::new(box_, said)
-        });
-    }
-
-    out
-}
-
 /// What colour a box of the building is, asked once for the room and for the
 /// glass both.
 ///
@@ -1951,7 +1907,6 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
     };
     let (middle, across) = ball(reaches);
 
-    scene.traces(&traced(room, since));
     scene.lens(
         sphere,
         &Transform::at(middle).with_scale(Vec3::splat(across * 2.0)),
@@ -2055,37 +2010,6 @@ mod tests {
         at
     }
 
-    /// What the glass is given is the building's own boxes.
-    ///
-    /// **The claim is that there is no second account.** Every box the
-    /// tracer sees has to be one `solid` or `lids` already held, because the
-    /// day the two come apart is the day the room inside the ball stops
-    /// being the room round it, and nothing but an eye would notice.
-    #[test]
-    fn it_traces_the_building_itself() {
-        let room = crate::room::Room::of(crate::games());
-        let mine: Vec<Aabb> = room.solid().into_iter().chain(room.lids()).collect();
-        let traced = traced(&room, 0.0);
-
-        assert!(!traced.is_empty(), "the glass is given nothing to trace");
-
-        for one in traced.iter() {
-            let box_ = Aabb::new(
-                vec3(one.least[0], one.least[1], one.least[2]),
-                vec3(one.most[0], one.most[1], one.most[2]),
-            );
-
-            assert!(
-                mine.iter().any(|held| {
-                    held.min.distance(box_.min) < 1e-3 && held.max.distance(box_.max) < 1e-3
-                }),
-                "the glass traces {:?} to {:?}, which the building does not hold",
-                box_.min,
-                box_.max
-            );
-        }
-    }
-
     /// And a ray that leaves the glass and meets nothing comes back as the
     /// room's own ambient rather than as a hole.
     ///
@@ -2107,33 +2031,6 @@ mod tests {
                 fill
             );
         }
-    }
-
-    /// What is behind you is in the ball, which is the claim this room is
-    /// for.
-    ///
-    /// Stood at either end of the walk, the wall at your back is in the list
-    /// the glass is given. A render to texture from a fixed plane, which is
-    /// what spec 0061's corridor does, cannot say that.
-    #[test]
-    fn the_room_behind_you_is_in_it() {
-        let reaches = reaches();
-        let room = inside(reaches);
-        let traced = traced(&crate::room::Room::of(crate::games()), 0.0);
-        let holds = |want: f32| {
-            traced.iter().any(|one| {
-                let near = one.least[2].min(one.most[2]);
-                let far = one.least[2].max(one.most[2]);
-
-                near <= want + 0.4 && far >= want - 0.4
-            })
-        };
-
-        assert!(holds(room.min.z), "the south end is not in the glass");
-        assert!(
-            holds(well(reaches).min.z),
-            "the north end is not in the glass"
-        );
     }
 
     /// Spec 0064: the building's skin leaves the bays open.

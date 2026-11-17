@@ -253,10 +253,10 @@ fn inside_its_reach(how_far: f32, reach: f32) -> f32 {
 /// stepped 1.26 further off and the reflected stair went dark with them.
 ///
 /// **The room the sphere stands in, grown by the lamp's own reach**, and
-/// not everything within `glass::SEES` of it. The sphere is given every box
-/// within 25 metres, which is most of the south half of the building: asked
-/// that way the cull kept 119 lamps where it had kept 18, and took the hall
-/// to 128, which is the engine's cap exactly. What the sphere shows is this
+/// not everything within `glass::SEES` of it. The sphere can see the whole
+/// of what the frame draws, which is most of the building: asked that way
+/// the cull kept 119 lamps where it had kept 18, and took the hall to 128,
+/// which is the engine's cap exactly. What the sphere shows is this
 /// room and what is through its openings, so a lamp that reaches into this
 /// room is one that can be seen in it.
 ///
