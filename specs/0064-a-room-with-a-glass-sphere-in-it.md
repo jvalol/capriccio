@@ -600,9 +600,7 @@ window. It sat behind the lamp panel and so was never seen.
 
 ## Acceptance criteria
 
-- The sphere traces the room's own boxes, and the list it is given is `solid` plus `lids` rather than a second account of the building. — `glass::tests::it_traces_the_building_itself`
 - A ray that leaves the sphere and hits nothing comes back as the room's ambient rather than as black. — `glass::tests::a_ray_that_hits_nothing_is_not_a_hole`
-- What is behind the eye is in the sphere, which is the claim this room is for. — `glass::tests::the_room_behind_you_is_in_it`
 - The plinth stands in the middle of the room's length, within a tread of it, and not against either end. — `glass::tests::the_sphere_has_length_behind_it_either_way`
 - The frames run the room's length at the corridor's own pitch, so the cone finds something different at every angle. — `glass::tests::the_room_is_a_colonnade`
 - You can walk its length and all the way round the plinth with the passage this project has settled on. — `glass::tests::you_can_walk_round_it`
@@ -614,6 +612,19 @@ window. It sat behind the lamp panel and so was never seen.
 - The building's skin leaves the bays open rather than plastering over them. — `glass::tests::the_skin_leaves_the_bays_open`
 - And the glazing stands in the opening rather than proud of the skin. — `glass::tests::the_glazing_is_in_the_opening`
 - Every part of the nook's open floor has a lamp on it. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
+
+**And two more went the same day, with the boxes they were about.** The
+sphere was handed `solid` plus `lids` and traced that list, and the engine
+traces the meshes the room actually draws now, per its own spec 0107. So
+`it_traces_the_building_itself` and `the_room_behind_you_is_in_it` went with
+the list they asked about, and neither claim is gone: the first is now the
+engine's to hold, and the second is the reason this room exists and is what
+`tests::the_glass_room_is_drawn` shows.
+
+Neither is written back as a citation, because what holds the first is a
+test in the engine and ./check-specs builds each repo's list of tests with
+`cargo metadata --no-deps`. A game cannot cite the engine, and a citation
+that cannot resolve reads as a dead one on every run.
 
 **Three of these moved on 2026-11-17 and one went.** Spec 0114 took this
 room off the nook's ceiling and put it in a wing of its own, so the stair
