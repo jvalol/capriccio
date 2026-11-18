@@ -674,6 +674,7 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         if crate::village::shades(reaches, at)
             || crate::village::along_the_path(reaches, at)
             || crate::bridge::banked(reaches, at)
+            || crate::bridge::on_the_ledger(reaches, at)
         {
             continue;
         }

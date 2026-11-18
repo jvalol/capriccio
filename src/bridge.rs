@@ -292,7 +292,18 @@ pub fn alight(since: f32) -> glam::Vec4 {
 /// lantern, and the thing to light is the stone it is cut in and a
 /// little of the rubble at its foot.
 pub const LAMP_OUT: f32 = 0.26;
-pub const LAMP_RANGE: f32 = 5.0;
+/// **Shortened from five, because five lit the heap.** Jake, with a
+/// recording: there is banding from the lights. The face is 0.26 off the
+/// lamp and the rubble is one to three metres out, and at a range of five
+/// those stones took enough of it to matter: `garden::rock_mesh` is
+/// faceted on purpose, so a facet turned toward a near point light flares
+/// while the one beside it stays dark, and the heap came out in hard
+/// orange patches that moved as the lamp pulsed.
+///
+/// A range that falls off inside the heap keeps what the note above asks
+/// for, which is the stone it is cut in and a little of the rubble, and
+/// not the heap picked out stone by stone.
+pub const LAMP_RANGE: f32 = 1.8;
 pub const LAMP_LIT: f32 = 0.42;
 
 /// Where that light stands, what colour it is, how hard and how far,
@@ -345,11 +356,15 @@ const RUNES: [&[(f32, f32, f32, f32)]; 7] = [
     ],
     // iss, i
     &[(0.5, 0.0, 0.5, 1.0)],
-    // fe, f
+    // fe, f. **Its branches rise and oss's fall, which is the whole of
+    // what tells the two apart.** Both were drawn falling: a stave with
+    // two branches angling down to the right, a few hundredths of a
+    // square apart, so the name read b i f r f s t. Jake, 2026-11-18, of
+    // the fifth rune: it looks like an f. It was one.
     &[
         (0.3, 0.0, 0.3, 1.0),
-        (0.3, 0.86, 0.74, 0.62),
-        (0.3, 0.58, 0.74, 0.34),
+        (0.3, 0.62, 0.74, 0.86),
+        (0.3, 0.34, 0.74, 0.58),
     ],
     // reid, r
     &[
@@ -358,7 +373,7 @@ const RUNES: [&[(f32, f32, f32, f32)]; 7] = [
         (0.72, 0.8, 0.3, 0.56),
         (0.34, 0.52, 0.74, 0.05),
     ],
-    // oss, o
+    // oss, o, which is fe turned over
     &[
         (0.3, 0.0, 0.3, 1.0),
         (0.3, 0.9, 0.72, 0.68),
@@ -704,15 +719,17 @@ pub type Cut = ((f32, f32), (f32, f32), f32);
 /// So this is the lines, once, and both the picture and the cut bars are
 /// stood along them.
 /// `room` is how much of the face to clear at the foot, which the whole
-/// column rises by. Spec 0118: the serpent pulls its tail up when the
-/// building has something to say, and puts it back down when there is
-/// nothing left to say.
+/// column rises by.
 ///
-/// **The whole column and not the tail alone.** The uprights run to 0.065
-/// and the lowest rune's foot is at 0.085, so a tail pulled up on its own
-/// leaves runes hanging outside the ribbon they are written in. What pays
-/// for the lift is the headroom over the apex, which is the one part of
-/// this face that was empty.
+/// **Nought everywhere, and kept because it was earned.** Spec 0118 cut
+/// what the building is still holding into this face and the serpent
+/// pulled its tail up to make room: the whole column and not the tail
+/// alone, the uprights running to 0.065 with the lowest rune's foot at
+/// 0.085, so a tail lifted on its own leaves runes hanging outside the
+/// ribbon they are written in. The line moved off this panel onto its own
+/// band of stone below, that panel being 0.6 metres wide and a sentence
+/// needing more, so nothing asks for room now. The parameter stays
+/// because the next thing to want room will want it the same way.
 pub fn strokes(room: f32) -> Vec<Cut> {
     // **The ribbon's own numbers, not the runes'.** Its top used to be
     // `far`, which was also its width, and the two agreed only because
@@ -793,7 +810,7 @@ pub fn strokes(room: f32) -> Vec<Cut> {
 /// the name's own block was written inline: a second copy of it would be
 /// two ways of laying type on one stone, which is the fault this project
 /// keeps finding in a new costume.
-fn cut_in(pixels: &mut [u8], n: u32, says: &str, tall: f32, foot: f32) {
+fn cut_in(pixels: &mut [u8], wide: u32, high: u32, says: &str, tall: f32, foot: f32, stretch: f32) {
     let said = blitzkit::text::stencilled(says, RUNE_TEXELS);
     let (was_wide, was_tall) = (said.width() as f32, said.height() as f32);
     // **Sized by its height, not its width.** It was laid out to a
@@ -803,15 +820,25 @@ fn cut_in(pixels: &mut [u8], n: u32, says: &str, tall: f32, foot: f32) {
     // string went from twenty one characters to seven, and the block
     // trebled in height and ran up into the rune ribbon. A cap height
     // is the thing that should not move when the words change.
-    let want = (n as f32 * tall * was_wide / was_tall, n as f32 * tall);
+    // **Drawn wider than it should be, to arrive the right shape.** The
+    // patch this is laid on is about twice as tall as it is wide, so a
+    // square picture is squeezed by two across and every letter with it:
+    // the O in the name lost its bowl until its two uprights merged and
+    // Jake read it as an F. The runes have compensated for this since they
+    // went in, their own note saying a rune is written twice as wide here
+    // to arrive twice as high as it is wide out there; the Latin never did.
+    let want = (
+        high as f32 * tall * stretch * was_wide / was_tall,
+        high as f32 * tall,
+    );
     // **And taken down when it is too wide for the face.** A cap height
     // that does not move is right for a name of one word and wrong for a
     // sentence: spec 0118's lines run to sixty characters, and a long one
     // set at the name's own height would run off both edges of the stone.
-    let room = n as f32 * CUT_WIDE;
+    let room = wide as f32 * CUT_WIDE;
     let shrink = (room / want.0).min(1.0);
     let want = (want.0 * shrink, want.1 * shrink);
-    let (at_x, at_y) = ((n as f32 - want.0) * 0.5, n as f32 * foot);
+    let (at_x, at_y) = ((wide as f32 - want.0) * 0.5, high as f32 * foot);
 
     for down in 0..want.1 as u32 {
         for across in 0..want.0 as u32 {
@@ -839,9 +866,9 @@ fn cut_in(pixels: &mut [u8], n: u32, says: &str, tall: f32, foot: f32) {
             // letter over.
             let (to_x, to_y) = (
                 at_x as u32 + across,
-                n.saturating_sub(at_y as u32 + want.1 as u32) + down,
+                high.saturating_sub(at_y as u32 + want.1 as u32) + down,
             );
-            let at = ((to_y.min(n - 1) * n + to_x.min(n - 1)) * 4) as usize;
+            let at = ((to_y.min(high - 1) * wide + to_x.min(wide - 1)) * 4) as usize;
 
             for c in 0..3 {
                 pixels[at + c] = 255;
@@ -854,23 +881,189 @@ fn cut_in(pixels: &mut [u8], n: u32, says: &str, tall: f32, foot: f32) {
 /// How much of the face across a cut line may use.
 pub const CUT_WIDE: f32 = 0.92;
 
-/// How much of the face the serpent lifts to make room for a line.
+/// How much taller than wide the dressed panel is, which is how much a
+/// square picture laid on it squeezes what is drawn.
 ///
-/// **Paid for out of the headroom over its apex**, which was the only
-/// empty part of this face: at 0.045 the apex goes to 0.99 and the band
-/// between the name's cap and the tail opens from seven thousandths to
-/// fifty two, which is room for a line and a margin either side of it.
-pub const HELD_ROOM: f32 = 0.045;
+/// Two, which is the same observation `strokes` records about the runes:
+/// the patch is about twice as tall as it is wide. Named here because two
+/// things now have to undo it.
+pub const FACE_SQUEEZE: f32 = 2.0;
 
 /// How tall spec 0118's line stands and how far up the face its foot is.
 ///
 /// **Smaller than the name and above it.** The name is what the stone is
 /// and does not change; this is what it happens to be saying today, and a
 /// sentence set as large as a title reads as the title.
-pub const HELD_TALL: f32 = 0.030;
-pub const HELD_FOOT: f32 = 0.068;
+/// **Asked for larger than it can have.** `cut_in` takes a line down to
+/// fit `CUT_WIDE` of the picture, and on a band this shape every one of
+/// spec 0118's lines is wider than it is tall: what sets the size is the
+/// number of characters, not this. It is written large so the short lines
+/// get everything the band will give them.
+pub const HELD_TALL: f32 = 0.60;
+/// **Near enough the middle of the slab.** It is a share of the picture's
+/// height and the picture is the slab's own shape, so what centres the
+/// line is a foot of about a half less half the block: at 0.22 the words
+/// sat on the near third of the stone with a hand's breadth of plain
+/// granite above them and none below.
+pub const HELD_FOOT: f32 = 0.40;
 
-pub fn carving(held: Option<&str>) -> blitzkit::texture::TextureData {
+/// Where the held line's own band of stone runs, and how far round the
+/// stone it takes.
+///
+/// **Its own patch of rock, under the dressed panel rather than on it.**
+/// The line was cut into the panel with the name, which is 1.22 metres
+/// tall and 0.6 wide: a square picture squeezed onto that halves every
+/// letter across, so forty five characters came out 3.7 centimetres tall
+/// and 1.1 wide and Jake could not read them from more than a few paces.
+/// Width is what binds, not height, and the panel had none to give.
+///
+/// This band is wider than the panel and short, and its picture is cut to
+/// the same shape, so the letters arrive the shape they were drawn. It is
+/// built from `stone_point` like the panel above it, so it is the rock
+/// rather than a plate on the rock, which is what spec 0054 spent a whole
+/// change learning.
+///
+/// Below the panel and clear of it, reading as something added to the
+/// stone rather than part of its making.
+/// The ledger stone at the runestone's foot: how far out from its middle
+/// it lies, how wide it is across the approach, how far it runs away from
+/// you, and how far it is tipped up to face somebody standing at it.
+///
+/// **Flat, because the stone is not.** Spec 0118 cut the held line into
+/// the lump itself and then into a band round it, and both failed the same
+/// way: to be big enough for a sentence the line has to run a fifth of the
+/// way round, and that far round the rock is turning away, so the line
+/// bends at both ends and the letters skew with the surface. Narrow it
+/// until it stays on the flat front and it is back to the panel's width.
+/// Jake, 2026-11-18, looking at the band: impossible to read. Then, asked
+/// where it should go: somewhere other than the stone, but still part of
+/// it.
+///
+/// A ledger laid in the footing is that. It is a real thing to find at the
+/// foot of a raised stone, it is as wide as the heap will take with no
+/// curve anywhere on it, and the line gets half as many characters per
+/// metre again as the band could give it.
+///
+/// Tipped up rather than laid flat, because a slab read from standing
+/// height at a pace away is seen at forty degrees and a tilt buys most of
+/// that back.
+pub const SLAB_OUT: f32 = 1.15;
+pub const SLAB_WIDE: f32 = 1.5;
+pub const SLAB_LONG: f32 = 0.62;
+/// **Propped rather than laid.** At a quarter turn it was near enough
+/// flat, and a face turned up at a noon sun takes the full of it: at an
+/// albedo of 0.25 it still came out paler than the heap beside it at
+/// 0.70, because the heap's slopes are turned away from the light. Stood
+/// up it takes less sun and faces the reader at once, and a slab propped
+/// against the foot of a raised stone is a thing that happens.
+pub const SLAB_TIPS: f32 = 0.78;
+
+/// How far the inscription stands off the slab it is cut into.
+///
+/// **Two faces in one plane is the fault this building has found eight
+/// times**, and a flat slab with a flat inscription on it is the easiest
+/// way yet to make a ninth. The same answer `FACE_PROUD` gives on the
+/// lump above: the words stand off the stone.
+pub const SLAB_PROUD: f32 = 0.004;
+
+/// How thick the ledger is.
+///
+/// **Because a slab with no sides is a smooth patch.** Laid as one face
+/// it was the same granite as the heap with no edge anywhere on it, so
+/// what you saw was words lying on the ground rather than words on a
+/// stone. A hand's thickness gives it four sides and a shadow under its
+/// lower edge, which is the whole of what says there is a stone there.
+pub const SLAB_THICK: f32 = 0.11;
+
+/// The ledger as a box: where its middle sits, how far it is tipped, and
+/// how big it is.
+///
+/// **A box and not a mesh of its own.** It is a cuboid, the building has
+/// a cube, and a sixth mesh of six quads would be six quads nobody needs.
+/// What it cannot be is the inscription as well, a cube's texture running
+/// nought to one on every face it has.
+pub fn slab_box() -> (Vec3, f32, Vec3) {
+    let (top, lean) = slab_at();
+    let up = vec3(-lean.sin(), lean.cos(), 0.0);
+
+    (
+        top - up * SLAB_THICK * 0.5,
+        lean,
+        vec3(SLAB_LONG, SLAB_THICK, SLAB_WIDE),
+    )
+}
+
+/// How wide its picture is, and how tall, which is that slab's own shape.
+pub const SAID_ACROSS: u32 = 1024;
+pub const SAID_DOWN: u32 = 424;
+
+/// The ledger stone, as the face you read.
+///
+/// Built flat and then tipped, and set into the heap rather than resting
+/// on it: a slab lying on a mound is a slab lying on a mound, which is
+/// what `rubble`'s own note says about pebbles on grass.
+/// **In metres about the stone's foot, like `mound_mesh`.** The panel and
+/// the band were both built in the stone's own unit space and drawn
+/// scaled by `size`; this is not, so it takes the transform the mound
+/// takes rather than the one the carving takes.
+pub fn said_mesh(proud: f32) -> blitzkit::mesh::MeshData {
+    let (at, lean) = slab_at();
+    let up = vec3(-lean.sin(), lean.cos(), 0.0) * proud;
+    let mut mesh = blitzkit::mesh::MeshData::surface(2, 2, |s, t| {
+        // **Both the way round they are, and neither by guess.** You read
+        // this standing east of the stone looking west, so screen right is
+        // `-z` and the picture's own row nought is its top, which has to
+        // land at the far edge. Written the other way the line came out
+        // turned through half a circle, which is the one thing a flat slab
+        // can get wrong.
+        let across = (0.5 - s) * SLAB_WIDE;
+        let along = (t - 0.5) * SLAB_LONG;
+
+        at + up + vec3(along * lean.cos(), along * lean.sin(), across)
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// Where the middle of the ledger sits, in the runestone's own terms, and
+/// how far it is tipped.
+///
+/// **Measured off the heap and not guessed.** `mound_high` says how high
+/// the footing stands a share of the way out, so the slab lies on the heap
+/// wherever the heap happens to be rather than at a number that goes stale
+/// the first time `RUBBLE_UP` moves.
+pub fn slab_at() -> (Vec3, f32) {
+    let share = SLAB_OUT / RUBBLE_OUT;
+    // its near edge rather than its middle, the heap falling away as it
+    // goes out: a slab set by its middle digs its far edge in
+    let on = mound_high(share - SLAB_LONG * 0.5 / RUBBLE_OUT);
+
+    (vec3(SLAB_OUT, on, 0.0), -SLAB_TIPS)
+}
+
+/// And what is cut into it, or nothing once every room has answered./// And what is cut into it, or nothing once every room has answered.
+pub fn said_cut(held: Option<&str>) -> blitzkit::texture::TextureData {
+    let mut pixels = vec![0u8; (SAID_ACROSS * SAID_DOWN * 4) as usize];
+
+    if let Some(line) = held {
+        // **No stretch here**, the picture already being cut to the band's
+        // own shape rather than square.
+        cut_in(
+            &mut pixels,
+            SAID_ACROSS,
+            SAID_DOWN,
+            line,
+            HELD_TALL,
+            HELD_FOOT,
+            1.0,
+        );
+    }
+
+    blitzkit::texture::TextureData::from_pixels(SAID_ACROSS, SAID_DOWN, pixels)
+}
+
+pub fn carving() -> blitzkit::texture::TextureData {
     let n = CARVED;
     let mut pixels = vec![0u8; (n * n * 4) as usize];
 
@@ -933,7 +1126,7 @@ pub fn carving(held: Option<&str>) -> blitzkit::texture::TextureData {
 
     // the band, round the face and open at the foot the way a serpent's
     // body leaves its own tail
-    for (from, to, thick) in strokes(if held.is_some() { HELD_ROOM } else { 0.0 }) {
+    for (from, to, thick) in strokes(0.0) {
         line(from, to, thick);
     }
 
@@ -941,18 +1134,30 @@ pub fn carving(held: Option<&str>) -> blitzkit::texture::TextureData {
     // picture rather than hung on a second quad. **One carved face.** A
     // separate plate for the Latin is the plate this whole change is
     // getting rid of.
-    cut_in(&mut pixels, n, SAYS, LATIN_TALL, LATIN_FOOT);
-
-    // **And what the building is still holding, inside the ribbon.** Spec
-    // 0118. Cut into this face rather than hung on a plate beside it,
-    // which is the plate spec 0054 spent a whole change getting rid of,
-    // and smaller than the name because the name is what the stone is and
-    // this is what it happens to be saying today.
-    if let Some(line) = held {
-        cut_in(&mut pixels, n, line, HELD_TALL, HELD_FOOT);
-    }
-
+    // **The ribbon is haloed and the name is not, and the order here is
+    // the whole of how.** `HALO_OUT` throws twenty four texels of glow
+    // round every cut, which is what the runes want: nothing their
+    // strokes enclose is small. The name's capitals are `LATIN_TALL` of
+    // the picture, so the hole inside an O is about six texels with
+    // strokes haloing inward from all four sides, and twenty four beats
+    // six: the counter floods and the O reads as an F. Jake saw that and
+    // I twice told him it was fixed.
+    //
+    // Cut after the halo rather than before it, so the name keeps its
+    // holes. What it gives up is a glow skirt of its own, which it can
+    // afford: it is the one thing on this face that is letters, and
+    // letters are read rather than looked at.
     halo(&mut pixels, n);
+
+    cut_in(
+        &mut pixels,
+        n,
+        n,
+        SAYS,
+        LATIN_TALL,
+        LATIN_FOOT,
+        FACE_SQUEEZE,
+    );
 
     blitzkit::texture::TextureData::from_pixels(n, n, pixels)
 }
@@ -1247,7 +1452,20 @@ pub fn rubble(reaches: f32, _trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
     let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
     let mut out = Vec::with_capacity(RUBBLE);
 
-    for _ in 0..RUBBLE {
+    let (slab, _) = slab_at();
+
+    // **Drawn again rather than dropped.** A piece that lands on the
+    // ledger is not thrown away: the heap is `RUBBLE` pieces and
+    // `the_rubble_banks_against_the_stone_and_thins_outward` says so,
+    // which is what catches a generator quietly making fewer. The bound
+    // is there because a roll that can never land clear would otherwise
+    // spin for ever, and it cannot happen: the ledger is a tenth of the
+    // heap's area.
+    let mut tries = 0;
+
+    while out.len() < RUBBLE && tries < RUBBLE * 20 {
+        tries += 1;
+
         let round = roll(next()) * std::f32::consts::TAU;
         let (cos, sin) = (round.cos(), round.sin());
 
@@ -1270,6 +1488,16 @@ pub fn rubble(reaches: f32, _trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
         // sitting into the bank at that radius, by about a third of
         // itself, which is what stops them reading as dropped
         let up = mound_high(share) - across * 0.34;
+
+        // **And not on the ledger.** Spec 0118 laid a slab in this heap
+        // and the heap did not know: a piece came to rest on it and sat
+        // across the middle of a word. The same fault as grass through
+        // the bank's gravel, which `field::cover` learned the same day.
+        let (from_x, from_z) = (cos * off - slab.x, sin * off);
+
+        if from_x.abs() < SLAB_LONG * 0.5 + across && from_z.abs() < SLAB_WIDE * 0.5 + across {
+            continue;
+        }
 
         out.push((
             vec3(at.x + cos * off, up, at.z + sin * off),
@@ -2357,6 +2585,19 @@ pub fn bank_reaches() -> f32 {
 /// Read off `bank_spread`, which is also what the surface is drawn to, so
 /// the keep-out is the bank's own footprint rather than a second guess at
 /// where the bank is.
+/// Whether a spot is on spec 0118's ledger, which is dressed stone and so
+/// is not ground anything grows out of.
+///
+/// **The same fault a third time in one day.** Grass came up through the
+/// bank's gravel and a piece of rubble came to rest on this slab, both
+/// because the thing scattering did not know the thing was there.
+pub fn on_the_ledger(reaches: f32, at: Vec3) -> bool {
+    let (stone, _) = runestone_at(reaches);
+    let (slab, _) = slab_at();
+
+    (at.x - stone.x - slab.x).abs() < SLAB_LONG * 0.5 && (at.z - stone.z).abs() < SLAB_WIDE * 0.5
+}
+
 pub fn banked(reaches: f32, at: Vec3) -> bool {
     let foot = foot(reaches);
     let (begins, ends) = bank_runs();
@@ -3640,6 +3881,49 @@ pub mod tests {
         }
     }
 
+    /// Spec 0054: no two runes of the name are the same shape.
+    ///
+    /// **Because two of them were.** `fe` and `oss` are a stave with two
+    /// branches each, and both were drawn with the branches falling to
+    /// the right: the same glyph to within a few hundredths of a square,
+    /// so BIFROST read b i f r f s t for as long as the stone has stood.
+    /// Jake found it by looking at it, which is the only way anything
+    /// here could have, since nothing reads these strokes but the chisel.
+    ///
+    /// Compared as sets of strokes, because the order they are cut in is
+    /// not part of the letter.
+    #[test]
+    fn no_two_runes_of_the_name_are_the_same_shape() {
+        let rounded = |one: &[(f32, f32, f32, f32)]| {
+            let mut cut: Vec<[i32; 4]> = one
+                .iter()
+                .map(|(a, b, c, d)| {
+                    [
+                        (a * 20.0).round() as i32,
+                        (b * 20.0).round() as i32,
+                        (c * 20.0).round() as i32,
+                        (d * 20.0).round() as i32,
+                    ]
+                })
+                .collect();
+
+            cut.sort();
+            cut
+        };
+
+        for (one, first) in RUNES.iter().enumerate() {
+            for (other, second) in RUNES.iter().enumerate().skip(one + 1) {
+                assert_ne!(
+                    rounded(first),
+                    rounded(second),
+                    "runes {} and {} of the name are cut the same",
+                    one,
+                    other
+                );
+            }
+        }
+    }
+
     /// Spec 0118: the stone is there before anything has been answered.
     ///
     /// **Because it is the one thing out there that says what any of this
@@ -4496,7 +4780,7 @@ mod look {
     #[test]
     #[ignore]
     fn write_the_carving() {
-        let made = super::carving(None);
+        let made = super::carving();
         let (wide, tall) = (made.width(), made.height());
         let mut out = format!("P6\n{} {}\n255\n", wide, tall).into_bytes();
 
@@ -4791,12 +5075,21 @@ mod chisel_tests {
     /// the runes that reads as fog.
     #[test]
     fn the_glow_round_a_cut_is_warmer_than_the_cut() {
-        let cut = carving(None);
+        let cut = carving();
         let pixels = &cut.levels[0].pixels;
         let mut whole = None;
         let mut skirt = None;
 
-        for i in 0..(CARVED * CARVED) as usize {
+        // **Above the name, because a part covered texel is not always a
+        // skirt.** This read the whole picture and called anything between
+        // the two alphas skirt. The name is cut after the halo now, so its
+        // holes survive `HALO_OUT`, and that leaves its own antialiased
+        // edges part covered and white: a cut, not a glow, and the last
+        // one the scan met. What carries a skirt is the ribbon, and the
+        // ribbon is everything above the lettering.
+        let lettering = (CARVED as f32 * (LATIN_FOOT + LATIN_TALL * FACE_SQUEEZE)) as u32;
+
+        for i in 0..((CARVED - lettering) * CARVED) as usize {
             let (red, green, alpha) = (pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 3]);
 
             match alpha {
@@ -4833,7 +5126,7 @@ mod chisel_tests {
     /// each other passed while altering nothing.
     #[test]
     fn the_carving_is_cut_with_edges_and_not_steps() {
-        let cut = carving(None);
+        let cut = carving();
         let pixels = &cut.levels[0].pixels;
         let mut soft = 0;
         let mut hard = 0;

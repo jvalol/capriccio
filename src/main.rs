@@ -1026,6 +1026,10 @@ struct Arcade {
     /// What the stone's face is currently cut with, so it is recut when
     /// the answer changes and at no other time. Spec 0118.
     carved_says: Option<trail::Asked>,
+    /// The band under the stone's name and what is cut into it, which is
+    /// the only part of that stone that ever changes. Spec 0118.
+    said_face: Option<MeshId>,
+    said_cut: Option<TextureId>,
     /// The strip of one colour a span the kerbs are drawn through, and how
     /// many rooms had answered when it was last painted. Spec 0118.
     span_paint: Option<TextureId>,
@@ -1647,6 +1651,8 @@ impl Arcade {
             rubble_mound: None,
             carved_face: None,
             carved_says: None,
+            said_face: None,
+            said_cut: None,
             span_paint: None,
             spans_painted: 0,
             crown: None,
@@ -3783,6 +3789,42 @@ impl Arcade {
                     face,
                     carving,
                     &Transform::at(at).with_rotation(leans).with_scale(size),
+                    alight,
+                    aim::VOID,
+                );
+            }
+
+            // and the ledger at its foot, which says what the building is
+            // still holding. Spec 0118. Lit the same way the name is,
+            // being the same chisel in the same stone, and empty once
+            // every room has answered.
+            //
+            // **The mound's transform and not the carving's.** The panel
+            // is built in the stone's unit space and scaled by `size`;
+            // this is built in metres about the stone's foot, so it goes
+            // where the heap goes and neither leans nor scales with the
+            // lump above it.
+            if let Some(granite) = self.granite {
+                let (middle, lean, size) = bridge::slab_box();
+                let laid = Transform::at(vec3(at.x, 0.0, at.z) + middle)
+                    .with_rotation(glam::Quat::from_rotation_z(lean))
+                    .with_scale(size);
+
+                // **Darker than the heap it lies in.** A flat face turned
+                // up at a bright sky takes far more light than the lump's
+                // vertical one, so at the stone's own colour it came out
+                // paler than anything else on the site and read as poured
+                // rather than cut, and the glowing words on it washed out.
+                // The garden's edging stone is what a cut slab looks
+                // like beside weathered rubble.
+                scene.push_textured(cube, granite, &laid, aim::EDGE_STONE, aim::MATTE);
+            }
+
+            if let (Some(slab), Some(cut)) = (self.said_face, self.said_cut) {
+                scene.push_textured(
+                    slab,
+                    cut,
+                    &Transform::at(vec3(at.x, 0.0, at.z)),
                     alight,
                     aim::VOID,
                 );
@@ -8335,18 +8377,20 @@ impl Game for Arcade {
             });
         }
 
-        // and the stone's face, when what the building is still holding
-        // has changed. Spec 0118. Recut in place rather than swapped for
-        // a second texture: the face is one picture and `write_texture`
-        // is what the engine has for exactly this.
+        // and the band under the stone's name, when what the building is
+        // still holding has changed. Spec 0118. Recut in place, which is
+        // what `write_texture` is for, and it is the band rather than the
+        // dressed panel: the panel is the stone's name and its runes and
+        // never moves, so what is rewritten is a wide thin picture rather
+        // than the four megabytes of the face.
         {
             let says = bridge::still_held(&self.trail);
 
             if says != self.carved_says {
                 self.carved_says = says;
 
-                if let Some(carving) = self.carving {
-                    renderer.write_texture(carving, &bridge::carving(says.map(says::still_held)));
+                if let Some(cut) = self.said_cut {
+                    renderer.write_texture(cut, &bridge::said_cut(says.map(says::still_held)));
                 }
             }
         }
@@ -8826,7 +8870,16 @@ impl Game for Arcade {
         // than the stone's own face. The engine has the other one for
         // exactly this: the letters, and what is behind them showing
         // through.
-        self.carving = Some(renderer.add_texture(&bridge::carving(bridge::held_line(&self.trail))));
+        self.carving = Some(renderer.add_texture(&bridge::carving()));
+        // and the band under it, which is the only part of this stone that
+        // ever changes. Spec 0118.
+        // the slab itself, and the words standing off it. Two meshes of
+        // one shape rather than one drawn twice: the inscription glows
+        // and the stone does not, which is two colours and so two draws
+        // whatever happens, and `SLAB_PROUD` keeps them out of one plane.
+        self.said_face = Some(renderer.add_mesh(&bridge::said_mesh(bridge::SLAB_PROUD)));
+        self.said_cut =
+            Some(renderer.add_texture(&bridge::said_cut(bridge::held_line(&self.trail))));
         self.carved_says = bridge::still_held(&self.trail);
         self.span_paint = Some(renderer.add_texture(&bridge::span_colours(&self.trail)));
         self.spans_painted = self.trail.given().len();
