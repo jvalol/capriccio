@@ -1005,6 +1005,99 @@ pub fn lid(reaches: f32) -> Aabb {
     )
 }
 
+/// The coffering on the lid's underside: how wide a rib is, how far it
+/// hangs, and how far the panel between them is set up into the dark.
+///
+/// **`BEAM` is taken**, by the glazing's own frames a few hundred lines
+/// down, so these say what they are for rather than what they are.
+pub const COFFER_RIB: f32 = 0.22;
+pub const COFFER_DOWN: f32 = 0.30;
+pub const COFFER_SUNK: f32 = 0.05;
+pub const COFFER_PANEL: f32 = 0.04;
+
+/// The ribs across the lid and the panels between them.
+///
+/// **Coffered because the ball showed it.** The upper half of a sphere
+/// reflects what is over it, and what was over this one was a single flat
+/// untextured slab the length of the room: the top of the glass came back
+/// as one smooth cap with nothing in it. A ceiling is the surface nobody
+/// spends anything on, and this room is a colonnade with a sphere in the
+/// middle of it, which is a room that wants one.
+///
+/// **On the colonnade's own bays, read off `frames` rather than counted
+/// again.** A rib landing halfway along a bay is a ceiling belonging to a
+/// different building from the columns holding it up, and a second count of
+/// the same rhythm is the fault this project has written down under five
+/// other names. `frames` puts a column at both ends of every bay, so each z
+/// arrives twice and is taken once.
+///
+/// Across the width the ribs are at the bays' own pitch as well, so a
+/// coffer comes out square rather than a long slot.
+pub fn ceiling(reaches: f32) -> (Vec<crate::cellar::Timber>, Vec<crate::cellar::Timber>) {
+    let room = inside(reaches);
+    let face = room.max.y;
+
+    let mut zs: Vec<f32> = Vec::new();
+
+    for (at, _) in frames(reaches) {
+        if !zs.iter().any(|one| (one - at.z).abs() < 1e-3) {
+            zs.push(at.z);
+        }
+    }
+
+    zs.sort_by(f32::total_cmp);
+
+    let wide = room.max.x - room.min.x;
+    let count = (wide / crate::mirrors::PITCH).round().max(1.0);
+    let step = wide / count;
+    let xs: Vec<f32> = (0..=count as usize)
+        .map(|n| room.min.x + n as f32 * step)
+        .collect();
+
+    if zs.len() < 2 || xs.len() < 2 {
+        return (Vec::new(), Vec::new());
+    }
+
+    let (from, to) = (zs[0], zs[zs.len() - 1]);
+    let down = face - COFFER_DOWN * 0.5;
+    let mut ribs = Vec::new();
+
+    for z in &zs {
+        ribs.push((
+            vec3((room.min.x + room.max.x) * 0.5, down, *z),
+            vec3(wide, COFFER_DOWN, COFFER_RIB),
+        ));
+    }
+
+    for x in &xs {
+        ribs.push((
+            vec3(*x, down, (from + to) * 0.5),
+            vec3(COFFER_RIB, COFFER_DOWN, to - from),
+        ));
+    }
+
+    let mut panels = Vec::new();
+
+    for pair in zs.windows(2) {
+        for side in xs.windows(2) {
+            panels.push((
+                vec3(
+                    (side[0] + side[1]) * 0.5,
+                    face - COFFER_SUNK,
+                    (pair[0] + pair[1]) * 0.5,
+                ),
+                vec3(
+                    side[1] - side[0] - COFFER_RIB,
+                    COFFER_PANEL,
+                    pair[1] - pair[0] - COFFER_RIB,
+                ),
+            ));
+        }
+    }
+
+    (ribs, panels)
+}
+
 /// Where the room stands over, which is the nook and nothing else.
 #[cfg(test)]
 pub fn over(reaches: f32) -> Aabb {
@@ -1886,6 +1979,34 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
         );
     }
 
+    // the coffering under the lid, which is what the ball shows of it
+    //
+    // **Pushed after the lid and under it, never into it.** The panel sits
+    // `COFFER_SUNK` below the lid's own face and the ribs hang lower still,
+    // so no face of either shares a plane with the slab above: two exposed
+    // faces in one plane is the fault this building has found seven times.
+    {
+        let (ribs, panels) = ceiling(reaches);
+
+        for (at, size) in &panels {
+            scene.push_material(
+                cube,
+                &Transform::at(*at).with_scale(*size),
+                crate::aim::GLASS_PIER,
+                crate::aim::MATTE,
+            );
+        }
+
+        for (at, size) in &ribs {
+            scene.push_material(
+                cube,
+                &Transform::at(*at).with_scale(*size),
+                crate::aim::GLASS_TRIM,
+                crate::aim::MATTE,
+            );
+        }
+    }
+
     // and the glazing in the bays, which is what the room shows the field
     for pane in panes(reaches) {
         scene.push_material(
@@ -1980,6 +2101,86 @@ mod tests {
 
     fn reaches() -> f32 {
         crate::room::Room::of(crate::games()).reaches
+    }
+
+    /// Spec 0064: the coffering hangs under the lid and never into it.
+    ///
+    /// **Because two exposed faces in one plane fight**, and a panel laid on
+    /// the slab rather than under it is exactly that. This building has
+    /// found that fault seven times and every one of them was found by
+    /// somebody walking the room and seeing it flicker.
+    #[test]
+    fn the_coffering_hangs_under_the_lid() {
+        let reaches = reaches();
+        let face = inside(reaches).max.y;
+        let (ribs, panels) = ceiling(reaches);
+
+        assert!(!ribs.is_empty() && !panels.is_empty(), "it coffers nothing");
+
+        for (what, these) in [("a rib", &ribs), ("a panel", &panels)] {
+            for (at, size) in these.iter() {
+                let top = at.y + size.y * 0.5;
+
+                assert!(
+                    top <= face + 1e-4,
+                    "{} reaches {} and the lid's face is at {}",
+                    what,
+                    top,
+                    face
+                );
+                assert!(
+                    top > face - COFFER_DOWN - 1e-3,
+                    "{} hangs clear of the lid altogether, its top at {}",
+                    what,
+                    top
+                );
+            }
+        }
+    }
+
+    /// Spec 0064: and a rib stands over every bay of the colonnade.
+    ///
+    /// The grid is read off `frames`, so this holds that it goes on being
+    /// read off it. A ceiling counted again from a pitch of its own would
+    /// pass every other test here and land its ribs halfway along the bays.
+    #[test]
+    fn a_rib_stands_over_every_bay() {
+        let reaches = reaches();
+        let (ribs, _) = ceiling(reaches);
+        let wide = inside(reaches).max.x - inside(reaches).min.x;
+        // the ribs that run across, which are the ones over the columns
+        let across: Vec<f32> = ribs
+            .iter()
+            .filter(|(_, size)| (size.x - wide).abs() < 1e-3)
+            .map(|(at, _)| at.z)
+            .collect();
+
+        for (at, _) in frames(reaches) {
+            assert!(
+                across.iter().any(|z| (z - at.z).abs() < 1e-3),
+                "a column at z {} has no rib over it",
+                at.z
+            );
+        }
+    }
+
+    /// And a coffer is a square rather than a slot.
+    #[test]
+    fn a_coffer_is_about_square() {
+        let (_, panels) = ceiling(reaches());
+
+        for (at, size) in panels.iter() {
+            let long = size.x.max(size.z);
+            let short = size.x.min(size.z);
+
+            assert!(
+                long / short < 1.6,
+                "a panel at {:?} is {} by {}, which is a slot",
+                at,
+                size.x,
+                size.z
+            );
+        }
     }
 
     /// Walks a body with the game's own `walk`, through the whole building,
