@@ -733,6 +733,8 @@ pub const SPA_CUT: Vec4 = vec4(0.78, 0.75, 0.70, 1.0);
 pub const SPA_URN: Vec4 = vec4(0.56, 0.32, 0.22, 1.0);
 
 pub const SPA_LAMP: Vec3 = glam::vec3(0.86, 0.94, 1.0);
+/// What the water itself throws, which is the pool's own green.
+pub const SPA_GLOW: Vec3 = glam::vec3(0.42, 0.95, 0.82);
 
 /// And the lens of a light set into the pool's wall, under the water. Spec
 /// 0082.

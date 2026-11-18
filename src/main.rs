@@ -9831,6 +9831,12 @@ impl Game for Arcade {
 
         scene.light.ambient = garden::indoors().lerp(garden::filled(self.since), share);
 
+        // and the baths keep less of it than the rest, so that the pool is
+        // the light in the room rather than a bright patch in a lit one.
+        if noise::room_at(self.room.reaches, self.at) == noise::Room::Baths {
+            scene.light.ambient *= spa::DIM;
+        }
+
         // and a strike on top of the day, per spec 0016.
         //
         // **On the sun and not on the ambient**, which is the whole reason it
@@ -13288,6 +13294,18 @@ impl Game for Arcade {
                 aim::SPA_LAMP,
                 spa::POOL_LIT,
                 spa::POOL_RANGE,
+            ));
+        }
+
+        // and what the water throws back into the room, which is the thing
+        // that makes a pool a light rather than a bright patch of floor.
+        for lamp in spa::glow(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::SPA_GLOW,
+                spa::GLOW_LIT,
+                spa::GLOW_RANGE,
             ));
         }
 

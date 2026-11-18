@@ -800,8 +800,8 @@ fn timber(reaches: f32) -> Vec<(Aabb, Made)> {
 /// this room had it worse: the lamps hung along the ceiling and the sconces
 /// stood on a wall, so the ceiling glowed at nothing and the sconces were dark.
 pub const SCONCES: usize = 4;
-pub const LAMP_LIT: f32 = 0.62;
-pub const LAMP_RANGE: f32 = 7.0;
+pub const LAMP_LIT: f32 = 0.45;
+pub const LAMP_RANGE: f32 = 3.2;
 
 /// And the sauna's own, which is the opposite: close, low and orange, so that
 /// stepping into it is stepping into a different warmth.
@@ -899,6 +899,44 @@ pub const POOL_BEZEL: f32 = 0.11;
 pub const POOL_LIT: f32 = 1.5;
 pub const POOL_RANGE: f32 = 2.1;
 pub const POOL_LIGHTS: usize = 3;
+
+/// The light the pool itself throws into the room: how bright, how far, and
+/// how many across the water each way.
+pub const GLOW_LIT: f32 = 0.55;
+pub const GLOW_RANGE: f32 = 6.5;
+pub const GLOW_ALONG: usize = 3;
+pub const GLOW_ACROSS: usize = 2;
+/// How far over the water they sit.
+pub const GLOW_UP: f32 = 0.60;
+
+/// How much of the building's indoor fill this room keeps.
+///
+/// **Its own, because the fill is one number for every windowless room.**
+/// A pool reads as the light in the room only when the room is darker than
+/// the pool, and the cellar and the gallery want the fill they have.
+pub const DIM: f32 = 0.18;
+
+/// Where they sit: spread over the surface, derived from the pool rather
+/// than listed, the way [`lamps`] comes off [`sconces`].
+pub fn glow(reaches: f32) -> Vec<Vec3> {
+    let (middle, size, _) = pool(reaches);
+    let mut out = Vec::new();
+
+    for a in 0..GLOW_ALONG {
+        for b in 0..GLOW_ACROSS {
+            let along = (a as f32 + 0.5) / GLOW_ALONG as f32 - 0.5;
+            let across = (b as f32 + 0.5) / GLOW_ACROSS as f32 - 0.5;
+
+            out.push(vec3(
+                middle.x + along * size.x,
+                middle.y + GLOW_UP,
+                middle.z + across * size.y,
+            ));
+        }
+    }
+
+    out
+}
 
 /// Where the lights sit: in the two long walls of the basin, facing each
 /// other across the water, with which wall each is in.
