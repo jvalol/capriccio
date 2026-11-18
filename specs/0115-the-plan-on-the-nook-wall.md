@@ -1,6 +1,6 @@
 # 0115 The plan on the nook wall
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-17
 
 ## Goal

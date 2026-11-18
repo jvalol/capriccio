@@ -3,5 +3,9 @@
 # Naming this file turns the default off, so the readme has to be listed
 # as well: it is copy too, and leaving it out signs nothing and says
 # everything is signed.
+# Two of these are Rust, because most of what this building says is drawn
+# on a screen rather than written in markdown. `says.rs` is what `--help`
+# prints and `keys.rs` is the list behind H.
 README.md
 src/says.rs
+src/keys.rs

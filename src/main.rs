@@ -18,6 +18,7 @@ mod gesture;
 mod glass;
 mod globe;
 mod gyro;
+mod keys;
 // **Allowed to be unused until the bench exists.** Spec 0050's cube is being
 // built state first: what a turn does to twenty pieces is provable without a
 // bench, a colour or a mesh, and none of those are decided yet. The allow
@@ -1315,6 +1316,10 @@ struct Arcade {
     /// engine. One press, one check: it compares every drawn thing with every
     /// other and the answer does not change between frames.
     wants_planes: bool,
+    /// Whether the list of every key is up, per spec 0116. Off until asked:
+    /// the corner already says how to walk, and the rest is for somebody who
+    /// has wondered whether there is more.
+    showing_keys: bool,
     /// Whether the readout of where you are standing is up, per spec 0045.
     showing_place: bool,
     /// The patches the last check found, kept so they can be outlined. A press
@@ -1717,6 +1722,7 @@ impl Arcade {
             flying: flying(),
             showing_solid: false,
             showing_cost: showing_cost(),
+            showing_keys: false,
             rig_step: 2,
             rig_many: false,
             rig_meshes: Vec::new(),
@@ -9714,6 +9720,24 @@ impl Game for Arcade {
             })
             .collect();
 
+        // and every key there is, grown out of the line that already says
+        // how to walk. Spec 0116.
+        //
+        // **On the same plate rather than a panel of its own.** The corner
+        // is where somebody already looks to find out what to press, and a
+        // list somewhere else is a second place to look for one answer.
+        // Wrapped the same way as the lines above for the same reason: the
+        // plate is measured off what is in `lines`.
+        if self.showing_keys {
+            for said in keys::lines() {
+                lines.extend(
+                    blitzkit::text::wrapped_in(&said, aim::SAYS_SIZE, room, aim::SAYS_FACE)
+                        .split('\n')
+                        .map(String::from),
+                );
+            }
+        }
+
         // and where you are standing, under the help and on the same plate,
         // for the seconds after M. Spec 0045.
         if self.showing_place {
@@ -13847,6 +13871,13 @@ impl Game for Arcade {
             // Jake asked for in as many words.
             KeyboardKey::G if held && !input.repeat => {
                 self.flying = !self.flying;
+            }
+            // and every key there is, per spec 0116. A toggle, like the
+            // four inspection keys above it: you open it, read it, and put
+            // it away, and a list you have to hold a key down to read is a
+            // list you cannot walk away from while reading.
+            KeyboardKey::H if held && !input.repeat => {
+                self.showing_keys = !self.showing_keys;
             }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
