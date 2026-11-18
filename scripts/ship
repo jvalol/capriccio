@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# Gates, commits and pushes this repo in one command.
+#
+# **Because four round trips is three too many.** Committing, clearing the
+# copy gate, pushing and deploying were four separate things to ask for, and
+# on a day with four changes in it that is sixteen asks. This is the one
+# command, and the order it runs things in is the whole of what it knows.
+#
+# **The cheap checks run first, and that is the point.** The gate is three
+# minutes. A copy marker and an unsigned page are a grep and a hash, so they
+# go in front: being told after three minutes that a word was never Jake's is
+# three minutes for nothing, and it is the commonest way this stops.
+#
+# **It does not sign anything.** The gate's whole claim is that Jake read the
+# words. A signature that happened as a side effect of shipping would be a
+# blanket say-so with nothing on screen, which is the case ~/.claude/voice/
+# sign-copy was written to stop. So an unsigned string ends the run and says
+# where it is. Signing stays his, and this is the door it opens.
+#
+# **Pushing is ../push and not a git push here.** This project is six repos
+# that depend on each other and a change often lands in two, so the order
+# they go in is a real question and ../push is already the one account of it.
+# A `git push` in here would be a second, and the pair would go out of step
+# the first time the engine changed with the game.
+#
+# There is nothing to deploy from this repo. The game is a binary somebody
+# builds, and blitzkit's site is the engine's to publish.
+#
+# Usage: ./scripts/ship "<message>" [<path> ...]
+#   (no paths)   every tracked change in this repo
+#   <path>...    only those, as `git commit -- <path>`
+set -uo pipefail
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] || [ "$#" -eq 0 ]; then
+  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+  [ "$#" -eq 0 ] && exit 1
+  exit 0
+fi
+
+message="$1"
+shift
+
+here=$(cd "$(dirname "$0")/.." && pwd)
+project=$(cd "$here/.." && pwd)
+cd "$here" || exit 1
+
+stop() {
+  echo
+  echo "nothing was committed: $1"
+  exit 1
+}
+
+# **Is there anything to do at all.** A run with a clean tree and nothing
+# ahead would spend three minutes proving it, which is how a command stops
+# being reached for.
+# **Asked whether there is an upstream at all, rather than reading a silent
+# failure as good news.** `git log @{u}..HEAD` on a branch with no upstream
+# says nothing and exits non-zero, so a bare test of its output reads a repo
+# that has never been pushed as a repo with nothing to push.
+ahead=unknown
+if git rev-parse --abbrev-ref '@{u}' > /dev/null 2>&1; then
+  ahead=$(git log --oneline '@{u}..HEAD')
+fi
+
+if [ -z "$(git status --porcelain)" ] && [ -z "$ahead" ]; then
+  echo "nothing to ship: the tree is clean and origin has everything"
+  exit 0
+fi
+
+echo "== copy markers"
+if ! "$project/check-copy" "$here"; then
+  stop "a string here is still a draft"
+fi
+
+# The same check this repo's pre-push hook runs, asked now rather than after
+# the gate. The hook stays: it is what holds for a push nobody shipped.
+echo "== copy Jake has signed"
+if [ -x "$HOME/.claude/voice/check-voice" ]; then
+  if ! "$HOME/.claude/voice/check-voice"; then
+    stop "a page here is not signed off"
+  fi
+else
+  echo "   no ~/.claude/voice/check-voice here, so nothing was checked"
+fi
+
+# **This repo's gate and not ./check-all.** That one builds sixteen crates
+# four ways and is for a release. What a commit here can break is here.
+echo "== fmt"
+cargo fmt
+if [ -n "$(git status --porcelain)" ]; then
+  echo "   fmt touched the tree; what it wrote goes in with the rest"
+fi
+
+echo "== clippy"
+if ! cargo clippy --all-targets -- -D warnings; then
+  stop "clippy is unhappy"
+fi
+
+echo "== tests"
+if ! cargo test; then
+  stop "a test failed"
+fi
+
+# **A clean tree is a run that only pushes.** Committing is one of the things
+# this does and not the reason it exists: a gate that has gone green over
+# commits already made is worth as much as one over a change just written,
+# and `git commit` on nothing would end the run one step short of the push.
+echo "== commit"
+if [ -z "$(git status --porcelain)" ]; then
+  echo "   nothing new to commit; what is already here is what goes"
+elif [ "$#" -gt 0 ]; then
+  # **The pathspec form, which commits the working tree for those paths and
+  # not the index.** That is what is wanted nearly always and wrong exactly
+  # when the two are meant to disagree: `git rm --cached` leaves the file on
+  # disk, so this finds it there and puts it straight back, reporting success
+  # and changing nothing. Commit that one by hand.
+  git commit -m "$message" -- "$@" || stop "git would not commit those paths"
+else
+  # **Refuses a half-staged index rather than sweeping it in.** Jake stages
+  # work as a checkpoint, and a bare commit takes the lot.
+  if [ -n "$(git diff --cached --name-only)" ]; then
+    echo "something is already staged:"
+    git diff --cached --name-only | sed 's/^/  /'
+    stop "name the paths you mean, or commit the staged work yourself"
+  fi
+
+  git commit -a -m "$message" || stop "git would not commit"
+fi
+
+echo "== push"
+# ../push takes every repo with work, engine first, and refuses on a dirty
+# tree anywhere. If it refuses, the commit above still stands and is the
+# thing to push once the rest is tidy.
+if ! "$project/push"; then
+  echo
+  echo "committed here, but nothing was pushed. ../push says why above."
+  exit 1
+fi
