@@ -158,6 +158,13 @@ elif [ "$#" -gt 0 ]; then
   # when the two are meant to disagree: `git rm --cached` leaves the file on
   # disk, so this finds it there and puts it straight back, reporting success
   # and changing nothing. Commit that one by hand.
+  # **Added first, because a path you named may be new.** `git commit --
+  # <path>` refuses an untracked one outright, which made this the one thing
+  # ship could not do: the no-paths branch refuses a new file on purpose, and
+  # naming it got the same refusal from git for a different reason. Naming a
+  # path is saying you mean it, so it is taken whether git has seen it before
+  # or not. Found on 2026-11-17 trying to ship a new spec with this.
+  git add -- "$@" || stop "git would not take those paths"
   git commit -m "$message" -- "$@" || stop "git would not commit those paths"
 else
   git commit -a -m "$message" || stop "git would not commit"
