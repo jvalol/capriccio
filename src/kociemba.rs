@@ -1318,6 +1318,10 @@ pub struct Toy {
     /// the one it is in the middle of, and how far through it is
     doing: Option<(usize, f32)>,
     seed: u32,
+    /// whether it has been scrambled since it was last home
+    muddled: bool,
+    /// and whether the key did the solving rather than the player
+    helped: bool,
 }
 
 impl Default for Toy {
@@ -1334,6 +1338,8 @@ impl Toy {
             left: Vec::new(),
             doing: None,
             seed: 0x5eed,
+            muddled: false,
+            helped: false,
         }
     }
 
@@ -1375,6 +1381,11 @@ impl Toy {
         }
 
         if self.cube.solved() {
+            // a fresh scramble, so whatever happened to the last one is
+            // not held against this one
+            self.muddled = true;
+            self.helped = false;
+
             for _ in 0..SCRAMBLE {
                 self.seed = self.seed.wrapping_mul(1664525).wrapping_add(1013904223);
                 self.left.push((self.seed >> 13) as usize % TURNS_IN_ALL);
@@ -1383,11 +1394,34 @@ impl Toy {
             return;
         }
 
+        self.helped = true;
+
         let solver = self.solver.get_or_insert_with(Solver::new);
         let mut moves = solver.solve(&self.cube);
 
         moves.reverse();
         self.left = moves;
+    }
+
+    /// Whether this cube was scrambled and brought home by hand.
+    ///
+    /// **Spec 0036's station for the nook**, and what it is not is
+    /// `cube.solved()`. The bench hands you a solved cube, so that answer
+    /// is true before you have touched it and the trail would take the
+    /// nook's question as given to anybody who walked past. What the room
+    /// asks is the round trip.
+    ///
+    /// **And the key that solves it does not count.** One press scrambles
+    /// a home cube and the next sets the solver running, so a cube that
+    /// came home under its own power is a cube nobody worked. Spec 0036's
+    /// rule is that following the trail is doing the room properly, and
+    /// this is the one place in the building where the difference between
+    /// doing it and watching it done is a single key.
+    ///
+    /// Spec 0105's `hint` is untouched by this: being told the next move
+    /// and making it yourself is still making it.
+    pub fn brought_home(&self) -> bool {
+        self.muddled && !self.helped && self.cube.solved()
     }
 
     /// Turns one face by hand, which goes on the same list the solver's
@@ -1462,6 +1496,12 @@ impl Toy {
         self.cube = Cube::SOLVED;
         self.left.clear();
         self.doing = None;
+        // **And it is as the bench hands it over, not a cube you solved.**
+        // This puts the thing home outright, so leaving `muddled` standing
+        // would make one key the whole of spec 0036's station for this
+        // room: scramble, square it up, and the trail has its answer.
+        self.muddled = false;
+        self.helped = false;
     }
 
     /// One frame of it.
@@ -2439,6 +2479,78 @@ mod tests {
     /// every face turn is a four cycle of both, so its parity is one no
     /// sequence of face turns can reach. The second half is what this
     /// asserts, because it is the half that says why rather than that.
+    /// Spec 0036's station for the nook: the cube went round and came back.
+    ///
+    /// **Four ways it must not be true**, and each of them was a way the
+    /// trail could have been given this room for nothing: a cube nobody
+    /// touched, a cube still scrambled, a cube the key solved, and a cube
+    /// squared up with the other key. The bench hands you a solved cube,
+    /// so the first of those is the one that matters most.
+    #[test]
+    fn the_cube_has_to_go_round_and_come_back() {
+        let mut toy = Toy::new();
+
+        assert!(!toy.brought_home(), "a cube nobody has touched counts");
+
+        toy.worked();
+
+        while toy.going() {
+            toy.advance(TURNS_AT);
+        }
+
+        assert!(!toy.cube.solved(), "the scramble left it solved");
+        assert!(!toy.brought_home(), "a scrambled cube counts");
+
+        // by hand, which is what the room asks: every turn of the
+        // solution played one at a time the way a player plays them
+        let mut by_hand = Toy {
+            cube: toy.cube,
+            ..Toy::new()
+        };
+
+        by_hand.muddled = true;
+
+        let solver = Solver::new();
+        let moves = solver.solve(&by_hand.cube);
+
+        for turn in moves {
+            let (face, quarters) = turn_number(turn);
+
+            by_hand.turn(face, quarters);
+
+            while by_hand.going() {
+                by_hand.advance(TURNS_AT);
+            }
+        }
+
+        assert!(by_hand.cube.solved(), "the hand solve left it scrambled");
+        assert!(by_hand.brought_home(), "solving it by hand does not count");
+
+        // and the key that solves it for you does not
+        toy.worked();
+
+        while toy.going() {
+            toy.advance(TURNS_AT);
+        }
+
+        assert!(toy.cube.solved(), "the key left it scrambled");
+        assert!(!toy.brought_home(), "the key solving it counts");
+
+        // nor does squaring it up outright
+        let mut squared = Toy::new();
+
+        squared.worked();
+
+        while squared.going() {
+            squared.advance(TURNS_AT);
+        }
+
+        squared.home();
+
+        assert!(squared.cube.solved(), "home left it scrambled");
+        assert!(!squared.brought_home(), "squaring it up outright counts");
+    }
+
     #[test]
     fn the_middle_layer_has_no_face_to_turn() {
         let middle = Vec3::ZERO;

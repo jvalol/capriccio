@@ -1042,6 +1042,12 @@ pub const STARS: Vec4 = vec4(1.6, 1.6, 1.7, 1.0);
 /// not have is a tint that is not its own.
 pub const WORLD: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
 
+/// A tint that tints nothing, for a surface whose picture already is the
+/// colour. Spec 0118's kerbs are drawn through a strip of one colour a
+/// span, and anything but white here would be the building having a
+/// second opinion about what the cellar looks like.
+pub const AS_PAINTED: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+
 /// What a body's name is multiplied by, per spec 0015.
 ///
 /// Past one, so it carries its own light the way the exit and the neon do. A

@@ -1023,6 +1023,13 @@ struct Arcade {
     standing_stone: Option<MeshId>,
     rubble_mound: Option<MeshId>,
     carved_face: Option<MeshId>,
+    /// What the stone's face is currently cut with, so it is recut when
+    /// the answer changes and at no other time. Spec 0118.
+    carved_says: Option<trail::Asked>,
+    /// The strip of one colour a span the kerbs are drawn through, and how
+    /// many rooms had answered when it was last painted. Spec 0118.
+    span_paint: Option<TextureId>,
+    spans_painted: usize,
     /// The three crossed planes a sprig of foliage is drawn on, and the
     /// pictures it wears: needles for the conifers and leaves for the rest.
     /// Spec 0010.
@@ -1639,6 +1646,9 @@ impl Arcade {
             standing_stone: None,
             rubble_mound: None,
             carved_face: None,
+            carved_says: None,
+            span_paint: None,
+            spans_painted: 0,
             crown: None,
             needles: Vec::new(),
             broadleaf: Vec::new(),
@@ -1846,7 +1856,6 @@ impl Arcade {
             // the way in is a thing on a plinth rather than another wall.
             Some(room::Seen::Display(n)) if n == display::tesseract() => {
                 self.go_inside();
-                self.trail.gave(trail::Asked::WentInsideTheTesseract);
             }
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
             // the book that is a handle. Spec 0007.
@@ -2813,6 +2822,23 @@ impl Arcade {
         spa::wading(self.room.reaches, self.at)
     }
 
+    /// What the baths and the nook give up, asked once a frame.
+    ///
+    /// **Both of them are states rather than moments**, which is why this
+    /// is a sweep and not a line in the key handler. Wading is where your
+    /// feet are and a solved cube is how the cube stands, so neither has an
+    /// event to hang off; `Trail::gave` ignores a repeat, so asking every
+    /// frame and asking once come out the same.
+    fn what_the_rooms_give(&mut self) {
+        if self.wading() {
+            self.trail.gave(trail::Asked::WadedInThePool);
+        }
+
+        if self.puzzle.brought_home() {
+            self.trail.gave(trail::Asked::SolvedTheCube);
+        }
+    }
+
     /// Which line the corner says, which is the one true where you are
     /// standing.
     ///
@@ -3636,7 +3662,24 @@ impl Arcade {
         // walking off a six metre road at eleven metres a second. See
         // `bridge::KERB_UP`.
         for kerb in self.kerbs.iter().flatten() {
-            scene.push_material(*kerb, &Transform::at(Vec3::ZERO), aim::KERB, aim::DULL);
+            // **Through the strip of span colours, per spec 0118.** Each
+            // span's kerb wears the room that paid for it, in the order
+            // the rooms answered, so the climb is a record of your own
+            // walk. White, because the colour is the picture's and a tint
+            // over it would be the building having a second opinion about
+            // what the cellar looks like.
+            match self.span_paint {
+                Some(paint) => scene.push_textured(
+                    *kerb,
+                    paint,
+                    &Transform::at(Vec3::ZERO),
+                    aim::AS_PAINTED,
+                    aim::DULL,
+                ),
+                None => {
+                    scene.push_material(*kerb, &Transform::at(Vec3::ZERO), aim::KERB, aim::DULL)
+                }
+            }
         }
 
         // the underside, dimmer and seen through, before the top: it is
@@ -8292,6 +8335,34 @@ impl Game for Arcade {
             });
         }
 
+        // and the stone's face, when what the building is still holding
+        // has changed. Spec 0118. Recut in place rather than swapped for
+        // a second texture: the face is one picture and `write_texture`
+        // is what the engine has for exactly this.
+        {
+            let says = bridge::still_held(&self.trail);
+
+            if says != self.carved_says {
+                self.carved_says = says;
+
+                if let Some(carving) = self.carving {
+                    renderer.write_texture(carving, &bridge::carving(says.map(says::still_held)));
+                }
+            }
+        }
+
+        // and the strip the kerbs are drawn through, when another room has
+        // answered. Spec 0118. One picture of eight pixels, so this is a
+        // write of thirty two bytes and not the four megabytes the stone's
+        // face is.
+        if self.trail.given().len() != self.spans_painted {
+            self.spans_painted = self.trail.given().len();
+
+            if let Some(paint) = self.span_paint {
+                renderer.write_texture(paint, &bridge::span_colours(&self.trail));
+            }
+        }
+
         // and the deck, when a span has been given since the last frame.
         // Spec 0117. Asked every frame and acted on almost never: what
         // changes it is answering one of five questions in a whole run.
@@ -8755,7 +8826,10 @@ impl Game for Arcade {
         // than the stone's own face. The engine has the other one for
         // exactly this: the letters, and what is behind them showing
         // through.
-        self.carving = Some(renderer.add_texture(&bridge::carving()));
+        self.carving = Some(renderer.add_texture(&bridge::carving(bridge::held_line(&self.trail))));
+        self.carved_says = bridge::still_held(&self.trail);
+        self.span_paint = Some(renderer.add_texture(&bridge::span_colours(&self.trail)));
+        self.spans_painted = self.trail.given().len();
         self.night = Some(renderer.add_texture(&valhalla::night_sky()));
         self.gable = Some(renderer.add_mesh(&valhalla::gable_mesh()));
         self.hearth_flame = Some(renderer.add_mesh(&valhalla::flame_mesh()));
@@ -9200,6 +9274,12 @@ impl Game for Arcade {
             noise::Room::Field => self.trail.gave(trail::Asked::WentOutIntoTheField),
             _ => (),
         }
+
+        // and the two that answer by being done rather than by being
+        // reached, which is spec 0036's own rule and what the five it had
+        // were short of: four rooms out of eleven, two of them the same
+        // room. Jake, 2026-11-18.
+        self.what_the_rooms_give();
 
         // `WHERE=1` says where you are standing, twice a second, on stderr.
         //
@@ -15300,14 +15380,15 @@ mod tests {
             "working the case twice answered the room twice"
         );
 
-        // the sixth display, which turns you instead of turning
+        // and the sixth display, which takes you inside and is asked for
+        // by nobody: Jake took it out of the trail on 2026-11-18 for being
+        // too much to explain. See `trail::Asked`.
         let mut arcade = Arcade::new();
         arcade.seen = Some(room::Seen::Display(display::tesseract()));
         arcade.use_what_i_see();
-        assert_eq!(
-            arcade.trail.given(),
-            [trail::Asked::WentInsideTheTesseract],
-            "you went inside and the building did not notice"
+        assert!(
+            arcade.trail.is_empty(),
+            "going inside the tesseract answered something"
         );
     }
 
@@ -17748,26 +17829,34 @@ mod tests {
         );
     }
 
-    /// Spec 0040: the field's horizon, from the bridge.
+    /// Spec 0040: the field's horizon, from the top of the bridge.
     ///
-    /// **From up on the deck, because that is where a horizon can be seen.**
-    /// At eye level out there the field is trees: the scatter is full at the
-    /// reach it has on foot, so every ground level view is into a wood. The
-    /// bridge is the one place in this building you stand high enough over
-    /// the field to see its far side, and until 2026-11-11 what was there
-    /// was a dead straight line where the ground slab ends.
+    /// **From up high, because that is where a horizon can be seen.** At
+    /// eye level out there the field is trees: the scatter is full at the
+    /// reach it has on foot, so every ground level view is into a wood.
+    /// The bridge is the one place in this building you stand high enough
+    /// over the field to see its far side, and until 2026-11-11 what was
+    /// there was a dead straight line where the ground slab ends.
+    ///
+    /// **From the landing and not from halfway up the deck**, which is
+    /// where it stood until 2026-11-18. Spec 0118 gave the kerbs a colour
+    /// a span, and this camera stood on the deck's own centre line with
+    /// the near kerb three metres off and nine degrees below the axis: a
+    /// picture of the horizon that moved eleven per cent of its pixels
+    /// because the cellar had paid for that span. Jake: move the horizon
+    /// pose off the bridge.
+    ///
+    /// Nowhere else in the building is twenty six metres up, so what moved
+    /// is the standing place rather than the structure. From the landing
+    /// looking out over the field there is nothing of the bridge in frame
+    /// at all, and what is under the camera is the landing's own stone,
+    /// which no answer anywhere changes.
     #[test]
     fn the_horizon_is_drawn() {
-        let reaches = reaches();
-        let foot = bridge::foot(reaches);
-        let along = 0.42;
-        let at = vec3(foot.x - along * bridge::RUN, bridge::high(along), foot.z);
+        let top = bridge::top(reaches());
+        let at = top + Vec3::Y * EYE;
 
-        looks_right_at_the_end(
-            "horizon",
-            at,
-            vec3(at.x + 6.0, at.y + EYE - 1.6, at.z + 320.0),
-        );
+        looks_right_at_the_end("horizon", at, vec3(at.x, at.y - 6.0, at.z + 320.0));
     }
 
     /// Spec 0060: inside the hall at the end of the trail.

@@ -35,6 +35,47 @@
 /// of a room being nice to visit. The rest arrive as their rooms grow a
 /// moment worth recording, and `Trail` does not care how many there are.
 ///
+/// **And the tesseract is not one of them.** It was, for an afternoon on
+/// 2026-11-18. Jake, trying to write the stone's line for it: it is too
+/// complicated for a layperson, and if even he does not understand it then
+/// it stays in the building and comes out of the requirements. The room is
+/// spec 0021's and is worth working on; what it is not is a thing to put
+/// between somebody and the end of the trail. Working the sixth display
+/// still takes you inside, and nothing records that you went.
+///
+/// **Six, where there were seven, where there were five, where there were
+/// eight.** Jake,
+/// 2026-11-18, asked what the trail actually is and whether it is the most
+/// interesting way to unlock the bridge. It was not, and the plainest
+/// reason was arithmetic: the five covered four rooms out of eleven, two of
+/// them the same room, and two of the five fired on walking into a place
+/// rather than on doing anything there. The baths and the nook each already
+/// ask something with a test behind it, so they join and nothing is
+/// planted, which is this spec's own rule.
+///
+/// **And the order they are written in is the order they are asked for.**
+/// Spec 0118's stone names the first one not yet given, so this list stops
+/// being a set the moment anything reads it in order. Two of the seven are
+/// fixed by the building rather than by taste, and both are checked by
+/// `tests::nothing_is_asked_for_before_its_room_can_be_reached`:
+///
+/// - The case before the pool. `room::open` is the case over the way down,
+///   the cellar is at the foot of that stair, and the baths' doorway is cut
+///   in the wall the baths share with the cellar.
+/// - The wall before the sun. The ride runs past `beyond::at`, which is
+///   inside `behind::inside`.
+///
+/// Nothing else in the building is ever shut: `room::open`, `sauna_open`,
+/// `baths_open` and `mirror_open` are the whole list of things that are one
+/// way or the other, and the way in behind the hall's end wall is an
+/// opening rather than a door.
+///
+/// The rest is a curve, easiest first, and the tail is the argument worth
+/// keeping: the cube is the hardest thing in the building and is fifth
+/// rather than last, so what stands between you and a finished bridge at
+/// the end is the ride out at true scale rather than a Rubik's cube. Jake
+/// settled this on 2026-11-18.
+///
 /// **Five, where there were eight.** Spec 0063 parked the hotel, the
 /// register and the imaginarium, which between them asked three of them:
 /// walking the diagonal, handing what it left you to the desk, and working
@@ -44,23 +85,46 @@
 /// takes to walk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Asked {
-    /// Riding out to the sun, which is what the space behind the wall is
-    /// for: the system at true scale, where the reading is the distance.
-    /// Specs 0015 and 0018, and one of the four spec 0036 names itself.
-    RodeToTheSun,
-    /// Turning the sixth display, which turns you instead. Spec 0021: five
-    /// of them spin on their plinths while you watch, and the way into the
-    /// hidden wing is a thing on a plinth rather than another wall.
-    WentInsideTheTesseract,
+    /// Walking out past the garden's west wall, where the ground does not
+    /// stop. Spec 0040.
+    ///
+    /// **First because it is free.** Spec 0118's stone stands at the foot
+    /// of the bridge, which is out here, so anybody who can read what the
+    /// stone says has already answered this one and it is never the thing
+    /// named.
+    WentOutIntoTheField,
     /// Opening the bookcase in the cellar, by the one leaf in it that is a
     /// handle. Spec 0007.
     OpenedTheCase,
+    /// Getting into the pool rather than standing on the coping looking at
+    /// it. Spec 0030, and `spa::wading` is the same test the wade's own
+    /// pace is taken from.
+    ///
+    /// **After the case, and it has to be.** `room::open` is the case over
+    /// the way down, the cellar is at the foot of that stair, and
+    /// `spa::near` cuts the baths' doorway in the wall the baths share with
+    /// the cellar. Named before it, this is a room with no way in.
+    WadedInThePool,
+    /// Solving the cube on the nook's sixth bench. Spec 0105.
+    ///
+    /// The hard one, and deliberately not the last: see the note on the
+    /// enum about what the tail is for.
+    SolvedTheCube,
     /// Getting behind the hall's near end wall. Spec 0011, and the answer
     /// to the question spec 0020's worn track asks by existing.
+    ///
+    /// Nothing shuts this way; it is only hidden, and the worn track is
+    /// the clue it already had.
     GotBehindTheWall,
-    /// Walking out past the garden's west wall, where the ground does not
-    /// stop. Spec 0040.
-    WentOutIntoTheField,
+    /// Riding out to the sun, which is what the space behind the wall is
+    /// for: the system at true scale, where the reading is the distance.
+    /// Specs 0015 and 0018, and one of the four spec 0036 names itself.
+    ///
+    /// **After getting behind the wall, and it has to be.** The ride runs
+    /// past `beyond::at`, which is inside `behind::inside`. Written first,
+    /// as it was until 2026-11-18, the first thing spec 0118's stone could
+    /// ever name was a thing in a room nobody has found.
+    RodeToTheSun,
 }
 
 impl Asked {
@@ -78,11 +142,12 @@ impl Asked {
     /// then says this list is short.
     pub fn every() -> &'static [Asked] {
         &[
-            Asked::RodeToTheSun,
-            Asked::WentInsideTheTesseract,
-            Asked::OpenedTheCase,
-            Asked::GotBehindTheWall,
             Asked::WentOutIntoTheField,
+            Asked::OpenedTheCase,
+            Asked::WadedInThePool,
+            Asked::SolvedTheCube,
+            Asked::GotBehindTheWall,
+            Asked::RodeToTheSun,
         ]
     }
 }
@@ -151,11 +216,45 @@ mod tests {
     /// checked nothing.
     fn sits_at(what: Asked) -> usize {
         match what {
-            Asked::RodeToTheSun => 0,
-            Asked::WentInsideTheTesseract => 1,
-            Asked::OpenedTheCase => 2,
-            Asked::GotBehindTheWall => 3,
-            Asked::WentOutIntoTheField => 4,
+            Asked::WentOutIntoTheField => 0,
+            Asked::OpenedTheCase => 1,
+            Asked::WadedInThePool => 2,
+            Asked::SolvedTheCube => 3,
+            Asked::GotBehindTheWall => 4,
+            Asked::RodeToTheSun => 5,
+        }
+    }
+
+    /// What has to be answered before what, as pairs.
+    ///
+    /// **Written here and not beside the list**, because the list is what
+    /// this checks: a constraint that lives inside the thing it constrains
+    /// is a comment. Each pair is a room you cannot reach until the other
+    /// one has been answered, and both are doors rather than opinions.
+    const NEEDS: [(Asked, Asked); 2] = [
+        (Asked::OpenedTheCase, Asked::WadedInThePool),
+        (Asked::GotBehindTheWall, Asked::RodeToTheSun),
+    ];
+
+    /// Spec 0118: the stone never names a room there is no way into.
+    ///
+    /// **Which it did.** Riding to the sun was written first and getting
+    /// behind the wall fourth, and the ride happens inside that room, so
+    /// the first thing the stone could have said to anybody was the name
+    /// of a thing in a place nobody has found.
+    #[test]
+    fn nothing_is_asked_for_before_its_room_can_be_reached() {
+        for (first, then) in NEEDS {
+            assert!(
+                sits_at(first) < sits_at(then),
+                "{:?} is asked for at {} and {:?} at {}, which is the \
+                 wrong way round: you cannot reach the second without \
+                 having answered the first",
+                first,
+                sits_at(first),
+                then,
+                sits_at(then)
+            );
         }
     }
 

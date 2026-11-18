@@ -452,8 +452,14 @@ be able to tell is there.
 
 ## Acceptance criteria
 
-- Nothing is drawn and nothing is solid until every `Asked` has been given. — `bridge::tests::nothing_until_the_building_is_done`
-- One `Asked` short leaves it away. — `bridge::tests::one_short_is_not_done`
+- It is finished only once every `Asked` has been given. — `bridge::tests::it_is_there_once_every_room_has_answered`
+- One `Asked` short leaves the deck standing and the landing away. — `bridge::tests::one_short_has_deck_but_no_landing`
+
+  **Both of these said something else until spec 0117.** Nothing was drawn and
+  nothing was solid until the building was done, which is what
+  `nothing_until_the_building_is_done` and `one_short_is_not_done` held. The
+  foot is there from the first minute now and a span arrives per answer, so
+  what is gated on the whole trail is the landing and what stands on it.
 - Every question the building asks is in the list the bridge reads. — `trail::tests::every_one_of_them_is_in_every`
 - It springs from the ground and ends level. — `bridge::tests::it_rises_out_of_the_field_and_levels_off`
 - It leaves the ground at an angle you can walk at. — `bridge::tests::it_leaves_the_ground_at_a_walkable_angle`

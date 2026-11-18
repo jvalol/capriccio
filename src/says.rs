@@ -84,3 +84,71 @@ The arcade takes these of its own:
   --film <clip>            film a clip
 
 ";
+
+/// What the stone at the foot of the bridge says the building is still
+/// holding. Spec 0118.
+///
+/// **And never a compass direction.** The field's line said the grass west
+/// of the garden. Jake, 2026-11-18: nobody knows west from east or south
+/// or north. Nothing in this building tells you which way you are facing
+/// except spec 0115's brass mark on the nook's plan, which is one wall in
+/// one room, so a direction is a word the player cannot cash. A landmark
+/// they can see and walk to is one they can.
+///
+/// **The gallery has no line, because it is no longer asked.** Three were
+/// written for it and each failed differently: "one of the six has not
+/// turned you" read as predatory, "five of the six turn where they stand"
+/// could not be parsed, and "one of the six stands still" was simply
+/// false, `display::Spin::facing` turning every one of them that is not
+/// in your hands. The one that would have worked is "one of the six
+/// changes shape", the sixth turning itself in the fourth at
+/// `tesseract::TURNS_BY` while the rest only spin on their plinths. It is
+/// not here because Jake took the room out of the requirements rather
+/// than the line out of the room: see `trail::Asked`.
+///
+/// **And never more than the trail asks for.** The cellar's line said one
+/// book on the shelf was a handle. Two are: `room::handle` is
+/// `bookcases[cellar::CASE]` and `room::mirror_handle` is
+/// `bookcases[mirrors::CASE]`, which are different cases in the row, so
+/// "the shelf" was wrong as well as the count. Saying two are handles
+/// would be worse than wrong: spec 0113 keeps the cellar and the hall of
+/// mirrors unsigned on purpose, a sign over either being the building
+/// giving away its own secret, and the trail never asks for the mirrors.
+/// So the line says a book without counting, which is true of the one
+/// this station is about and tells you nothing about the other.
+///
+/// **And never the room doing something to the player.** Jake, 2026-11-18:
+/// "the water has not had you" and "one of the six has not turned you"
+/// sound predatory. Both put the thing in the room on the acting end of
+/// the sentence with the player on the receiving one, which is a voice
+/// nothing else in this building uses. The register that works is the one
+/// the other five were already in: nobody has done the thing yet.
+///
+/// **In the voice of the thing undone, and never an instruction.** Spec
+/// 0036 forbids signposting outright: a clue that says GO LEFT is a sign.
+/// What is allowed is the model that spec sets, which is spec 0020's worn
+/// lane in the carpet, a thing that happened rather than a thing somebody
+/// put up. So each of these is a fact about the building with nothing in
+/// it telling you what to do about it, and working out what to do is the
+/// whole of what the player is being asked for.
+///
+/// **A match and not a table**, so a station added to `trail::Asked`
+/// stops this compiling rather than quietly carving nothing.
+///
+/// `WentOutIntoTheField` has a line it can never show, this stone
+/// standing out in the field: nobody can read it without having answered
+/// that one. It is written anyway, because "the stone is in the field" is
+/// a fact about where the stone is today and leaving the line out would
+/// tie the copy to it. Move the stone and the hole would be silent.
+pub fn still_held(what: crate::trail::Asked) -> &'static str {
+    use crate::trail::Asked;
+
+    match what {
+        Asked::WentOutIntoTheField => "The grass past the garden wall has not been walked.",
+        Asked::OpenedTheCase => "A book is a handle, and nobody has pulled it.",
+        Asked::WadedInThePool => "Nobody has been in the water.",
+        Asked::SolvedTheCube => "The cube on the bench is not as it was handed over.",
+        Asked::GotBehindTheWall => "The hall's end wall has a secret nobody has walked through.",
+        Asked::RodeToTheSun => "Nobody has ridden out as far as the sun.",
+    }
+}

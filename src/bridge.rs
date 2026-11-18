@@ -703,7 +703,17 @@ pub type Cut = ((f32, f32), (f32, f32), f32);
 ///
 /// So this is the lines, once, and both the picture and the cut bars are
 /// stood along them.
-pub fn strokes() -> Vec<Cut> {
+/// `room` is how much of the face to clear at the foot, which the whole
+/// column rises by. Spec 0118: the serpent pulls its tail up when the
+/// building has something to say, and puts it back down when there is
+/// nothing left to say.
+///
+/// **The whole column and not the tail alone.** The uprights run to 0.065
+/// and the lowest rune's foot is at 0.085, so a tail pulled up on its own
+/// leaves runes hanging outside the ribbon they are written in. What pays
+/// for the lift is the headroom over the apex, which is the one part of
+/// this face that was empty.
+pub fn strokes(room: f32) -> Vec<Cut> {
     // **The ribbon's own numbers, not the runes'.** Its top used to be
     // `far`, which was also its width, and the two agreed only because
     // the band happened to be as wide as it was tall. Narrowed to the
@@ -711,7 +721,7 @@ pub fn strokes() -> Vec<Cut> {
     // column ran out of the bottom of the picture and three of the
     // seven runes were drawn off the stone.
     let (near, far) = (0.385, 0.615);
-    let (foot, shoulder, apex) = (0.065, 0.885, 0.945);
+    let (foot, shoulder, apex) = (0.065 + room, 0.885 + room, 0.945 + room);
     // **Each stroke carries its own chisel.** The band and the runes are
     // cut at different widths and the only thing that says which is which
     // is what it is, so it is said here rather than counted off the front
@@ -746,7 +756,7 @@ pub fn strokes() -> Vec<Cut> {
     let tall = 0.0778;
     let wide = tall * 1.3;
     let gap = 0.035;
-    let top = 0.875;
+    let top = 0.875 + room;
 
     for (n, lines) in RUNES.iter().enumerate() {
         let foot = top - (n as f32 + 1.0) * (tall + gap);
@@ -774,7 +784,93 @@ pub fn strokes() -> Vec<Cut> {
 /// Cut away rather than painted on: the alpha is nought everywhere the
 /// chisel did not go, so the stone shows between the strokes and the
 /// engine's cutout throws the rest away.
-pub fn carving() -> blitzkit::texture::TextureData {
+/// Cuts a line of letters into a face that is already being carved: what
+/// it says, how tall its capitals are as a share of the face, and how far
+/// its foot is up from the bottom.
+///
+/// **One account of compositing text, because there are two lines now.**
+/// Spec 0118 put what the building is still holding under the name, and
+/// the name's own block was written inline: a second copy of it would be
+/// two ways of laying type on one stone, which is the fault this project
+/// keeps finding in a new costume.
+fn cut_in(pixels: &mut [u8], n: u32, says: &str, tall: f32, foot: f32) {
+    let said = blitzkit::text::stencilled(says, RUNE_TEXELS);
+    let (was_wide, was_tall) = (said.width() as f32, said.height() as f32);
+    // **Sized by its height, not its width.** It was laid out to a
+    // fixed share of the picture across, with the height following from
+    // the aspect, which means the fewer letters there are the taller
+    // they get. The marker came off when Jake signed the copy, the
+    // string went from twenty one characters to seven, and the block
+    // trebled in height and ran up into the rune ribbon. A cap height
+    // is the thing that should not move when the words change.
+    let want = (n as f32 * tall * was_wide / was_tall, n as f32 * tall);
+    // **And taken down when it is too wide for the face.** A cap height
+    // that does not move is right for a name of one word and wrong for a
+    // sentence: spec 0118's lines run to sixty characters, and a long one
+    // set at the name's own height would run off both edges of the stone.
+    let room = n as f32 * CUT_WIDE;
+    let shrink = (room / want.0).min(1.0);
+    let want = (want.0 * shrink, want.1 * shrink);
+    let (at_x, at_y) = ((n as f32 - want.0) * 0.5, n as f32 * foot);
+
+    for down in 0..want.1 as u32 {
+        for across in 0..want.0 as u32 {
+            let from = (
+                (across as f32 / want.0 * was_wide) as u32,
+                (down as f32 / want.1 * was_tall) as u32,
+            );
+            let took = ((from.1.min(said.height() - 1) * said.width()
+                + from.0.min(said.width() - 1))
+                * 4) as usize;
+
+            // **How much of a letter, not whether there is one.** This
+            // took anything over a half and wrote it solid, which throws
+            // away the font's own antialiasing and leaves the name as
+            // blocky as the strokes were.
+            let cover = said.levels[0].pixels[took + 3];
+
+            if cover == 0 {
+                continue;
+            }
+
+            // the picture's row nought is its top and so is the text's,
+            // so the block is placed by its top row and read forwards.
+            // Walking the destination upwards instead turned every
+            // letter over.
+            let (to_x, to_y) = (
+                at_x as u32 + across,
+                n.saturating_sub(at_y as u32 + want.1 as u32) + down,
+            );
+            let at = ((to_y.min(n - 1) * n + to_x.min(n - 1)) * 4) as usize;
+
+            for c in 0..3 {
+                pixels[at + c] = 255;
+            }
+            pixels[at + 3] = pixels[at + 3].max(cover);
+        }
+    }
+}
+
+/// How much of the face across a cut line may use.
+pub const CUT_WIDE: f32 = 0.92;
+
+/// How much of the face the serpent lifts to make room for a line.
+///
+/// **Paid for out of the headroom over its apex**, which was the only
+/// empty part of this face: at 0.045 the apex goes to 0.99 and the band
+/// between the name's cap and the tail opens from seven thousandths to
+/// fifty two, which is room for a line and a margin either side of it.
+pub const HELD_ROOM: f32 = 0.045;
+
+/// How tall spec 0118's line stands and how far up the face its foot is.
+///
+/// **Smaller than the name and above it.** The name is what the stone is
+/// and does not change; this is what it happens to be saying today, and a
+/// sentence set as large as a title reads as the title.
+pub const HELD_TALL: f32 = 0.030;
+pub const HELD_FOOT: f32 = 0.068;
+
+pub fn carving(held: Option<&str>) -> blitzkit::texture::TextureData {
     let n = CARVED;
     let mut pixels = vec![0u8; (n * n * 4) as usize];
 
@@ -837,7 +933,7 @@ pub fn carving() -> blitzkit::texture::TextureData {
 
     // the band, round the face and open at the foot the way a serpent's
     // body leaves its own tail
-    for (from, to, thick) in strokes() {
+    for (from, to, thick) in strokes(if held.is_some() { HELD_ROOM } else { 0.0 }) {
         line(from, to, thick);
     }
 
@@ -845,56 +941,15 @@ pub fn carving() -> blitzkit::texture::TextureData {
     // picture rather than hung on a second quad. **One carved face.** A
     // separate plate for the Latin is the plate this whole change is
     // getting rid of.
-    let said = blitzkit::text::stencilled(SAYS, RUNE_TEXELS);
-    let (was_wide, was_tall) = (said.width() as f32, said.height() as f32);
-    // **Sized by its height, not its width.** It was laid out to a
-    // fixed share of the picture across, with the height following from
-    // the aspect, which means the fewer letters there are the taller
-    // they get. The marker came off when Jake signed the copy, the
-    // string went from twenty one characters to seven, and the block
-    // trebled in height and ran up into the rune ribbon. A cap height
-    // is the thing that should not move when the words change.
-    let want = (
-        n as f32 * LATIN_TALL * was_wide / was_tall,
-        n as f32 * LATIN_TALL,
-    );
-    let (at_x, at_y) = ((n as f32 - want.0) * 0.5, n as f32 * LATIN_FOOT);
+    cut_in(&mut pixels, n, SAYS, LATIN_TALL, LATIN_FOOT);
 
-    for down in 0..want.1 as u32 {
-        for across in 0..want.0 as u32 {
-            let from = (
-                (across as f32 / want.0 * was_wide) as u32,
-                (down as f32 / want.1 * was_tall) as u32,
-            );
-            let took = ((from.1.min(said.height() - 1) * said.width()
-                + from.0.min(said.width() - 1))
-                * 4) as usize;
-
-            // **How much of a letter, not whether there is one.** This
-            // took anything over a half and wrote it solid, which throws
-            // away the font's own antialiasing and leaves the name as
-            // blocky as the strokes were.
-            let cover = said.levels[0].pixels[took + 3];
-
-            if cover == 0 {
-                continue;
-            }
-
-            // the picture's row nought is its top and so is the text's,
-            // so the block is placed by its top row and read forwards.
-            // Walking the destination upwards instead turned every
-            // letter over.
-            let (to_x, to_y) = (
-                at_x as u32 + across,
-                n.saturating_sub(at_y as u32 + want.1 as u32) + down,
-            );
-            let at = ((to_y.min(n - 1) * n + to_x.min(n - 1)) * 4) as usize;
-
-            for c in 0..3 {
-                pixels[at + c] = 255;
-            }
-            pixels[at + 3] = pixels[at + 3].max(cover);
-        }
+    // **And what the building is still holding, inside the ribbon.** Spec
+    // 0118. Cut into this face rather than hung on a plate beside it,
+    // which is the plate spec 0054 spent a whole change getting rid of,
+    // and smaller than the name because the name is what the stone is and
+    // this is what it happens to be saying today.
+    if let Some(line) = held {
+        cut_in(&mut pixels, n, line, HELD_TALL, HELD_FOOT);
     }
 
     halo(&mut pixels, n);
@@ -1172,10 +1227,11 @@ pub const MOUND_STEPS: u32 = 14;
 /// own eleven by seven lump, not the hundred and seventy six by two
 /// hundred and twenty four the standing stone is. Seven of *those* put
 /// more geometry in the footing than in the monument.
-pub fn rubble(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
-    if !whole(trail) {
-        return Vec::new();
-    }
+pub fn rubble(reaches: f32, _trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
+    // **And it is there from the first minute, like the stone it packs.**
+    // Spec 0118. The footing appearing the moment somebody finishes the
+    // building is the fault `shades` already names one object along: a
+    // clearing that arrives when you finish is trees vanishing.
 
     let (at, _) = runestone_at(reaches);
     let (hug_x, hug_z) = foot_half();
@@ -1300,8 +1356,32 @@ pub fn horn_mesh() -> blitzkit::mesh::MeshData {
 ///
 /// Empty until the bridge is there, like everything else here. A stone
 /// naming a bridge that does not exist is a grave marker.
-pub fn runestone(reaches: f32, trail: &Trail) -> Option<(Vec3, Vec3)> {
-    whole(trail).then(|| runestone_at(reaches))
+pub fn runestone(reaches: f32, _trail: &Trail) -> Option<(Vec3, Vec3)> {
+    Some(runestone_at(reaches))
+}
+
+/// What the building is still holding, which is the first question in
+/// `Asked::every` order that has not been given. Spec 0118.
+///
+/// **One, never a list.** Spec 0036 forbids a panel of ticks and forbids
+/// "3 of 8 found", and a list of what is left is the same thing written
+/// out in words. The order is the one `trail::Asked` is written in, which
+/// as of 2026-11-18 is a curve rather than an accident: see the note on
+/// that enum, and `trail::tests::nothing_is_asked_for_before_its_room_can_be_reached`
+/// for the two orderings the building fixes rather than taste.
+///
+/// Nothing once every one has been given, and then the stone is the stone
+/// it always was.
+pub fn still_held(trail: &Trail) -> Option<crate::trail::Asked> {
+    crate::trail::Asked::every()
+        .iter()
+        .find(|one| !trail.given().contains(one))
+        .copied()
+}
+
+/// And the line it cuts into the stone's face for that.
+pub fn held_line(trail: &Trail) -> Option<&'static str> {
+    still_held(trail).map(crate::says::still_held)
 }
 
 /// Whether a spot in the field is one the bridge keeps clear of trees.
@@ -1548,7 +1628,126 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
     });
     mesh.compute_normals();
 
+    // **And its `u` says which span it is on, not where it is along.**
+    // Spec 0118: the kerb over each span wears the colour of the room that
+    // paid for that span, and `spans` is the strip of those colours. A
+    // surface's own `u` runs nought to one down the whole ribbon, so it is
+    // replaced with the middle of the span's own slot: whole slots, never
+    // a gradient, because a kerb that fades from one room into the next is
+    // a progress bar and the colours are meant to be countable.
+    for vertex in &mut mesh.vertices {
+        let along = vertex.uv[0] * reach;
+        let span = (along * SPANS as f32).floor().min(SPANS as f32 - 1.0);
+
+        vertex.uv[0] = (span + 0.5) / SPANS as f32;
+        vertex.uv[1] = 0.5;
+    }
+
     mesh
+}
+
+/// How many spans the deck grows in, which is one more than the building
+/// asks.
+///
+/// **One more**, because the foot is there before anything is answered:
+/// spec 0117's promise at the beginning is a span nobody paid for.
+///
+/// **A number and not `Asked::every().len() + 1`**, because a texture's
+/// width and a mesh's `u` both want it and neither can call a function at
+/// compile time. What keeps it honest is
+/// `tests::there_is_a_slot_for_every_span`, the same device
+/// `trail::tests::every_one_of_them_is_in_every` uses on the list itself.
+pub const SPANS: usize = 7;
+
+/// The strip of colours the kerbs are drawn through: one slot a span, in
+/// the order the rooms answered. Spec 0118.
+///
+/// **The kerbs and not the deck.** Bifröst is a rainbow and a span of it
+/// in mahogany is not a rainbow bridge, so the deck is the one surface
+/// here that cannot carry this. The kerb is already a ribbon down either
+/// side in one flat colour and is what you look along for the whole climb.
+///
+/// **One picture and one draw**, rather than a mesh a span. The kerb is
+/// two meshes and stays two meshes; what changed is that its `u` points at
+/// a slot in this strip instead of running down its length.
+///
+/// The first slot is nobody's, per `spans`, and keeps `aim::KERB`. A slot
+/// past what has been answered keeps it too, so the unbuilt end of the
+/// ribbon is the colour the whole thing used to be.
+pub fn span_colours(trail: &Trail) -> blitzkit::texture::TextureData {
+    let mut pixels = Vec::with_capacity(SPANS * 4);
+
+    for slot in 0..SPANS {
+        // slot nought is the span that was there before anything was
+        // asked, and after that each slot is the room that answered
+        let paid = slot
+            .checked_sub(1)
+            .and_then(|nth| trail.given().get(nth))
+            .map(|one| room_colour(*one))
+            .unwrap_or(crate::aim::KERB);
+
+        for c in 0..3 {
+            pixels.push((paid[c].clamp(0.0, 1.0) * 255.0).round() as u8);
+        }
+
+        pixels.push(255);
+    }
+
+    blitzkit::texture::TextureData::from_pixels(SPANS as u32, 1, pixels)
+}
+
+/// What colour a room wears on the bridge.
+///
+/// **Taken from the room's own material wherever it has one**, so nothing
+/// here is a second opinion about what a room looks like: the cellar wears
+/// its bookcase, the nook its benches, the gallery its plinths, the baths
+/// their water, the field its leaves. Two have no one material to take:
+/// the space behind the wall is a room spec 0011 gives no voice and keeps
+/// dark, and the sun is a light rather than a surface, so those two take
+/// the nearest thing the building already names.
+///
+/// **A match and not a table**, so a station added to `trail::Asked` stops
+/// this compiling rather than quietly wearing the kerb's own grey.
+///
+/// **Lifted to one brightness, so what tells them apart is hue.** Taken
+/// straight, the kerb ran from (10, 10, 25) to (26, 31, 42) out of 255
+/// down its whole length: the hues were right and nothing was legible,
+/// because these colours were chosen for walls and benches seen across a
+/// room and this is a hand's width of edge seen from a hundred metres.
+/// Lifting them keeps each room's own hue and takes away the part of the
+/// colour that was about being indoors.
+pub fn room_colour(what: crate::trail::Asked) -> glam::Vec4 {
+    let own = room_colour_own(what);
+    let most = own.x.max(own.y).max(own.z).max(1e-4);
+    let lift = KERB_LIT / most;
+
+    glam::vec4(own.x * lift, own.y * lift, own.z * lift, 1.0)
+}
+
+/// How bright a room's colour is painted on the kerb, whatever it is
+/// indoors.
+pub const KERB_LIT: f32 = 0.78;
+
+/// And the room's colour as the room itself wears it.
+fn room_colour_own(what: crate::trail::Asked) -> glam::Vec4 {
+    use crate::trail::Asked;
+
+    match what {
+        Asked::WentOutIntoTheField => crate::aim::LEAF,
+        Asked::OpenedTheCase => crate::aim::SHELF,
+        Asked::WadedInThePool => {
+            let water = crate::aim::WATER;
+
+            glam::vec4(water.x, water.y, water.z, 1.0)
+        }
+        Asked::SolvedTheCube => crate::aim::BENCH,
+        Asked::GotBehindTheWall => crate::aim::EDGE_STONE,
+        Asked::RodeToTheSun => {
+            let sun = crate::aim::SUN;
+
+            glam::vec4(sun.x, sun.y, sun.z, 1.0)
+        }
+    }
 }
 
 /// Where each piece of kerb sits: its box, in the same terms as
@@ -3392,6 +3591,217 @@ pub mod tests {
         );
     }
 
+    /// Spec 0117: and no gap the other way, every drawn piece having tread
+    /// under it.
+    ///
+    /// **The criterion that spec shipped without a test for.** Its pair,
+    /// `you_cannot_walk_past_the_end`, holds that the colliders stop where
+    /// the drawing does. This is the same claim the other way about: the
+    /// drawing stops where the colliders do, so there is no stretch of
+    /// deck you can see and fall through.
+    #[test]
+    fn every_piece_drawn_can_be_stood_on() {
+        let mut trail = Trail::new();
+
+        for one in Asked::every()
+            .iter()
+            .chain(std::iter::once(&Asked::every()[0]))
+        {
+            let far = reach(&trail);
+            // the far end is the smallest x, the bridge running west
+            let drawn = deck_mesh(REACHES, far)
+                .vertices
+                .iter()
+                .map(|v| v.position[0])
+                .fold(f32::MAX, f32::min);
+            let stood = treads(REACHES, far)
+                .iter()
+                .map(|box_| box_.min.x)
+                .fold(f32::MAX, f32::min);
+
+            assert!(
+                // **An allowance of `DEEP` and not of `TREAD`.**
+                // `stations` ends the centre line exactly at `reach`, so
+                // the walking surface does not overhang at all. What does
+                // is the cut end's own face: a slab `DEEP` thick on a
+                // slope reaches past its own top by `DEEP` times the sine
+                // of the pitch, which at a reach of two sevenths measured
+                // 0.133 and is underside rather than anything you could
+                // stand on and fall through.
+                drawn >= stood - DEEP,
+                "with {} answered the deck is drawn to {} and the last \
+                 tread ends at {}",
+                trail.given().len(),
+                drawn,
+                stood
+            );
+
+            trail.gave(*one);
+        }
+    }
+
+    /// Spec 0118: the stone is there before anything has been answered.
+    ///
+    /// **Because it is the one thing out there that says what any of this
+    /// is**, and it used to arrive once the bridge was whole, which is
+    /// after you have stopped needing telling. `shades` made this argument
+    /// one object along for the clearing in the trees: a thing that
+    /// appears the moment somebody finishes the building is worse to watch
+    /// than a thing that was always there.
+    #[test]
+    fn the_stone_stands_before_the_first_answer() {
+        let nothing = Trail::new();
+
+        assert!(
+            runestone(REACHES, &nothing).is_some(),
+            "the stone is not there until the bridge is"
+        );
+        assert!(
+            !rubble(REACHES, &nothing).is_empty(),
+            "its footing is not there until the bridge is"
+        );
+        assert_eq!(
+            runestone(REACHES, &nothing),
+            runestone(REACHES, &done()),
+            "the stone moves when the trail fills up"
+        );
+    }
+
+    /// And its face names the first thing not given, and then nothing.
+    #[test]
+    fn the_stone_names_what_is_still_held() {
+        let mut trail = Trail::new();
+
+        for one in Asked::every() {
+            assert_eq!(
+                still_held(&trail),
+                Some(*one),
+                "with {:?} given it does not name {:?}",
+                trail.given(),
+                one
+            );
+            assert!(held_line(&trail).is_some(), "{:?} has no line to cut", one);
+
+            trail.gave(*one);
+        }
+
+        assert_eq!(
+            still_held(&trail),
+            None,
+            "it still names something once every room has answered"
+        );
+        assert_eq!(held_line(&trail), None, "and still has a line to cut");
+    }
+
+    /// And it names what is left rather than what has been done, whatever
+    /// order the rooms were answered in.
+    ///
+    /// **The one that would catch a `given().last()`.** Naming the first
+    /// not-given and naming the one after the last given are the same
+    /// answer for anybody who walks the list in order, which is what the
+    /// test above does, so it cannot tell them apart.
+    #[test]
+    fn it_names_what_is_left_and_not_what_was_last_done() {
+        let mut trail = Trail::new();
+
+        // the fifth one first, which nothing in the order forbids
+        trail.gave(Asked::every()[4]);
+
+        assert_eq!(
+            still_held(&trail),
+            Some(Asked::every()[0]),
+            "answering the fifth made it name something other than the first"
+        );
+    }
+
+    /// Spec 0118: a span wears the room that paid for it.
+    #[test]
+    fn a_span_wears_the_room_that_paid_for_it() {
+        let mut trail = Trail::new();
+
+        for (nth, one) in Asked::every().iter().enumerate() {
+            trail.gave(*one);
+
+            let strip = span_colours(&trail);
+            let want = room_colour(*one);
+            let at = (nth + 1) * 4;
+            let got = [
+                strip.levels[0].pixels[at] as f32 / 255.0,
+                strip.levels[0].pixels[at + 1] as f32 / 255.0,
+                strip.levels[0].pixels[at + 2] as f32 / 255.0,
+            ];
+
+            for c in 0..3 {
+                assert!(
+                    (got[c] - want[c]).abs() < 1.0 / 255.0 + 1e-4,
+                    "span {} wears {:?} and {:?} paid for it, which is {:?}",
+                    nth + 1,
+                    got,
+                    one,
+                    want
+                );
+            }
+        }
+    }
+
+    /// And the first span is nobody's: it was there before anything was
+    /// asked, per spec 0117, so it keeps the kerb's own colour.
+    #[test]
+    fn the_first_span_is_nobodys() {
+        for trail in [Trail::new(), done()] {
+            let strip = span_colours(&trail);
+
+            for c in 0..3 {
+                assert!(
+                    (strip.levels[0].pixels[c] as f32 / 255.0 - crate::aim::KERB[c]).abs()
+                        < 1.0 / 255.0 + 1e-4,
+                    "the first span is painted by somebody"
+                );
+            }
+        }
+    }
+
+    /// And the strip is a record of your own walk rather than of how much
+    /// of it is done.
+    ///
+    /// **The one that would catch a progress bar.** Painting span `k` by
+    /// `Asked::every()[k - 1]` instead of by what was actually answered
+    /// `k`th gives the same strip to anybody who walks the list in order,
+    /// which is what `a_span_wears_the_room_that_paid_for_it` does.
+    #[test]
+    fn the_kerbs_are_a_record_of_your_own_walk() {
+        let every = Asked::every();
+        let mut one = Trail::new();
+        let mut other = Trail::new();
+
+        // the same two rooms, the other way about. Nothing in the order
+        // forbids either, these two having no door between them.
+        one.gave(every[1]);
+        one.gave(every[4]);
+        other.gave(every[4]);
+        other.gave(every[1]);
+
+        assert_ne!(
+            span_colours(&one).levels[0].pixels,
+            span_colours(&other).levels[0].pixels,
+            "two walks that answered the same rooms in different orders \
+             paint the kerbs the same"
+        );
+    }
+
+    /// And every span has a slot to be painted in.
+    #[test]
+    fn there_is_a_slot_for_every_span() {
+        let grows_in = Asked::every().len() + 1;
+
+        assert_eq!(
+            SPANS, grows_in,
+            "the strip holds {} colours and the deck grows in {} spans",
+            SPANS, grows_in
+        );
+        assert_eq!(span_colours(&done()).width() as usize, SPANS);
+    }
+
     /// Spec 0117: and there is no lane under the bank to drop into.
     ///
     /// **Because half of it was missing.** The box under the deck was
@@ -4086,7 +4496,7 @@ mod look {
     #[test]
     #[ignore]
     fn write_the_carving() {
-        let made = super::carving();
+        let made = super::carving(None);
         let (wide, tall) = (made.width(), made.height());
         let mut out = format!("P6\n{} {}\n255\n", wide, tall).into_bytes();
 
@@ -4381,7 +4791,7 @@ mod chisel_tests {
     /// the runes that reads as fog.
     #[test]
     fn the_glow_round_a_cut_is_warmer_than_the_cut() {
-        let cut = carving();
+        let cut = carving(None);
         let pixels = &cut.levels[0].pixels;
         let mut whole = None;
         let mut skirt = None;
@@ -4423,7 +4833,7 @@ mod chisel_tests {
     /// each other passed while altering nothing.
     #[test]
     fn the_carving_is_cut_with_edges_and_not_steps() {
-        let cut = carving();
+        let cut = carving(None);
         let pixels = &cut.levels[0].pixels;
         let mut soft = 0;
         let mut hard = 0;

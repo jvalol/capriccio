@@ -1,6 +1,6 @@
 # 0117 A promise at the beginning
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-17
 
 ## Goal
@@ -75,8 +75,17 @@ field: enough to see from the garden, not enough to read as a way anywhere.
   `bridge::tests::every_piece_drawn_can_be_stood_on`
 - The foot never moves when a span is added, since only the far end grows. —
   `bridge::tests::it_grows_from_the_far_end`
-- One account of how far it has got: nothing asks `Asked` directly but
-  `reach`. — `bridge::tests::reach_is_the_only_thing_that_counts_questions`
+- One account of how far it has got: a question given puts the end one span
+  further out, and the foot never moves. —
+  `bridge::tests::a_question_adds_a_span` and
+  `bridge::tests::it_grows_from_the_far_end`
+
+  **This said that nothing asks `Asked` directly but `reach`, and spec 0118
+  made that false on purpose.** `bridge::still_held` reads the list to find
+  the first question not given, and `bridge::span_colours` reads it in the
+  order it was given. Neither is counting how far the bridge has got, which
+  is what the rule was about; both are asking what the trail says, which is
+  a different question and is the whole of what 0118 is for.
 
 ### Verified by hand
 
