@@ -732,6 +732,17 @@ struct Inside {
 
 struct Arcade {
     room: Room,
+    /// Each room's name on that plan: the word drawn into a texture, where
+    /// it sits, and how wide it is.
+    ///
+    /// **All three, so the draw asks `plan::labels` nothing.** They were two
+    /// lists paired by position, the textures kept here and the places
+    /// fetched again every frame, and `plan::labels` walks every collider in
+    /// the building the way the field below says not to: it was 55% of the
+    /// whole program and took the arcade to eighteen frames a second from
+    /// anywhere in it, the nook in sight or not. The places never move, so
+    /// they are cut once beside the words they belong to.
+    plan_says: Vec<(Option<TextureId>, Vec3, f32)>,
     /// The relief plan on the nook's north wall, per spec 0115. Cut once:
     /// it walks every collider in the building against a grid, which is
     /// five milliseconds at startup and is not a thing to do per frame.
@@ -1430,6 +1441,7 @@ impl Arcade {
             eye: 0.0,
             room,
             plan,
+            plan_says: Vec::new(),
             spin,
             playing: Playing::new(),
             cascada: Cabinet::found(cascada::NAME, &beside()),
@@ -8741,6 +8753,21 @@ impl Game for Arcade {
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.garden_says =
             Some(renderer.add_texture(&blitzkit::text::drawn(sign::GARDEN, sign::TEXELS)));
+        // the room names on spec 0115's plan, each the word the building
+        // uses for that room in its own specs
+        self.plan_says = plan::labels(&self.room, self.room.reaches)
+            .into_iter()
+            .map(|(says, at)| {
+                (
+                    Some(renderer.add_texture(&blitzkit::text::drawn(says, sign::TEXELS))),
+                    at,
+                    // **Sized by the word's own length**, a letter being
+                    // about three fifths as wide as it is tall, so a long
+                    // name is a long label and not a squeezed one.
+                    plan::LETTERS * 0.62 * says.chars().count() as f32,
+                )
+            })
+            .collect();
         self.says = sign::planks(self.room.reaches)
             .into_iter()
             .map(|plank| {
@@ -12325,6 +12352,21 @@ impl Game for Arcade {
 
         // the plan of the building, cut from the building, on the one wall
         // of this room with nothing on it. Spec 0115.
+        // the room names, each on the middle of what is drawn of that room,
+        // read off the list rather than worked out again: see `plan_says`.
+        for (texture, at, wide) in self.plan_says.iter() {
+            let Some(texture) = texture else {
+                continue;
+            };
+            let letters = Transform::at(*at - Vec3::Z * plan::RELIEF * 3.0).with_scale(vec3(
+                *wide,
+                plan::LETTERS,
+                0.004,
+            ));
+
+            scene.push_textured(cube, *texture, &letters, aim::TRIM, 8.0);
+        }
+
         // and the mark that says where you are standing and which way you
         // are looking, which is the thing that makes a plan a map. Drawn
         // rather than cut, because it moves.

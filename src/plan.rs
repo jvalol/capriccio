@@ -281,6 +281,92 @@ fn laid_out(room: &Room, reaches: f32) -> (f32, f32, Vec3) {
     (scale, step, vec3(first, board.center().y, board.min.z))
 }
 
+/// What a place in the building is called, in the building's own words.
+///
+/// **Taken off the specs rather than written.** Every one of these is what
+/// capriccio calls that room and has called it for as long as it has had
+/// one: the nook 216 times, the cellar 82, the gallery 68, the baths 66,
+/// the imaginarium 61, the hall 43, and that is the form they take here,
+/// article and all. The sign over the aisle says NOOK and these do not
+/// follow it: a sign shouts across a room and a plan is read at arm's
+/// length. Jake chose the prose form, asked.
+///
+/// **`room_at` cannot tell the glass room from the nook**, having no
+/// variant for either of the two rooms upstairs, so the floor above is
+/// named by where the glass room stands and everything else up there is the
+/// imaginarium.
+pub fn called(reaches: f32, storey: usize, at: Vec3) -> Option<&'static str> {
+    use crate::noise::Room as Which;
+
+    if storey == 2 {
+        let glass = crate::glass::inside(reaches);
+
+        return Some(
+            if at.x >= glass.min.x
+                && at.x <= glass.max.x
+                && at.z >= glass.min.z
+                && at.z <= glass.max.z
+            {
+                "the glass room"
+            } else {
+                "the imaginarium"
+            },
+        );
+    }
+
+    match crate::noise::room_at(reaches, vec3(at.x, floors()[storey] + WAIST, at.z)) {
+        Which::Hall => Some("the hall"),
+        Which::Nook => Some("the nook"),
+        Which::Gallery => Some("the gallery"),
+        Which::Cellar => Some("the cellar"),
+        Which::Baths => Some("the baths"),
+        _ => None,
+    }
+}
+
+/// How tall a label is on the wall.
+///
+/// **A drawing's lettering, which is read by leaning in.** The plans are two
+/// metres across for a building forty-six wide, so anything a room's own
+/// width could carry would be a word taller than the room it names.
+pub const LETTERS: f32 = 0.042;
+
+/// Where each room's name goes: the middle of the largest piece of it.
+///
+/// **The largest piece and not the middle of the whole.** A weighted middle
+/// is outside its own room whenever that room is an L or has a hole in it,
+/// and the baths have both: the pool is a hole and the middle of the baths
+/// landed in the water, which on the wall is bare plaster.
+pub fn labels(room: &Room, reaches: f32) -> Vec<(&'static str, Vec3)> {
+    let mut held: Vec<(&'static str, usize, Aabb, f32)> = Vec::new();
+
+    for (n, floor) in floors().iter().copied().enumerate() {
+        for bar in filled(room, floor) {
+            let Some(name) = called(reaches, n, bar.center()) else {
+                continue;
+            };
+            let size = (bar.max.x - bar.min.x) * (bar.max.z - bar.min.z);
+            let found = held
+                .iter_mut()
+                .find(|(held, storey, _, _)| *held == name && *storey == n);
+
+            match found {
+                Some((_, _, biggest, most)) => {
+                    if size > *most {
+                        *biggest = bar;
+                        *most = size;
+                    }
+                }
+                None => held.push((name, n, bar, size)),
+            }
+        }
+    }
+
+    held.into_iter()
+        .map(|(name, storey, bar, _)| (name, onto(room, reaches, storey, bar.center())))
+        .collect()
+}
+
 /// Which of the three a height belongs to: the lowest floor at or under it.
 pub fn storey_at(y: f32) -> usize {
     floors()
@@ -649,6 +735,50 @@ mod tests {
             north.y,
             south.y
         );
+    }
+
+    /// Spec 0115: every room the building can name is named once, on
+    /// itself.
+    #[test]
+    fn every_room_is_named_once_and_on_itself() {
+        let room = building();
+        let labels = labels(&room, room.reaches);
+        let mut names: Vec<&str> = labels.iter().map(|(says, _)| *says).collect();
+
+        names.sort_unstable();
+
+        let mut once = names.clone();
+
+        once.dedup();
+
+        assert_eq!(names, once, "a room is named twice: {:?}", names);
+
+        for want in [
+            "the hall",
+            "the nook",
+            "the gallery",
+            "the cellar",
+            "the baths",
+            "the glass room",
+        ] {
+            assert!(names.contains(&want), "{} is on no plan", want);
+        }
+
+        // and each sits on what it names rather than out on the wall beside
+        // it, which is the fault a weighted middle has when a room is an L
+        let drawn = relief(&room, room.reaches);
+
+        for (says, at) in labels.iter() {
+            let on = drawn.iter().any(|(bar, _)| {
+                bar.min.x <= at.x && bar.max.x >= at.x && bar.min.y <= at.y && bar.max.y >= at.y
+            });
+
+            assert!(
+                on,
+                "{} is written on bare wall at {:.2}, {:.2}",
+                says, at.x, at.y
+            );
+        }
     }
 
     /// Spec 0115: the mark lands on the room you are standing in.

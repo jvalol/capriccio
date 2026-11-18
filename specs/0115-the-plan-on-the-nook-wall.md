@@ -89,11 +89,26 @@ centimetres against 298 at fifty, and 31 milliseconds to cut. Cut once at
 startup, because this walks every collider in the building and the first
 build did it every frame.
 
-**Nothing is named.** It is cut stone, not a directory. A relief says how big
-the building is, how its rooms sit together, and that there is more of it
-than you have seen, and it says that without a word on it. What names would
-cost is a sign in a building that has decided signs are `aim`'s business, and
-that is spec 0113's question rather than this one.
+**Each room carries its own name**, on the largest single piece of itself:
+the hall, the nook, the gallery, the cellar, the baths, the glass room, the
+imaginarium. The mark says
+where you are and the nose says which way you face, and neither of them says
+what anything is.
+
+**The words are the building's own.** Every one is what capriccio's specs
+call that room and have called it throughout: the nook 216 times, the cellar
+82, the gallery 68, the baths 66, the imaginarium 61, the hall 43. The sign over the aisle says NOOK and these
+do not follow it: a sign shouts across a room and a plan is read at arm's
+length. Jake's, asked and answered. Nothing here was drafted, which is why
+none of it carries a copy marker.
+
+**On the largest piece and not in the middle.** A room's weighted middle is
+outside it whenever the room is an L or has a hole, and the baths are both:
+the pool is a hole and BATHS was written on bare plaster.
+
+**`room_at` cannot name the two rooms upstairs**, having no variant for
+either, so that floor is named by where the glass room stands and whatever
+else is up there is the imaginarium.
 
 **One thing that moves: where you are standing, and which way you face.**
 A dot on the storey you are on, with a nose out in front of it, in brass
@@ -122,6 +137,7 @@ and someone who never finds the trail sees an ornament either way.
 - Moving a wall moves the plan, which is the claim this spec is built on. —
   `plan::tests::a_wall_that_moves_moves_the_plan`
 - The mark lands on the room you are standing in. — `plan::tests::the_mark_lands_on_the_room_you_are_in`
+- Every room the building can name is named once, and on itself. — `plan::tests::every_room_is_named_once_and_on_itself`
 - East is on the right as the wall is read, which is the only thing a
   mirrored plan breaks: the drawing and the mark go through one mapping, so
   turning it round turns both and everything else still agrees. —
@@ -153,5 +169,5 @@ and someone who never finds the trail sees an ornament either way.
 you work; this is a thing you look at, and the mark on it is not worked
 either.
 
-**Names on the rooms.** Still the open one. The mark says where you are and
-the nose says which way you face, and neither says what a room is for.
+**What a room is for.** The names say what each room is called and nothing
+says what is in it or why to walk there.
