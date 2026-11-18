@@ -50,6 +50,15 @@ stop() {
   exit 1
 }
 
+# **How many rustc at once**, which is ./check-all's number and its reason.
+# Cargo's default is one per core, eighteen on this machine, and eighteen
+# linking at once is what has filled its memory more than once during an
+# unattended gate. This was written without the cap and the second run of it
+# took the one minute load average to 27 with 64 MB free.
+#
+# Overridable, because the number is this machine's and the script is not.
+export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-4}
+
 # **Is there anything to do at all.** A run with a clean tree and nothing
 # ahead would spend three minutes proving it, which is how a command stops
 # being reached for.
@@ -65,6 +74,41 @@ fi
 if [ -z "$(git status --porcelain)" ] && [ -z "$ahead" ]; then
   echo "nothing to ship: the tree is clean and origin has everything"
   exit 0
+fi
+
+# **What the commit will be, asked before the gate and not after it.** Both
+# of these are a git call and certain, and the gate is four minutes. They sat
+# under the commit step at first, which meant a run that could never commit
+# spent four minutes proving its tests still passed before saying so. Cheap
+# and certain in front of slow is the whole of this script's order.
+#
+# Only when there are no paths and something to commit: with paths named,
+# `git commit -- <path>` refuses an untracked one itself and says so.
+if [ "$#" -eq 0 ] && [ -n "$(git status --porcelain)" ]; then
+  # **A half-staged index is not swept in.** Jake stages work as a
+  # checkpoint, and a commit of everything tracked takes the lot.
+  if [ -n "$(git diff --cached --name-only)" ]; then
+    echo "something is already staged:"
+    git diff --cached --name-only | sed 's/^/  /'
+    stop "name the paths you mean, or commit the staged work yourself"
+  fi
+
+  # **And a new file is not committed around.** `git commit -a` takes
+  # tracked files only. The first real run of this shipped a commit that
+  # declared `mod keys;`, named `src/keys.rs` in .copy-files and recorded a
+  # signature for it, with the module itself left behind untracked: a commit
+  # that cannot compile from a clean checkout, passing a gate that had just
+  # run against a working tree where the file was there.
+  #
+  # Refused rather than swept in with `git add -A`, which would take build
+  # output, editor leavings and whatever else is lying about.
+  untracked=$(git ls-files --others --exclude-standard)
+
+  if [ -n "$untracked" ]; then
+    echo 'these are new, and a commit of everything tracked will not take them:'
+    echo "$untracked" | sed 's/^/  /'
+    stop "name them as paths, or git add them first"
+  fi
 fi
 
 echo "== copy markers"
@@ -116,14 +160,6 @@ elif [ "$#" -gt 0 ]; then
   # and changing nothing. Commit that one by hand.
   git commit -m "$message" -- "$@" || stop "git would not commit those paths"
 else
-  # **Refuses a half-staged index rather than sweeping it in.** Jake stages
-  # work as a checkpoint, and a bare commit takes the lot.
-  if [ -n "$(git diff --cached --name-only)" ]; then
-    echo "something is already staged:"
-    git diff --cached --name-only | sed 's/^/  /'
-    stop "name the paths you mean, or commit the staged work yourself"
-  fi
-
   git commit -a -m "$message" || stop "git would not commit"
 fi
 
