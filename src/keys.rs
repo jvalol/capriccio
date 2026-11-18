@@ -149,15 +149,66 @@ pub const BOUND: &[Bound] = &[
     },
 ];
 
-/// The list as the corner draws it: a heading, then a line a binding.
-pub fn lines() -> Vec<String> {
+/// A line of the list: the words, and whether it sits under a heading or is
+/// one.
+///
+/// **The inset is not in the string.** Leading spaces were the first way,
+/// and `blitzkit::text::wrapped_in` eats them: it splits a line on spaces
+/// and skips empty words while the line it is building is still empty, so
+/// interior runs survive and the indent does not. That is worth fixing in
+/// the engine on its own account, and it was never the right mechanism
+/// here. Every line the corner draws already carries its own position, so
+/// how far in a line sits is the drawing's business and this says only
+/// which lines are rows.
+pub struct Said {
+    pub words: String,
+    pub under: bool,
+}
+
+/// The gap between the widest key and the column of what they do.
+pub const GAP: usize = 3;
+
+/// The list as the corner draws it: a blank, a heading, then a line a
+/// binding.
+///
+/// **Laid out rather than just listed.** The first build put the heading in
+/// the same column and weight as the rows, so a reader got fourteen similar
+/// lines with two odd ones among them, and the keys were ragged so the
+/// second column never landed. Headings stand proud of indented rows now,
+/// and the descriptions are padded into one column. The face this is drawn
+/// in is Roboto Mono, so a space is a letter wide and padding lands exactly
+/// where it says; see `blitzkit::text::Face::Plain`.
+///
+/// The width is measured off the rows rather than written down, because a
+/// binding with a longer name would otherwise push its own description out
+/// of the column and nothing would say so.
+pub fn lines() -> Vec<Said> {
+    let widest = BOUND
+        .iter()
+        .map(|bound| bound.shown.chars().count())
+        .max()
+        .unwrap_or(0);
     let mut out = Vec::new();
 
     for group in [About, Looking] {
-        out.push(heading(group).to_owned());
+        // and a blank line over each, which is what separates the second
+        // group from the first and the first from the line it grows out of
+        out.push(Said {
+            words: String::new(),
+            under: false,
+        });
+        out.push(Said {
+            words: heading(group).to_owned(),
+            under: false,
+        });
 
         for bound in BOUND.iter().filter(|bound| bound.group == group) {
-            out.push(format!("{}  {}", bound.shown, bound.does));
+            let pad = " ".repeat(widest + GAP - bound.shown.chars().count());
+
+            out.push(Said {
+                words: format!("{}{}{}", bound.shown, pad, bound.does),
+                under: true,
+            });
         }
     }
 
@@ -249,6 +300,45 @@ mod tests {
              be the real dispatch",
             said.matches("KeyboardKey::").count()
         );
+    }
+
+    /// Spec 0116: every description starts in the same column.
+    ///
+    /// **Because the column is the whole of why the list is readable**, and
+    /// it is arithmetic over a field anybody can change: a binding given a
+    /// longer name pushes its own line out and leaves the other thirteen
+    /// where they were, which is the kind of fault that only shows in a
+    /// screenshot somebody happens to look at.
+    #[test]
+    fn what_each_key_does_starts_in_one_column() {
+        let said = lines();
+        let rows: Vec<&Said> = said.iter().filter(|line| line.under).collect();
+
+        assert_eq!(rows.len(), BOUND.len(), "a row went missing from the list");
+
+        let mut at: Option<usize> = None;
+
+        for row in rows {
+            // where the description starts: past the name and past the run
+            // of padding after it
+            let gap = row
+                .words
+                .find("   ")
+                .unwrap_or_else(|| panic!("{:?} has no gap after its key", row.words));
+            let found = gap
+                + row.words[gap..]
+                    .find(|one: char| one != ' ')
+                    .unwrap_or_else(|| panic!("{:?} says nothing after its key", row.words));
+
+            match at {
+                None => at = Some(found),
+                Some(was) => assert_eq!(
+                    found, was,
+                    "{:?} starts its description at {} and the rows before it at {}",
+                    row.words, found, was
+                ),
+            }
+        }
     }
 
     /// Every row says something, and no key is in two rows.

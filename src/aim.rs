@@ -1481,6 +1481,13 @@ pub const SAYS_SIZE: f32 = 18.0;
 pub const SAYS_LINE: f32 = 24.0;
 
 /// Where the nth line of help goes.
+/// How far in a line under a heading sits, in the corner's own units.
+///
+/// **In the position and not in the string.** Every line the corner draws
+/// carries its own place, and `plate_round` measures the plate off those, so
+/// an inset row is inside its own plate without anything being told twice.
+pub const SAYS_INSET: f32 = 14.0;
+
 pub fn says_at(n: usize) -> Vec2 {
     SAYS_AT + Vec2::Y * SAYS_LINE * n as f32
 }

@@ -9710,12 +9710,14 @@ impl Game for Arcade {
         // right of the window until this went in; the one in the room behind
         // the wall happened to be short enough and did not.
         let room = (self.window.0 - aim::SAYS_AT.x * 2.0).max(aim::SAYS_SIZE * 8.0);
-        let mut lines: Vec<String> = said
+        // each line with how far in it sits, because spec 0116's list sets
+        // its rows under their headings and the rest of the corner does not
+        let mut lines: Vec<(String, f32)> = said
             .iter()
             .flat_map(|words| {
                 blitzkit::text::wrapped_in(words, aim::SAYS_SIZE, room, aim::SAYS_FACE)
                     .split('\n')
-                    .map(String::from)
+                    .map(|line| (String::from(line), 0.0))
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -9730,10 +9732,15 @@ impl Game for Arcade {
         // plate is measured off what is in `lines`.
         if self.showing_keys {
             for said in keys::lines() {
+                // a row sits in under its heading, and wraps in what is
+                // left of the line rather than in the whole of it
+                let inset = if said.under { aim::SAYS_INSET } else { 0.0 };
+                let room = (room - inset).max(aim::SAYS_SIZE * 8.0);
+
                 lines.extend(
-                    blitzkit::text::wrapped_in(&said, aim::SAYS_SIZE, room, aim::SAYS_FACE)
+                    blitzkit::text::wrapped_in(&said.words, aim::SAYS_SIZE, room, aim::SAYS_FACE)
                         .split('\n')
-                        .map(String::from),
+                        .map(|line| (String::from(line), inset)),
                 );
             }
         }
@@ -9741,7 +9748,7 @@ impl Game for Arcade {
         // and where you are standing, under the help and on the same plate,
         // for the seconds after M. Spec 0045.
         if self.showing_place {
-            lines.push(self.where_you_are());
+            lines.push((self.where_you_are(), 0.0));
         }
 
         // a plate under them first, because the text is drawn straight over
@@ -9750,9 +9757,9 @@ impl Game for Arcade {
         let laid: Vec<(Vec2, &str, f32, blitzkit::text::Face)> = lines
             .iter()
             .enumerate()
-            .map(|(n, words)| {
+            .map(|(n, (words, inset))| {
                 (
-                    aim::says_at(n),
+                    aim::says_at(n) + Vec2::X * *inset,
                     words.as_str(),
                     aim::SAYS_SIZE,
                     aim::SAYS_FACE,
