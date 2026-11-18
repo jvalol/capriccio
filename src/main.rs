@@ -473,6 +473,20 @@ fn posed_at() -> Option<Pose> {
     read_pose(&blitzkit::one_argument("--pose")?)
 }
 
+/// Whether the frame readout opens with the building rather than waiting for
+/// F. `--cost`.
+///
+/// **The fourth of the set, after `--fly`, `--pose` and `--at`.** Those three
+/// get a camera to a thing at an hour; this one is for the other question,
+/// which is what standing there costs. Measuring a room meant starting the
+/// game, walking to it and pressing a key, and the first thing that key does
+/// is put the cost of pressing it into the window: a flag puts the readout up
+/// before the first frame and `--pose` puts the camera in the room, so a
+/// number comes back from one command.
+fn showing_cost() -> bool {
+    blitzkit::asked_for("--cost")
+}
+
 /// Everything a frame of this building needs to be stood up again.
 ///
 /// **The clock is in here because a pose on its own is not a picture.** The
@@ -1282,6 +1296,18 @@ struct Arcade {
     /// agreed to time one at all, both asked of it at the top of the frame.
     counted: (u32, u32),
     timed: bool,
+    /// And what each pass of it took, by name, per spec 0067 of the engine.
+    ///
+    /// **The columns, not just the total.** The whole-frame number says the
+    /// building got dearer and nothing about which part of it did. These are
+    /// what the engine already measures and what nothing has ever read:
+    /// `gpu_passes` had no caller outside the wall of cubes it was written
+    /// against.
+    ///
+    /// Kept from the last frame that carried any, rather than cleared, since
+    /// a timestamp lands a few frames behind the picture and a column that
+    /// blanks every other frame cannot be read at all.
+    passes: Vec<(&'static str, f32)>,
     /// Whether a frame has gone by, since the first one has nothing to be
     /// measured against.
     ran: bool,
@@ -1690,7 +1716,7 @@ impl Arcade {
             shown_knobs: (0..display::count()).map(display::knob_rests).collect(),
             flying: flying(),
             showing_solid: false,
-            showing_cost: false,
+            showing_cost: showing_cost(),
             rig_step: 2,
             rig_many: false,
             rig_meshes: Vec::new(),
@@ -1699,6 +1725,7 @@ impl Arcade {
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
+            passes: Vec::new(),
             ran: false,
             wants_planes: false,
             showing_place: false,
@@ -6338,7 +6365,7 @@ impl Arcade {
             None => String::from("--"),
         };
         let counted = self.counted;
-        let lines = [
+        let mut lines = vec![
             format!(
                 "work {}   95th {}   worst {}",
                 ms(self.costs.middle_ms()),
@@ -6356,6 +6383,31 @@ impl Arcade {
             ),
             format!("{} draws, {} triangles", counted.0, counted.1),
         ];
+
+        // and which pass of it is the dear one, per spec 0067 of the engine.
+        //
+        // **The question the total cannot answer.** A frame that got worse
+        // asks which part of the building did, and the whole-frame number
+        // says only that something did. The columns are already measured;
+        // this reads them.
+        //
+        // Dearest first and four of them, because the frame has ten passes
+        // and the ones worth seeing are the ones at the top: a row of ten
+        // reading a fifth of a millisecond each is the fault spec 0067
+        // already names about the lamps.
+        if !self.passes.is_empty() {
+            let mut dearest = self.passes.clone();
+
+            dearest.sort_by(|one, two| two.1.total_cmp(&one.1));
+            lines.push(
+                dearest
+                    .iter()
+                    .take(4)
+                    .map(|(called, seconds)| format!("{} {:.2}", called, seconds * 1000.0))
+                    .collect::<Vec<String>>()
+                    .join("   "),
+            );
+        }
 
         let at = |line: usize| {
             glam::vec2(
@@ -8143,6 +8195,12 @@ impl Game for Arcade {
 
         self.counted = (counted.draws, counted.triangles);
         self.timed = renderer.times_frames();
+
+        let passes = renderer.gpu_passes();
+
+        if !passes.is_empty() {
+            self.passes = passes;
+        }
 
         if ran {
             self.costs.saw(blitzkit::cost::Frame {

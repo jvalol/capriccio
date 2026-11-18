@@ -67,6 +67,8 @@ The arcade takes these of its own:
                            under M, with or without commas
   --where                  print where you are standing, twice a second, on
                            stderr
+  --cost                   open with the frame readout up, rather than
+                           reaching for F
   --at <0 to 1>            what time it is when the run starts: nought dawn,
                            a quarter noon, a half dusk
   --day <seconds>          how long a day lasts
