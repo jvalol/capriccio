@@ -73,7 +73,7 @@ pub fn leaf_high() -> f32 {
 ///
 /// Always there, open or shut. The leaves are what moves.
 pub fn frame(reaches: f32, trail: &Trail) -> Vec<Aabb> {
-    if !shows(trail) {
+    if !whole(trail) {
         return Vec::new();
     }
 
@@ -175,9 +175,15 @@ pub fn solid(reaches: f32, trail: &Trail, swung: f32) -> Vec<Aabb> {
     out
 }
 
-/// Whether there is a gate here at all, which is whether there is a bridge.
-pub fn shows(trail: &Trail) -> bool {
-    bridge::shows(trail)
+/// Whether there is a gate here at all, which is whether the bridge is
+/// finished.
+///
+/// **`whole` and not `reach`.** Spec 0117 lets the bridge grow a span at a
+/// time, and a gate at the top of a bridge that has no top yet is a door
+/// standing in the air. The gate and what is through it arrive together,
+/// when the last span does.
+pub fn whole(trail: &Trail) -> bool {
+    bridge::whole(trail)
 }
 
 /// How near you have to come before the watchman opens it.
@@ -195,7 +201,7 @@ pub const OPENS_WITHIN: f32 = 7.0;
 
 /// Whether he has opened it, which is whether you have come near enough.
 pub fn opened(reaches: f32, trail: &Trail, from: Vec3) -> bool {
-    if !shows(trail) {
+    if !whole(trail) {
         return false;
     }
 
@@ -243,7 +249,7 @@ pub fn watchman_box(reaches: f32) -> Aabb {
 pub fn watched(reaches: f32, trail: &Trail, from: Vec3, way: Vec3) -> bool {
     let way = way.normalize_or_zero();
 
-    if !shows(trail) || way == Vec3::ZERO {
+    if !whole(trail) || way == Vec3::ZERO {
         return false;
     }
 
@@ -301,7 +307,7 @@ pub const WALL_IN: f32 = 0.04;
 pub const WALL_OVER: f32 = 0.03;
 
 pub fn wall(reaches: f32, trail: &Trail) -> Vec<Aabb> {
-    if !shows(trail) {
+    if !whole(trail) {
         return Vec::new();
     }
 
@@ -377,7 +383,7 @@ mod tests {
         }
 
         assert!(
-            !shows(&nothing),
+            !whole(&nothing),
             "the gate shows before the trail is walked"
         );
         assert!(

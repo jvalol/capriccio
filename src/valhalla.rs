@@ -887,7 +887,7 @@ pub fn people(reaches: f32) -> Vec<(Vec3, f32)> {
 /// boxes with a way through them and the other three stay the solid
 /// lumps they have always been.
 pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
-    if !crate::bridge::shows(trail) {
+    if !crate::bridge::whole(trail) {
         return Vec::new();
     }
 

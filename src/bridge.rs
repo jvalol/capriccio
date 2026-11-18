@@ -156,8 +156,39 @@ pub fn rainbow() -> blitzkit::texture::TextureData {
 /// **Every variant rather than a count.** A number here would go stale the
 /// first time a room grows a question, and spec 0036 is plain that this
 /// must never become "3 of 8 found". `Asked::every` is the one list.
-pub fn shows(trail: &Trail) -> bool {
+///
+/// This is the destination's gate and no longer the bridge's. The gate at
+/// the top and what is through it are a finished bridge's, per spec 0117;
+/// how far the bridge itself has got is [`reach`].
+pub fn whole(trail: &Trail) -> bool {
     Asked::every().iter().all(|one| trail.given().contains(one))
+}
+
+/// How far along its run the bridge has got, as a share of it. Spec 0117.
+///
+/// **One fraction where there were six predicates.** Everything that makes
+/// up the bridge asked `whole` separately and returned nothing, which is
+/// six accounts of the same question and the reason a growing bridge could
+/// not be written. There is one now and the deck, what holds you up, and
+/// what carries you all read it.
+///
+/// **The foot is there before anything is answered**, which is why this is
+/// one more than the questions over one more than their number rather than
+/// given over every. A bridge that is nothing until the first question is
+/// answered is not a promise; it is the same surprise moved one step
+/// earlier. At nothing given that is a sixth of the run.
+///
+/// Counted off `Asked::every` for the reason `whole` gives: a sixth
+/// question added anywhere makes this a seventh of the run with nothing
+/// here touched.
+pub fn reach(trail: &Trail) -> f32 {
+    let every = Asked::every();
+    let given = every
+        .iter()
+        .filter(|one| trail.given().contains(one))
+        .count();
+
+    (given + 1) as f32 / (every.len() + 1) as f32
 }
 
 /// The name under the runes, which lives in [`crate::says`] with the
@@ -1142,7 +1173,7 @@ pub const MOUND_STEPS: u32 = 14;
 /// hundred and twenty four the standing stone is. Seven of *those* put
 /// more geometry in the footing than in the monument.
 pub fn rubble(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
-    if !shows(trail) {
+    if !whole(trail) {
         return Vec::new();
     }
 
@@ -1270,7 +1301,7 @@ pub fn horn_mesh() -> blitzkit::mesh::MeshData {
 /// Empty until the bridge is there, like everything else here. A stone
 /// naming a bridge that does not exist is a grave marker.
 pub fn runestone(reaches: f32, trail: &Trail) -> Option<(Vec3, Vec3)> {
-    shows(trail).then(|| runestone_at(reaches))
+    whole(trail).then(|| runestone_at(reaches))
 }
 
 /// Whether a spot in the field is one the bridge keeps clear of trees.
@@ -1352,10 +1383,6 @@ pub const CARRIES: f32 = 2.8;
 /// off the deck's drawn shape: two answers to where the bridge is would
 /// come apart the first time either moved.
 pub fn carries(reaches: f32, at: Vec3, going: Vec3, trail: &Trail) -> f32 {
-    if !shows(trail) {
-        return 1.0;
-    }
-
     let foot = foot(reaches);
 
     if (at.z - foot.z).abs() > WIDE * 0.5 || at.y < 0.4 {
@@ -1364,7 +1391,10 @@ pub fn carries(reaches: f32, at: Vec3, going: Vec3, trail: &Trail) -> f32 {
 
     let along = (foot.x - at.x) / RUN;
 
-    if !(0.0..=1.0).contains(&along) {
+    // **Only over deck that is there.** Spec 0117: past the cut end there is
+    // nothing to be carried up, and a carry that reached further would hold
+    // you walking on air.
+    if !(0.0..=reach(trail)).contains(&along) {
         return 1.0;
     }
 
@@ -1485,13 +1515,18 @@ pub const KERB_PROUD: f32 = 0.04;
 /// than the last is level on top, so the kerb went up in steps of half
 /// a metre. Swept along the same curve the deck is swept along, it is
 /// a line.
-pub fn kerb_mesh(reaches: f32, side: f32) -> blitzkit::mesh::MeshData {
+pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshData {
     let foot = foot(reaches);
     let middle = foot.z + side * (WIDE * 0.5 - KERB_THICK * 0.5);
     let half = KERB_THICK * 0.5;
+    // **The verge stops where the deck does.** Spec 0117. It did not, and
+    // the two kerbs ran the whole hundred metres out over a deck a sixth of
+    // that: two thin arcs climbing out of the field and over, with nothing
+    // under them, which is what a picture of an empty trail showed.
+    let reach = reach.clamp(0.0, 1.0);
 
     let mut mesh = blitzkit::mesh::MeshData::surface(PIECES as u32, 3, |u, v| {
-        let along = u;
+        let along = u * reach;
         let on = high(along);
         let x = foot.x - along * RUN;
         // round the kerb's cross section: down the outer face, over the
@@ -1518,14 +1553,21 @@ pub fn kerb_mesh(reaches: f32, side: f32) -> blitzkit::mesh::MeshData {
 
 /// Where each piece of kerb sits: its box, in the same terms as
 /// [`treads`].
-pub fn kerbs(reaches: f32) -> Vec<Aabb> {
+/// The same, stopping where the deck does. Spec 0117.
+pub fn kerbs(reaches: f32, reach: f32) -> Vec<Aabb> {
     let foot = foot(reaches);
+    let reach = reach.clamp(0.0, 1.0);
     let pieces = (RUN / KERB_LONG).ceil() as usize;
     let mut out = Vec::with_capacity(pieces * 2);
 
     for piece in 0..pieces {
         let from = piece as f32 * KERB_LONG / RUN;
-        let to = ((piece + 1) as f32 * KERB_LONG / RUN).min(1.0);
+
+        if from >= reach {
+            break;
+        }
+
+        let to = ((piece + 1) as f32 * KERB_LONG / RUN).min(reach);
         let top = high(to).max(high(from)) + KERB_UP;
 
         for side in [-1.0f32, 1.0] {
@@ -1552,14 +1594,26 @@ pub fn kerbs(reaches: f32) -> Vec<Aabb> {
 /// a staircase to walk on, and a staircase fine enough to walk is far too
 /// fine to draw as boxes. Both come out of `high`, which is the one place
 /// the shape is written.
-pub fn treads(reaches: f32) -> Vec<Aabb> {
+/// The same, stopping where the deck does. Spec 0117.
+///
+/// **What holds you up ends where what is drawn ends**, or an unfinished
+/// bridge has invisible deck past its own cut end and you walk out into the
+/// air on nothing. The two come off the same reach for that reason, the way
+/// they already come off the same `high`.
+pub fn treads(reaches: f32, reach: f32) -> Vec<Aabb> {
     let foot = foot(reaches);
+    let reach = reach.clamp(0.0, 1.0);
     let steps = (RUN / TREAD).ceil() as usize;
     let mut out = Vec::with_capacity(steps);
 
     for step in 0..steps {
         let from = step as f32 * TREAD / RUN;
-        let to = ((step + 1) as f32 * TREAD / RUN).min(1.0);
+
+        if from >= reach {
+            break;
+        }
+
+        let to = ((step + 1) as f32 * TREAD / RUN).min(reach);
         let top = high(to).max(high(from));
 
         out.push(Aabb::new(
@@ -1577,16 +1631,28 @@ pub fn treads(reaches: f32) -> Vec<Aabb> {
 /// and the tests read. It is the same curve [`treads`] steps, so what you
 /// see and what holds you up are two readings of [`high`] and not two
 /// shapes.
-pub fn stations(reaches: f32) -> Vec<Vec3> {
+/// The same, stopping where the bridge has got to. Spec 0117.
+///
+/// **The cut end is put exactly at the reach**, rather than at the last
+/// whole piece it passed. `PIECES` is 48 over a hundred metres, so rounding
+/// to one would jump the end two metres at a time while a span winds in,
+/// which is a thing lurching rather than growing.
+pub fn stations(reaches: f32, reach: f32) -> Vec<Vec3> {
     let foot = foot(reaches);
+    let reach = reach.clamp(0.0, 1.0);
+    let at = |along: f32| vec3(foot.x - along * RUN, high(along), foot.z);
+    let last = (PIECES as f32 * reach).floor() as usize;
+    let mut out: Vec<Vec3> = (0..=last.min(PIECES))
+        .map(|n| at(n as f32 / PIECES as f32))
+        .collect();
+    let end = at(reach);
 
-    (0..=PIECES)
-        .map(|at| {
-            let along = at as f32 / PIECES as f32;
+    // and the end itself, unless the last whole piece already landed on it
+    if !out.last().is_some_and(|one| (one.x - end.x).abs() <= 1e-4) {
+        out.push(end);
+    }
 
-            vec3(foot.x - along * RUN, high(along), foot.z)
-        })
-        .collect()
+    out
 }
 
 /// What every bit of the deck is multiplied by.
@@ -1620,9 +1686,564 @@ pub fn glow() -> Vec4 {
 /// of it and the corners between them are sharp, so the vertices are not
 /// shared across a corner: averaged round one, the top of a rainbow catches
 /// the same light as its edge and the whole thing reads as a hose.
-pub fn deck_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
-    ribbon(reaches, false)
+pub fn deck_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
+    ribbon(reaches, false, reach)
 }
+
+/// How high the deck has to be before the earth beside it stops.
+///
+/// **2.2 is over your head**, which is the whole point: the bank runs
+/// exactly as far as the stretch you cannot pass, and stops where you can
+/// walk under the deck instead.
+pub const BANK_CLEAR: f32 = 2.2;
+
+/// How far the bank spreads to either side for every metre it stands.
+///
+/// **0.7, and it was 1.5.** Earth left to itself lies at about thirty-five
+/// degrees, which is a spread of one and a half, and that is what this was
+/// built at. The bank stands 1.22 at its tallest, so one and a half put
+/// 1.83 metres of gravel down either side of a six metre deck: nine and a
+/// half metres across in all, better than half of it gravel, which Jake
+/// read off the picture as a gravel road. Earth packed against a structure
+/// and held by it stands steeper than earth tipped out of a barrow, so
+/// this is steeper: 0.86 a side, and the bridge is the wider thing again.
+pub const BANK_SLOPE: f32 = 0.7;
+
+/// How far in from that spread the bank's edge wanders, as a share of it.
+///
+/// **A straight taper is a kerb.** Narrowing it left the outline a pair of
+/// dead straight lines converging on the foot, which is a civil engineering
+/// drawing and not a heap of spoil. The edge wanders instead, the way
+/// `mound_rim` wanders round the runestone's footing.
+///
+/// Inward only, so the drawn toe is never outside the boxes that stop you:
+/// the bank's whole claim is that what stops you is something you can see.
+pub const BANK_RAGGED: f32 = 0.34;
+
+/// How far under the field it is sunk, so no edge of it stands proud of
+/// ground that is not quite level.
+pub const BANK_UNDER: f32 = 0.6;
+
+/// And how far clear of the deck's underside its top stops.
+///
+/// **Two faces in one plane is this building's oldest fault.** It has been
+/// stripes round the pool, a chequerboard down a wall, a border sunk into a
+/// floor, a sign on panelling, the sky in patches, a floor over a garden,
+/// the underside of a neon can, and now a bank whose top was the soffit's
+/// own plane to the millimetre, drawing as grey bars across the rainbow
+/// that slid about as you walked.
+///
+/// A hand's breadth. The gap is under the deck and in its shadow, so
+/// nothing is seen through it, and it is far more than any depth buffer
+/// needs to tell the two apart.
+pub const BANK_SHY: f32 = 0.08;
+
+/// How deep the gravel lies where it is only a bed and not a bank.
+///
+/// A hand's depth, and under `crate::walk::RIDES`, so the edge of the
+/// apron is walked over rather than stepped up: a threshold you cross
+/// without noticing you crossed it, which is what a threshold is.
+pub const BANK_LEAST: f32 = 0.07;
+
+/// How far past the deck's edge the gravel lies wherever it lies at all.
+///
+/// **So the bed does not pinch to nothing at the foot.** Spread by height
+/// alone the apron would be five centimetres wide where the bank is a
+/// hand deep, which is a kerb and not a bed of gravel. This is the width
+/// it has before any of the slope's own spread is added.
+pub const BANK_APRON: f32 = 0.6;
+
+/// And how far in front of the foot it runs, so the ramp comes out of
+/// gravel rather than beginning in the middle of a field.
+pub const BANK_AHEAD: f32 = 3.0;
+
+/// And how much of that it spends coming up out of the field, so its
+/// front edge is a bed thinning away rather than a cut across the grass.
+pub const BANK_EDGE: f32 = 1.4;
+
+/// How far the deck's underside has to stand over the field before the
+/// bed of gravel goes under it rather than lying on the ground.
+pub const BANK_ONTO: f32 = 0.25;
+
+/// What share of the bank's height is spent easing it back into the field.
+pub const BANK_DIES: f32 = 0.34;
+
+/// How many steps across the bank's section, which wants enough to break
+/// its slope into facets rather than one flat cheek a side.
+pub const BANK_ACROSS: u32 = 16;
+
+/// And how many along, over the bank's own stretch and not the whole run.
+///
+/// **Because the first build was stretched over the hundred metres.** The
+/// surface ran `PIECES` steps from the foot to the far end of the bridge
+/// while everything it drew was in the first ten, so the bank itself got
+/// five of those steps: a ten metre heap in five facets, which is why it
+/// read as poured rather than piled. Its own stretch, its own steps.
+pub const BANK_ALONG: u32 = 40;
+
+/// How long a collider box is along the climb, and how many bands wide the
+/// wedge is to either side.
+///
+/// **A metre of terrace is a terrace.** `walk` takes a rise under
+/// [`crate::walk::RIDES`] as ground rather than a step, which is a tenth of
+/// a metre, and the bank's steepest stretch climbs a quarter of a metre for
+/// every metre along. Three tenths of a metre a box keeps every riser under
+/// that, so the wedge is walked and not climbed.
+pub const BANK_LONG: f32 = 0.3;
+pub const BANK_BANDS: usize = 3;
+
+/// Where the bank begins and ends, as shares along the run.
+///
+/// It starts where the deck's underside leaves the ground and stops where
+/// the deck clears your head, which are the two heights the bank is for.
+/// **Said once**, because the drawing and the boxes that stop you both want
+/// it and two lists of one thing drift.
+pub fn bank_runs() -> (f32, f32) {
+    (-BANK_AHEAD / RUN, along_at(BANK_CLEAR))
+}
+
+/// How far along the run the deck stands `y` high: the inverse of [`high`].
+pub fn along_at(y: f32) -> f32 {
+    let cos = (1.0 - 2.0 * y / RISE).clamp(-1.0, 1.0);
+
+    (LEVELS_AT * cos.acos() / std::f32::consts::PI).clamp(0.0, 1.0)
+}
+
+/// The earth the bridge comes out of. Spec 0117.
+///
+/// **Because a ramp rising out of a field has a stretch that is a wall.**
+/// Jake walked at the deck from the side on 2026-11-18 and stopped dead:
+/// where the deck is between knee and head height its edge is a floating
+/// slab, too high to step over and too low to duck under, and there is
+/// nothing to say so. The curve cannot fix it, since `high` eases out of
+/// the ground on purpose and the shape that leaves it sooner is the one
+/// `it_leaves_the_ground_at_a_walkable_angle` exists to keep out: steep
+/// enough to pass under quickly is steep enough to be a wall to walk up.
+///
+/// So the stretch stays and is given a reason. The earth is banked against
+/// both sides and fills the gap under the deck, so the bridge grows out of
+/// the ground rather than hovering over it, and the thing stopping you is
+/// a bank you can see.
+///
+/// **It ends where the deck clears your head.** Past that you walk under
+/// the bridge, which is worth being able to do, so the bank has no reason
+/// to go further.
+///
+/// **A wedge and not a block.** The first build pushed one box a step,
+/// full height out to the toe, which is a two metre wall standing where
+/// the drawing is an inch of gravel: the invisible face this building has
+/// been caught by three times. Each step is bands across instead, and
+/// every band is as high as the drawn surface at its outer edge and so
+/// never higher than what you can see.
+pub fn abutment(reaches: f32, reach: f32) -> Vec<Aabb> {
+    let foot = foot(reaches);
+    let reach = reach.clamp(0.0, 1.0);
+    let (begins, ends) = bank_runs();
+    let ends = ends.min(reach);
+
+    if ends <= begins {
+        return Vec::new();
+    }
+
+    let half = WIDE * 0.5;
+    let steps = ((ends - begins) * RUN / BANK_LONG).ceil() as usize;
+    let mut out = Vec::new();
+
+    for step in 0..steps {
+        let from = begins + step as f32 * BANK_LONG / RUN;
+        let to = (begins + (step + 1) as f32 * BANK_LONG / RUN).min(ends);
+        // **The lower end of the two, and that way round on purpose.** The
+        // deck's underside rises along the box, so a box as high as the
+        // bank's taller end stands through the deck at its shorter one,
+        // which `the_bank_stops_under_the_deck` catches. The other way
+        // round leaves the box a riser under the drawn surface, and at
+        // `BANK_LONG` along a slope of a quarter that riser is 0.08:
+        // inside `walk::RIDES`, so it is walked rather than stepped.
+        let top = bank_high(to).min(bank_high(from));
+
+        // **The apron is walked over and not stopped at.** A bed of
+        // gravel a hand deep is under `crate::walk::RIDES`, so boxes for
+        // it would be boxes nothing can touch, and there are a hundred
+        // and fifty of them. Only the stretch that actually stands in
+        // your way gets a collider.
+        if top <= BANK_LEAST + 1e-3 {
+            continue;
+        }
+
+        // **Out to the narrowest the edge ever wanders, and no further.**
+        // The drawing's own spread is `bank_spread`, which the rim pulls in
+        // by up to `BANK_RAGGED`: tile the boxes out to the widest of those
+        // and the bands past the wander stand in grass. So they stop at the
+        // narrowest, and what nothing stops you walking into is the last
+        // hand's breadth of the toe, which is ankle height and gravel.
+        let spread = top * BANK_SLOPE * (1.0 - BANK_RAGGED);
+        let (near, far) = (foot.x - to * RUN, foot.x - from * RUN);
+
+        for band in 0..=BANK_BANDS {
+            let step = spread / BANK_BANDS as f32;
+            let (inner, outer) = if band == 0 {
+                (0.0, half)
+            } else {
+                let from = half + step * (band - 1) as f32;
+
+                (from, from + step)
+            };
+            // as high as the drawn surface at the band's outer edge, so a
+            // band is never higher than what you can see of it
+            let stands = if band == 0 {
+                top
+            } else {
+                bank_profile(top, top, spread, outer)
+            };
+
+            if stands <= 0.0 {
+                continue;
+            }
+
+            // **Band nought is one box across the whole deck, not a half.**
+            // Written as `inner = 0.0` and mirrored only for the bands
+            // outside it, the box under the deck ran from the middle to
+            // the near edge and the other three metres had no collider at
+            // all: a lane down the whole length of the bank that you drop
+            // into. Jake, 2026-11-18, stuck coming up from under.
+            let (south, north) = if band == 0 {
+                (-outer, outer)
+            } else {
+                (inner, outer)
+            };
+
+            // up to the deck's own underside, never into it: two faces in
+            // one plane is the fault this building has found seven times
+            out.push(Aabb::new(
+                vec3(near, foot.y - BANK_UNDER, foot.z + south),
+                vec3(far, foot.y + stands, foot.z + north),
+            ));
+
+            if band > 0 {
+                out.push(Aabb::new(
+                    vec3(near, foot.y - BANK_UNDER, foot.z - outer),
+                    vec3(far, foot.y + stands, foot.z - inner),
+                ));
+            }
+        }
+    }
+
+    out
+}
+
+/// How high the earth stands a share `along` out, which is under the deck
+/// and falling away as the deck lifts clear of your head.
+///
+/// **It dies back rather than ending in a cliff.** The bank is there for
+/// the stretch you cannot pass, and at `BANK_CLEAR` you can walk under
+/// instead, so it has no business standing two metres tall and stopping
+/// dead. Over the last of its run it comes back down to the field.
+///
+/// **And it stops short of the soffit by [`BANK_SHY`].** Written as
+/// `high(along) - DEEP` the bank's flat top is the deck's underside, the
+/// same plane exactly, which is the fault this building has found seven
+/// times and found again here: Jake, 2026-11-18, standing at the foot with
+/// grey bars lying across the rainbow. The bars move when you move, which
+/// is the tell. The bank has no reason to touch the deck; it has to fill
+/// the gap, and a hand's breadth of air does that just as well.
+pub fn bank_high(along: f32) -> f32 {
+    let (begins, ends) = bank_runs();
+
+    if !(begins..=ends).contains(&along) {
+        return 0.0;
+    }
+
+    let under = bank_under(along);
+    let stands = BANK_CLEAR - DEEP - BANK_SHY;
+
+    if under >= stands {
+        return 0.0;
+    }
+
+    // **Never less than a bed of it.** Before the deck's underside leaves
+    // the ground there is nothing to fill, and the bank used to start
+    // there: six and a half metres of ramp lying on bare grass with
+    // nothing to say where the bridge began. Jake, 2026-11-18, asked at
+    // the foot: the ramp doesn't make sense. So the gravel runs the whole
+    // way and a little past the foot, and the shallowest it ever lies is
+    // a hand's depth, which is a threshold you walk onto rather than a
+    // step you climb: `crate::walk::RIDES` is deeper than this.
+    let top = under.max(BANK_LEAST);
+    // full under the low stretch, then eased down over the last third of it
+    let dying = ((stands - under) / (stands * BANK_DIES)).min(1.0);
+    // **And come up out of nothing at the front, not start in a cut.**
+    // The far end dies back; the near end stopped dead, so the bed ended
+    // in a straight line of gravel across the grass a few paces in front
+    // of the foot.
+    let coming = ((along - begins) * RUN / BANK_EDGE).clamp(0.0, 1.0);
+
+    top * dying * coming
+}
+
+/// How high the bank lies under the deck, which is the deck's own
+/// underside less [`BANK_SHY`] and is below the field over the first
+/// stretch, where the deck has not left the ground yet.
+///
+/// **Its own function, because the apron made the two different.** Out
+/// past the deck's edge the gravel never lies thinner than
+/// [`BANK_LEAST`]; under the deck it follows the soffit down and is
+/// buried, which is right: raising it to the apron's depth there would
+/// put gravel over the first three metres of the rainbow.
+pub fn bank_under(along: f32) -> f32 {
+    high(along) - DEEP - BANK_SHY
+}
+
+/// How high the bank stands `out` metres from the middle of the deck, where
+/// it is `top` high under the deck and spreads `spread` past the deck's own
+/// edge. Zero at its toe, flat under the deck, and eased between.
+pub fn bank_profile(under: f32, top: f32, spread: f32, out: f32) -> f32 {
+    let half = WIDE * 0.5;
+
+    if out <= half {
+        return under;
+    }
+
+    if spread <= 0.0 {
+        return 0.0;
+    }
+
+    let down = ((out - half) / spread).clamp(0.0, 1.0);
+
+    top * (1.0 - down * down)
+}
+
+/// How far out the bank's edge wanders a share `along` into the run, as a
+/// share of its spread.
+///
+/// **No one wave allowed to carry it**, which is `mound_rim`'s lesson one
+/// object along: three big lobes down a bank is a shape, and what is wanted
+/// is an edge with no shape at all. Four small waves, none of them large,
+/// and their shares add to one so the narrowest it ever runs is a number
+/// rather than a guess.
+pub fn bank_rim(along: f32) -> f32 {
+    let metres = along * RUN;
+    let wobble = (metres * 0.9).sin() * 0.27
+        + (metres * 2.3 + 1.7).sin() * 0.31
+        + (metres * 4.7 + 0.5).sin() * 0.25
+        + (metres * 9.1 + 2.4).sin() * 0.17;
+
+    1.0 - BANK_RAGGED * (0.5 + wobble * 0.5)
+}
+
+/// How far past the deck's edge the bank reaches a share `along` into the
+/// run, and how high its surface stands `across` metres from the middle.
+///
+/// **The one account of its shape.** The surface is drawn from these and
+/// the boxes that stop you are checked against them, which is the only way
+/// `nothing_stops_you_higher_than_the_bank_is_drawn` tests anything: a test
+/// against a second copy of the arithmetic passes whatever the copy says.
+pub fn bank_spread(along: f32) -> f32 {
+    let (begins, ends) = bank_runs();
+
+    if !(begins..=ends).contains(&along) {
+        return 0.0;
+    }
+
+    (BANK_APRON + bank_high(along) * BANK_SLOPE) * bank_rim(along)
+}
+
+pub fn bank_at(along: f32, across: f32) -> f32 {
+    let top = bank_high(along);
+    // **In front of the foot the bed runs right across.** Past that it
+    // keeps to the soffit and is buried, which is what stops gravel lying
+    // over the first stretch of the rainbow; but there is no deck in front
+    // of the foot to lie under, and keeping it down there left a six metre
+    // lane of bare grass with the tufts already taken out of it, which
+    // `the_field_is_drawn` caught because that picture is taken standing
+    // on this exact spot.
+    // **Onto the soffit only once there is a deck overhead to hide it.**
+    // The bed's middle follows the deck's underside, and the underside is
+    // below the field for the first six metres: taken there from the foot
+    // it put the middle of the bed under the ground, and what you saw was
+    // the field's own grass in a six metre lane with a strip of gravel
+    // down either side of it. Jake, 2026-11-18, standing in it: it's not
+    // consistent.
+    //
+    // So the blend is keyed on how far the soffit stands over the field
+    // rather than on how far along you are. Until it stands clear the bed
+    // lies on the ground across its whole width, which buries the ramp's
+    // first three metres, and that is the thing wanted: the ramp comes
+    // out of the gravel rather than starting on top of it.
+    let sunk = (high(along) - DEEP).max(0.0);
+    let onto = (sunk / BANK_ONTO).clamp(0.0, 1.0);
+    let inner = top * (1.0 - onto) + bank_under(along).min(top) * onto;
+
+    bank_profile(inner, top, bank_spread(along), across)
+}
+
+/// The bank as one surface, the way `mound_mesh` is one surface.
+///
+/// **Faceted, and thinning to nothing at its rim.** The first build of this
+/// was a smooth surface with a flat top and a slope each side, and
+/// `MeshData::surface` works its normals out by sampling around each point:
+/// at the kink where the slope meets the top the sampling straddles the
+/// kink and the normal comes out wrong, which drew as dark bars lying
+/// across the deck. `mound_mesh` had already solved this one object along,
+/// with `garden::faceted` for the normals and a rim that thins rather than
+/// steps. This is that, run along a line instead of around a stone.
+///
+/// **Stone and gravel, not turf.** Jake, 2026-11-18: sand and gravel and
+/// rocks are what make sense as an abutment. The first build was the
+/// field's own grass raised, which read as neither ground nor structure.
+pub fn bank_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
+    let foot = foot(reaches);
+    let reach = reach.clamp(0.0, 1.0);
+    let half = WIDE * 0.5;
+    let (begins, ends) = bank_runs();
+    let ends = ends.min(reach);
+    let stretch = (ends - begins).max(0.0);
+
+    let mut mesh = crate::garden::faceted(blitzkit::mesh::MeshData::surface(
+        BANK_ALONG,
+        BANK_ACROSS,
+        |u, v| {
+            let along = begins + u * stretch;
+            let spread = bank_spread(along);
+            let out = half + spread;
+            let z = (v * 2.0 - 1.0) * out;
+            let y = bank_at(along, z.abs());
+            // and broken up on the way down, the way the mound is
+            let down = if spread > 0.0 {
+                ((z.abs() - half) / spread).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let rough = ((along * 90.0).sin() * (v * 17.0).sin()) * 0.05 * down;
+
+            vec3(foot.x - along * RUN, foot.y + y + rough, foot.z + z)
+        },
+    ));
+
+    // **And the stone laid at a size, not stretched over the whole bank.**
+    // `MeshData::surface` runs its uv nought to one whichever way, so one
+    // granite picture covered ten metres by seven and drew as smears a
+    // metre long. This is the cube's fault with a different shape: a
+    // surface's texture is its own size however big the surface is.
+    let along = stretch * RUN / BANK_STONE;
+    let across = (WIDE + bank_reaches() * 2.0) / BANK_STONE;
+
+    for vertex in &mut mesh.vertices {
+        vertex.uv[0] *= along;
+        vertex.uv[1] *= across;
+    }
+
+    mesh
+}
+
+/// How many metres of bank one granite picture covers.
+///
+/// Two and a half, which is near enough what the runestone's footing does
+/// with the same picture: that mound is four metres across and takes one.
+pub const BANK_STONE: f32 = 2.5;
+
+/// The furthest the bank's edge can stand from the deck's own.
+pub fn bank_reaches() -> f32 {
+    (BANK_CLEAR - DEEP) * BANK_SLOPE
+}
+
+/// Whether a spot in the field is under the bank, and so is ground the
+/// field has no business sowing anything on.
+///
+/// **Because the field does not know the bank is there.** `field::cover`
+/// scatters its tufts, flowers and litter wherever the ground is open and
+/// asks the village but never the bridge, so grass came up through the
+/// gravel: the same fault as a flower through a cart's bed, which is the
+/// case that note was written about. Jake saw it on 2026-11-18.
+///
+/// Read off `bank_spread`, which is also what the surface is drawn to, so
+/// the keep-out is the bank's own footprint rather than a second guess at
+/// where the bank is.
+pub fn banked(reaches: f32, at: Vec3) -> bool {
+    let foot = foot(reaches);
+    let (begins, ends) = bank_runs();
+    let along = (foot.x - at.x) / RUN;
+
+    if !(begins..=ends).contains(&along) {
+        return false;
+    }
+
+    (at.z - foot.z).abs() <= WIDE * 0.5 + bank_spread(along)
+}
+
+/// The loose stone lying on the bank: where each piece sits, how big it is
+/// and which way round.
+///
+/// **Because a smooth grey surface is a smooth grey surface.** The bank
+/// came back from Jake on 2026-11-18 as stone that did not quite land, and
+/// this is the lesson `rubble` already wrote one object along: what makes
+/// ground read as gravel is pieces of it, and a raised surface with a
+/// stone picture on it is a raised surface with a stone picture on it.
+///
+/// Coarsest at the toe and finest up against the deck, which is the way
+/// round `rubble` is not, and for the opposite reason: there is no collar
+/// here to pack. This is spoil tipped against an abutment, so what rolls
+/// is what reaches the bottom.
+pub fn bank_stones(reaches: f32, reach: f32) -> Vec<(Vec3, Vec3, f32)> {
+    let foot = foot(reaches);
+    let reach = reach.clamp(0.0, 1.0);
+    let (begins, ends) = bank_runs();
+    let ends = ends.min(reach);
+
+    if ends <= begins {
+        return Vec::new();
+    }
+
+    let half = WIDE * 0.5;
+    let mut state = 0xB0FF_u32;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        state
+    };
+    let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
+    let mut out = Vec::with_capacity(BANK_STONES);
+
+    for _ in 0..BANK_STONES {
+        let along = begins + roll(next()) * (ends - begins);
+        let spread = bank_spread(along);
+        // **Out past the deck's edge, which is all of it you can see.**
+        // Under the deck the bank is a flat top in shadow and anything
+        // lying on it is hidden by the deck itself.
+        let share = roll(next());
+        // **From the deck's own edge outward.** Spread from the middle
+        // instead, nine pieces in ten lay under the deck, where the deck
+        // itself hides them: the gravel reads as gravel only where it is
+        // out in the open beside the kerb.
+        let out_by = half * 0.94 + share * (half * 0.06 + spread);
+        let side = if roll(next()) < 0.5 { -1.0 } else { 1.0 };
+        let across = (0.09 + share * 0.17) * (0.7 + roll(next()) * 0.8);
+        let z = foot.z + side * out_by;
+        // sitting into the bank by about a third of itself, which is what
+        // stops them reading as dropped
+        let up = foot.y + bank_at(along, out_by) - across * 0.34;
+
+        out.push((
+            vec3(foot.x - along * RUN, up, z),
+            vec3(
+                across,
+                across * (0.45 + roll(next()) * 0.4),
+                across * (0.8 + roll(next()) * 0.6),
+            ),
+            roll(next()) * std::f32::consts::TAU,
+        ));
+    }
+
+    out
+}
+
+/// How many pieces lie on it.
+///
+/// **Two hundred and forty over ten metres of bank each side.** The
+/// runestone's footing is a hundred and sixty over four metres across, and
+/// this has to read as gravel from the same distance.
+pub const BANK_STONES: usize = 240;
 
 /// How bright the underside is against the top, and how much of what is
 /// behind it comes through.
@@ -1663,16 +2284,16 @@ pub fn soffit_glow() -> Vec4 {
 
 /// The underside of that ribbon, which is drawn by itself so it can be
 /// dimmer than the top. See [`SOFFIT_LIT`].
-pub fn soffit_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
-    ribbon(reaches, true)
+pub fn soffit_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
+    ribbon(reaches, true, reach)
 }
 
 /// The deck's strips: the underside when `soffit`, and the top and the two
 /// edges when not.
-fn ribbon(reaches: f32, soffit: bool) -> blitzkit::mesh::MeshData {
+fn ribbon(reaches: f32, soffit: bool, reach: f32) -> blitzkit::mesh::MeshData {
     use blitzkit::mesh::Vertex;
 
-    let along = stations(reaches);
+    let along = stations(reaches, reach);
     let half = WIDE * 0.5;
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -1694,11 +2315,17 @@ fn ribbon(reaches: f32, soffit: bool) -> blitzkit::mesh::MeshData {
     for (near, far, looks) in want {
         let first = vertices.len() as u32;
 
-        for (at, middle) in along.iter().enumerate() {
+        for middle in along.iter() {
             // how the deck lies here, which is the slope of the curve: the
             // cross-section stands square to it rather than square to the
             // world, or the deck is thicker where it is steeper
-            let slope = pitch(at as f32 / PIECES as f32);
+            // **Where this station actually is along the run**, and not its
+            // place in the list over `PIECES`. Spec 0117 cuts the deck at
+            // the reach, so the last station is wherever that falls and the
+            // two stopped agreeing: the cross-section at the cut end stood
+            // at the wrong pitch and the rainbow's mapping ran short.
+            let along_run = (foot(reaches).x - middle.x) / RUN;
+            let slope = pitch(along_run);
             let over = vec3(slope, 1.0, 0.0).normalize();
             let under = *middle - over * DEEP;
 
@@ -1717,7 +2344,7 @@ fn ribbon(reaches: f32, soffit: bool) -> blitzkit::mesh::MeshData {
                 2 => -over,
                 _ => -Vec3::Z,
             };
-            let down = at as f32 / PIECES as f32;
+            let down = along_run;
 
             for which in [near, far] {
                 let put = corner(which);
@@ -1730,7 +2357,12 @@ fn ribbon(reaches: f32, soffit: bool) -> blitzkit::mesh::MeshData {
             }
         }
 
-        for at in 0..PIECES as u32 {
+        // **One quad between each pair of stations, and not `PIECES` of
+        // them.** This counted pieces while the loop above walked the
+        // stations, and a truncated deck has fewer: it indexed two vertices
+        // past the end of its own list and the engine panicked building the
+        // tree over it.
+        for at in 0..along.len().saturating_sub(1) as u32 {
             let one = first + at * 2;
 
             indices.extend([one, one + 1, one + 3, one, one + 3, one + 2]);
@@ -1789,7 +2421,7 @@ pub fn top(reaches: f32) -> Vec3 {
 /// building has been caught by three times in one day before now. The slab
 /// runs back under the last stretch of deck by a tread's length.
 pub fn landing(reaches: f32, trail: &Trail) -> Vec<Aabb> {
-    if !shows(trail) {
+    if !whole(trail) {
         return Vec::new();
     }
 
@@ -1858,12 +2490,24 @@ pub fn watchman(reaches: f32) -> (Vec3, f32) {
 
 /// What you can stand on, which is the treads and nothing else.
 pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
-    if !shows(trail) {
-        return Vec::new();
+    // **As far as it has got, and no further.** Spec 0117: the deck is
+    // drawn to `reach` and this is what you stand on, so the two read the
+    // same number or there is invisible deck past the cut end.
+    let far = reach(trail);
+    let mut out = treads(reaches, far);
+
+    out.extend(kerbs(reaches, far));
+    // and the earth it comes out of, which is what stops you where the deck
+    // is too low to duck under and too high to step over. Spec 0117.
+    out.extend(abutment(reaches, far));
+
+    // and the landing and what stands on it, which are the finished
+    // bridge's rather than the reaching one's: there is no top to arrive at
+    // until the last span is in.
+    if !whole(trail) {
+        return out;
     }
 
-    let mut out = treads(reaches);
-    out.extend(kerbs(reaches));
     out.extend(landing(reaches, trail));
     // and the piers, which oversail the kerb they stand on by enough to
     // put your head in one if they were only drawn
@@ -1936,8 +2580,8 @@ pub mod tests {
     /// end, drawn twice.
     #[test]
     fn the_four_strips_are_split_three_and_one() {
-        let deck = deck_mesh(REACHES);
-        let belly = soffit_mesh(REACHES);
+        let deck = deck_mesh(REACHES, 1.0);
+        let belly = soffit_mesh(REACHES, 1.0);
 
         assert_eq!(
             deck.indices.len(),
@@ -1968,28 +2612,445 @@ pub mod tests {
     }
 
     #[test]
-    fn nothing_until_the_building_is_done() {
+    fn the_foot_is_there_before_anything_is_asked() {
         let empty = Trail::new();
 
-        assert!(!shows(&empty));
-        assert!(solid(REACHES, &empty).is_empty());
+        assert!(!whole(&empty), "nothing has been given");
+
+        // **Not empty, which is the whole of spec 0117.** It used to be, and
+        // a bridge that is nothing until the first question is answered is
+        // the same surprise moved one step earlier rather than a promise.
+        assert!(
+            !solid(REACHES, &empty).is_empty(),
+            "the foot is not there to stand on"
+        );
+
+        let far = reach(&empty);
+        let every = Asked::every().len();
+
+        assert!(
+            (far - 1.0 / (every + 1) as f32).abs() < 1e-6,
+            "the foot is {} of the run and should be one of {}",
+            far,
+            every + 1
+        );
     }
 
     #[test]
-    fn one_short_is_not_done() {
+    fn one_short_has_deck_but_no_landing() {
         let nearly = nearly();
 
-        assert!(!shows(&nearly), "one answer short and it is still there");
-        assert!(solid(REACHES, &nearly).is_empty());
+        assert!(!whole(&nearly), "one answer short and it is still there");
+        assert!(
+            !solid(REACHES, &nearly).is_empty(),
+            "five sixths of a bridge is still a bridge"
+        );
+
+        // **And nothing of the landing**, which is what the bridge arrives
+        // at: a stone platform standing in the air ahead of the deck would
+        // be the ending given away. Spec 0117.
+        assert!(
+            landing(REACHES, &nearly).is_empty(),
+            "there is a landing before there is a top"
+        );
+        assert!(piers(REACHES, &nearly).is_empty(), "piers on no landing");
     }
 
+    /// Spec 0117: the bank runs exactly the stretch you cannot pass.
+    ///
+    /// **Both ends matter.** Short of the clearance it has to be there, or
+    /// the wall is back. Past it the bank has to stop, or you can no longer
+    /// walk under a bridge that is plainly high enough to walk under.
+    #[test]
+    fn the_bank_runs_out_where_the_deck_clears_your_head() {
+        let banked = abutment(REACHES, 1.0);
+
+        assert!(!banked.is_empty(), "nothing is banked at all");
+
+        let foot = foot(REACHES);
+        let ends = banked
+            .iter()
+            .map(|box_| box_.min.x)
+            .fold(f32::MAX, f32::min);
+        let along = (foot.x - ends) / RUN;
+
+        assert!(
+            high(along) <= BANK_CLEAR + 1e-3,
+            "the bank runs to {} up, past the {} it is for",
+            high(along),
+            BANK_CLEAR
+        );
+        assert!(
+            high(along) > BANK_CLEAR - 0.5,
+            "the bank gives up at {} up and leaves a wall to {}",
+            high(along),
+            BANK_CLEAR
+        );
+    }
+
+    /// Spec 0117, and Jake on 2026-11-18: the ramp doesn't make sense.
+    ///
+    /// **Because it began in the middle of a field.** The bank started
+    /// where the deck's underside leaves the ground, six and a half
+    /// metres in, so the first stretch of the ramp was a thin slab lying
+    /// on grass with nothing to say a bridge began there. The gravel runs
+    /// the whole way now and a little past the foot.
+    ///
+    /// The depths here are written out and not read off `BANK_LEAST` and
+    /// `BANK_APRON`: a test that reads the constant agrees with the code
+    /// whatever the constant says, which is how the first go at
+    /// `the_bank_is_narrower_...` came to prove nothing.
+    #[test]
+    fn the_gravel_runs_to_the_foot_and_past_it() {
+        let (begins, _) = bank_runs();
+
+        assert!(
+            begins < 0.0,
+            "the gravel starts {} along, which is not in front of the foot",
+            begins
+        );
+
+        assert!(
+            bank_high(-1.0 / RUN) > 0.03,
+            "the bed is {} deep a metre in front of the foot",
+            bank_high(-1.0 / RUN)
+        );
+
+        let half = WIDE * 0.5;
+
+        for step in 0..=200 {
+            // only the stretch the bank used to skip: from the foot to
+            // where the deck's underside leaves the ground. In front of
+            // the foot it is thinning away, per `BANK_EDGE`, so the depth
+            // there is asked for once above rather than all along.
+            let along = along_at(DEEP) * step as f32 / 200.0;
+
+            assert!(
+                bank_high(along) >= 0.04,
+                "the gravel is {} deep a share {} along",
+                bank_high(along),
+                along
+            );
+            assert!(
+                bank_spread(along) >= 0.25,
+                "the gravel reaches {} past the deck a share {} along",
+                bank_spread(along),
+                along
+            );
+            // and it is a bed on the ground, not a lip standing off it
+            assert!(
+                bank_at(along, half + bank_spread(along)) <= 1e-3,
+                "the gravel's toe stands {} proud of the field",
+                bank_at(along, half + bank_spread(along))
+            );
+            // **and nowhere under the field.** Where the bed's middle
+            // sank below the ground there was no deck over it yet, so
+            // what showed through was the field's own grass in a lane
+            // between two strips of gravel.
+            for across in 0..=12 {
+                let out = half * across as f32 / 12.0;
+
+                assert!(
+                    bank_at(along, out) > 1e-3,
+                    "the bed is {} at {} out a share {} along, under the field",
+                    bank_at(along, out),
+                    out,
+                    along
+                );
+            }
+        }
+    }
+
+    /// And none of it stands in the deck, nor in the deck's own plane.
+    ///
+    /// **A clearance written out rather than read off `BANK_SHY`.** The
+    /// bank's top was `high(along) - DEEP` exactly, which is the soffit's
+    /// plane to the millimetre, and it drew as grey bars sliding across
+    /// the rainbow as you walked. A test that reads the same constant the
+    /// code does agrees with the code whatever the constant says, so the
+    /// number here is the margin the fault needs, not the margin the
+    /// building happens to use.
+    const CLEARS_THE_SOFFIT: f32 = 0.02;
+
+    ///
+    /// Asked from where the deck's underside stands clear of the field by
+    /// `BANK_ONTO`. Below that the bed is lying on the ground rather than
+    /// hanging under the deck, and it crosses the soffit's line once on
+    /// its way down. A crossing is a line and draws clean; what speckles
+    /// is two faces sharing a plane over an area, which is what this
+    /// holds everywhere the two actually run together.
+    #[test]
+    fn the_bank_is_not_in_the_decks_own_plane() {
+        let (_, ends) = bank_runs();
+        let begins = along_at(DEEP + BANK_ONTO + 0.05);
+
+        for step in 0..=400 {
+            let along = begins + (ends - begins) * step as f32 / 400.0;
+            let soffit = high(along) - DEEP;
+            let bank = bank_at(along, 0.0);
+
+            assert!(
+                bank <= soffit - CLEARS_THE_SOFFIT,
+                "the bank's top is {} a share {} along and the soffit is {}",
+                bank,
+                along,
+                soffit
+            );
+        }
+    }
+
+    /// And none of the boxes that stop you stand in it either.
+    #[test]
+    fn the_bank_stops_under_the_deck() {
+        let foot = foot(REACHES);
+
+        for box_ in abutment(REACHES, 1.0) {
+            let along = (foot.x - box_.max.x) / RUN;
+            let deck = foot.y + high(along);
+
+            assert!(
+                box_.max.y <= deck - DEEP - CLEARS_THE_SOFFIT,
+                "the bank reaches {} and the deck's underside is {}",
+                box_.max.y,
+                deck - DEEP
+            );
+        }
+    }
+
+    /// And nothing stops you where there is nothing to see stopping you.
+    ///
+    /// **The fault this building has been caught by three times**, under
+    /// three names: a face at the walking surface, an unseen ledge, a
+    /// slab you cannot step over or duck under. The bank's whole claim in
+    /// spec 0117 is that what stops you is a bank you can see, and the
+    /// first build broke it by pushing one full height box a step: two
+    /// metres of wall standing where the drawing is an inch of gravel.
+    ///
+    /// Read against `bank_at`, which the surface itself is drawn from, so
+    /// this is the drawing and not a second copy of its arithmetic. The
+    /// surface also carries up to `0.05` of roughness either way, which is
+    /// below the allowance here and is not a wall at any height.
+    #[test]
+    fn nothing_stops_you_higher_than_the_bank_is_drawn() {
+        let foot = foot(REACHES);
+        let banked = abutment(REACHES, 1.0);
+
+        assert!(!banked.is_empty(), "nothing is banked at all");
+
+        for box_ in &banked {
+            let outer = (box_.max.z - foot.z).max(foot.z - box_.min.z);
+            let stands = box_.max.y - foot.y;
+
+            // at both ends of the box and across it, since the surface
+            // falls as well as rises over the stretch one box covers
+            for end in 0..=4 {
+                let span = (box_.max.x - box_.min.x) * end as f32 / 4.0;
+                let along = (foot.x - box_.max.x + span) / RUN;
+                let drawn = bank_at(along, outer);
+
+                assert!(
+                    stands <= drawn + 0.06,
+                    "a box stands {} at {} out, where the bank is drawn {} \
+                     high a share {} along",
+                    stands,
+                    outer,
+                    drawn,
+                    along
+                );
+            }
+        }
+    }
+
+    /// Spec 0117, and Jake on 2026-11-18: narrow it and break its line.
+    ///
+    /// **Narrow** is the gravel against the bridge: the two cheeks together
+    /// come to less than half the deck's own width. "Narrower than the
+    /// deck" was the first assertion here and it was worth nothing, since a
+    /// cheek was 1.83 at the old spread and the deck's half is 3: the
+    /// control put `BANK_SLOPE` back to 1.5 and the test still passed.
+    ///
+    /// **Broken** is the edge not running straight. Tested as bounds and a
+    /// spread of values rather than as a shape, since the thing wanted is
+    /// an edge with no shape at all.
+    #[test]
+    fn the_bank_is_narrower_than_the_deck_and_its_edge_wanders() {
+        let (begins, ends) = bank_runs();
+        let mut least = f32::MAX;
+        let mut most = f32::MIN;
+
+        for step in 0..=200 {
+            let along = begins + (ends - begins) * step as f32 / 200.0;
+            // **Before the wander takes anything off it**, since the rim
+            // only ever pulls in. Read as `bank_spread` this passed at the
+            // old 1.5 as well: the rim happens to run narrow just where
+            // the bank is tallest, so the sampled widest came in under the
+            // bar and the test said nothing about the constant at all.
+            let spread = BANK_APRON + bank_high(along) * BANK_SLOPE;
+
+            assert!(
+                spread * 2.0 <= WIDE * 0.5,
+                "the bank puts {} of gravel beside {} of bridge",
+                spread * 2.0,
+                WIDE
+            );
+
+            assert!(
+                bank_spread(along) <= spread + 1e-4,
+                "the wander puts the edge out to {} past a spread of {}",
+                bank_spread(along),
+                spread
+            );
+
+            let rim = bank_rim(along);
+
+            assert!(
+                (1.0 - BANK_RAGGED - 1e-4..=1.0 + 1e-4).contains(&rim),
+                "the edge wanders to {} of its spread",
+                rim
+            );
+
+            least = least.min(rim);
+            most = most.max(rim);
+        }
+
+        assert!(
+            most - least > BANK_RAGGED * 0.75,
+            "the edge only wanders over {} of the {} it is allowed",
+            most - least,
+            BANK_RAGGED
+        );
+    }
+
+    /// Spec 0117: each question given puts the end one span further out.
+    #[test]
+    fn a_question_adds_a_span() {
+        let every = Asked::every();
+        let mut trail = Trail::new();
+        let mut was = reach(&trail);
+        let span = 1.0 / (every.len() + 1) as f32;
+
+        for one in every {
+            trail.gave(*one);
+
+            let now = reach(&trail);
+
+            assert!(
+                (now - was - span).abs() < 1e-6,
+                "a question moved the end by {} and a span is {}",
+                now - was,
+                span
+            );
+
+            was = now;
+        }
+
+        assert!(
+            (was - 1.0).abs() < 1e-6,
+            "five questions and it ends at {}",
+            was
+        );
+    }
+
+    /// Spec 0117: what holds you up stops where what is drawn stops.
+    ///
+    /// **Both ways round.** Deck past the treads is a step into the air on
+    /// something you can see; treads past the deck is standing on nothing.
+    #[test]
+    fn you_cannot_walk_past_the_end() {
+        for trail in [Trail::new(), nearly(), done()] {
+            let far = reach(&trail);
+            let foot = foot(REACHES);
+            let ends = foot.x - far * RUN;
+            let drawn = stations(REACHES, far);
+            let stood = treads(REACHES, far);
+
+            let past = drawn.iter().map(|at| at.x).fold(f32::MAX, f32::min);
+            let held = stood.iter().map(|box_| box_.min.x).fold(f32::MAX, f32::min);
+
+            assert!(
+                (past - ends).abs() < 1e-3,
+                "the deck ends at {} and the reach is {}",
+                past,
+                ends
+            );
+            assert!(
+                (held - ends).abs() < TREAD,
+                "what holds you up ends at {} and the deck at {}",
+                held,
+                ends
+            );
+        }
+    }
+
+    /// And the carry stops there too.
+    #[test]
+    fn nothing_carries_you_past_the_end() {
+        let foot = foot(REACHES);
+        let up = vec3(-1.0, 0.0, 0.0);
+
+        for trail in [Trail::new(), nearly()] {
+            let far = reach(&trail);
+            let beyond = far + (1.0 - far) * 0.5;
+            let at = vec3(foot.x - beyond * RUN, high(beyond), foot.z);
+
+            assert_eq!(
+                carries(REACHES, at, up, &trail),
+                1.0,
+                "it carried at {} of the run with {} built",
+                beyond,
+                far
+            );
+        }
+    }
+
+    /// Spec 0117: only the far end moves, so the foot never shifts.
+    #[test]
+    fn it_grows_from_the_far_end() {
+        let foot = foot(REACHES);
+        let mut trail = Trail::new();
+        let mut was: Option<f32> = None;
+
+        for one in Asked::every()
+            .iter()
+            .chain(std::iter::once(&Asked::every()[0]))
+        {
+            let near = treads(REACHES, reach(&trail))
+                .iter()
+                .map(|box_| box_.max.x)
+                .fold(f32::MIN, f32::max);
+
+            assert!(
+                (near - foot.x).abs() < TREAD,
+                "the foot is at {} and the bridge starts at {}",
+                foot.x,
+                near
+            );
+
+            if let Some(was) = was {
+                assert!((was - near).abs() < 1e-4, "the foot moved");
+            }
+
+            was = Some(near);
+            trail.gave(*one);
+        }
+    }
+
+    /// **A sum, and it cannot tell you a term is empty.** This went green
+    /// through the whole of the day `abutment` returned nothing at all,
+    /// because the abutment was not one of the terms: a count that adds up
+    /// the same calls `solid` makes says only that nothing is lost or
+    /// counted twice on the way. What catches an empty one is a test that
+    /// asks for a box and looks at it, which is what
+    /// `the_bank_runs_out_where_the_deck_clears_your_head` and
+    /// `nothing_stops_you_higher_than_the_bank_is_drawn` do.
     #[test]
     fn it_is_there_once_every_room_has_answered() {
-        assert!(shows(&done()));
+        assert!(whole(&done()));
         assert_eq!(
             solid(REACHES, &done()).len(),
             (RUN / TREAD).ceil() as usize
-                + kerbs(REACHES).len()
+                + kerbs(REACHES, 1.0).len()
+                + abutment(REACHES, 1.0).len()
                 + landing(REACHES, &done()).len()
                 + piers(REACHES, &done()).len()
                 + runestone(REACHES, &done()).iter().count()
@@ -2239,7 +3300,7 @@ pub mod tests {
     /// riser over `walk::STEP` is a wall with a view.
     #[test]
     fn no_tread_rises_more_than_a_step() {
-        let treads = treads(REACHES);
+        let treads = treads(REACHES, 1.0);
         let mut worst: f32 = 0.0;
 
         for pair in treads.windows(2) {
@@ -2288,7 +3349,7 @@ pub mod tests {
 
     #[test]
     fn the_treads_lie_under_the_drawn_deck() {
-        let treads = treads(REACHES);
+        let treads = treads(REACHES, 1.0);
         let foot = foot(REACHES);
 
         // one curve, two lists off it: a tread's top and the deck's height
@@ -2308,7 +3369,7 @@ pub mod tests {
 
     #[test]
     fn every_band_is_the_same_width_and_they_fill_it() {
-        let made = deck_mesh(REACHES);
+        let made = deck_mesh(REACHES, 1.0);
         let foot = foot(REACHES);
         let (mut south, mut north) = (f32::MAX, f32::MIN);
 
@@ -2331,6 +3392,72 @@ pub mod tests {
         );
     }
 
+    /// Spec 0117: and there is no lane under the bank to drop into.
+    ///
+    /// **Because half of it was missing.** The box under the deck was
+    /// written from the middle out and mirrored only for the bands
+    /// outside it, so it ran from the deck's centre line to one edge and
+    /// the other three metres had nothing. You could walk in under the
+    /// deck on that side, follow it down toward the foot, and be wedged
+    /// between the field and the soffit with the bank's outer bands
+    /// standing beside you as a wall. Jake, 2026-11-18, stuck coming up
+    /// from under the bridge, which is the fault spec 0117 exists to
+    /// fix and had not fixed.
+    ///
+    /// Asked of the boxes rather than by walking, because a walk proves
+    /// one path and a gap is a place.
+    #[test]
+    fn there_is_no_lane_under_the_bank() {
+        let foot = foot(REACHES);
+        let boxes = abutment(REACHES, 1.0);
+        let (_, ends) = bank_runs();
+        let half = WIDE * 0.5;
+
+        for step in 0..=160 {
+            let along = ends * step as f32 / 160.0;
+            let top = bank_high(along);
+
+            if top <= 0.25 {
+                continue;
+            }
+
+            let x = foot.x - along * RUN;
+
+            for across in -8..=8 {
+                // inside the deck's own edge rather than on it: a body
+                // has a radius, and the kerb stands on that line anyway
+                let z = foot.z + half * 0.98 * across as f32 / 8.0;
+                // **Asked at shin height and not just under the top.** The
+                // boxes are as high as the lower end of the stretch they
+                // cover, so near the bank's steep dying back a box's top
+                // can sit a riser under `bank_high` and an answer taken
+                // from the top alone fails on a bank that is there. What
+                // the fault was is a lane you can walk into, so the
+                // question is whether anything is in the way at all.
+                let y = foot.y + 0.15;
+                let held = boxes.iter().any(|box_| {
+                    box_.min.x <= x
+                        && x <= box_.max.x
+                        && box_.min.z <= z
+                        && z <= box_.max.z
+                        && box_.min.y <= y
+                        && y <= box_.max.y
+                });
+
+                assert!(
+                    held,
+                    "nothing fills the bank at {:.2} {:.2} {:.2}, a share \
+                     {:.4} along and {:.2} off the middle",
+                    x,
+                    y,
+                    z,
+                    along,
+                    z - foot.z
+                );
+            }
+        }
+    }
+
     /// Spec 0054: what you see is what you stand on.
     ///
     /// **Jake, 2026-11-04: the base of the bridge should be flush with the
@@ -2343,7 +3470,7 @@ pub mod tests {
     fn the_deck_you_see_is_the_deck_you_stand_on() {
         let foot = foot(REACHES);
 
-        for middle in stations(REACHES) {
+        for middle in stations(REACHES, 1.0) {
             let along = (foot.x - middle.x) / RUN;
 
             assert!(
@@ -2361,13 +3488,13 @@ pub mod tests {
     #[test]
     fn it_springs_flush_from_the_grass() {
         // the top of what is drawn, which is what you would step up onto
-        let lowest = deck_mesh(REACHES)
+        let lowest = deck_mesh(REACHES, 1.0)
             .vertices
             .iter()
             .map(|one| one.position[1])
             .fold(f32::MIN, f32::max)
             .min(
-                stations(REACHES)
+                stations(REACHES, 1.0)
                     .into_iter()
                     .map(|middle| middle.y)
                     .fold(f32::MAX, f32::min),
@@ -2840,10 +3967,13 @@ pub mod tests {
             1.0,
             "it pushes you back"
         );
+        // halfway along is inside five sixths, so one question short it
+        // carries you there now. Spec 0117, and
+        // `nothing_carries_you_past_the_end` holds the other side.
         assert_eq!(
             carries(REACHES, on, up, &nearly()),
-            1.0,
-            "it carries you before it is there"
+            CARRIES,
+            "five sixths of a bridge does not carry you at halfway"
         );
 
         let aside = vec3(on.x, on.y, foot.z + WIDE);
@@ -2924,7 +4054,7 @@ pub mod tests {
         // it never lands on the garden or on the building behind it
         let stops = crate::field::starts(REACHES);
 
-        for one in deck_mesh(REACHES).vertices.iter() {
+        for one in deck_mesh(REACHES, 1.0).vertices.iter() {
             assert!(
                 one.position[0] < stops,
                 "a corner of it at {} is east of the field's start at {}",
@@ -2937,7 +4067,7 @@ pub mod tests {
     #[test]
     fn it_stays_inside_the_ground_it_stands_on() {
         let stops = crate::field::starts(REACHES);
-        let out = treads(REACHES)
+        let out = treads(REACHES, 1.0)
             .iter()
             .map(|box_| stops - box_.min.x)
             .fold(f32::MIN, f32::max);

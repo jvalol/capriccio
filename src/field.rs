@@ -664,7 +664,17 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // and not inside spec 0068's village, where flowers growing
         // through a cart's bed is what a field does to anything standing
         // on it that it was not told about, nor up through the way there
-        if crate::village::shades(reaches, at) || crate::village::along_the_path(reaches, at) {
+        //
+        // **Nor up through spec 0117's abutment**, which is the same fault
+        // again and was found the same way: Jake stood on the bank on
+        // 2026-11-18 and the grass was coming up through the gravel. Only
+        // the bank's own footprint, not `bridge::shades`, which keeps
+        // trees off the whole hundred metre run and would leave a bald
+        // stripe down the field.
+        if crate::village::shades(reaches, at)
+            || crate::village::along_the_path(reaches, at)
+            || crate::bridge::banked(reaches, at)
+        {
             continue;
         }
 

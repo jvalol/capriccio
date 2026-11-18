@@ -758,6 +758,9 @@ struct Arcade {
     /// anywhere in it, the nook in sight or not. The places never move, so
     /// they are cut once beside the words they belong to.
     plan_says: Vec<(Option<TextureId>, Vec3, f32)>,
+    /// The bank the bridge comes out of, per spec 0117, rebuilt with the
+    /// deck when a span lands.
+    bank: Option<MeshId>,
     /// The relief plan on the nook's north wall, per spec 0115. Cut once:
     /// it walks every collider in the building against a grid, which is
     /// five milliseconds at startup and is not a thing to do per frame.
@@ -1316,6 +1319,16 @@ struct Arcade {
     /// engine. One press, one check: it compares every drawn thing with every
     /// other and the answer does not change between frames.
     wants_planes: bool,
+    /// How far along the deck mesh currently reaches, so that a span given
+    /// while you are in another room is built into it once rather than
+    /// every frame. Spec 0117.
+    ///
+    /// **A mesh and not a flag**, because the deck is one ribbon swept
+    /// along the arc and a shorter bridge is a shorter ribbon. Rebuilding
+    /// it costs what `Renderer::update_mesh` costs, which since the engine
+    /// writes a patched mesh over its own ranges is the mesh and not the
+    /// pool.
+    deck_reaches: f32,
     /// Whether the list of every key is up, per spec 0116. Off until asked:
     /// the corner already says how to walk, and the rest is for somebody who
     /// has wondered whether there is more.
@@ -1473,6 +1486,7 @@ impl Arcade {
             room,
             plan,
             plan_says: Vec::new(),
+            bank: None,
             spin,
             playing: Playing::new(),
             cascada: Cabinet::found(cascada::NAME, &beside()),
@@ -1723,6 +1737,7 @@ impl Arcade {
             showing_solid: false,
             showing_cost: showing_cost(),
             showing_keys: false,
+            deck_reaches: 0.0,
             rig_step: 2,
             rig_many: false,
             rig_meshes: Vec::new(),
@@ -3475,15 +3490,10 @@ impl Arcade {
     /// forty-eight lengths of seven bands, each turned to the pitch of the
     /// arc where it lies, so what you see is a curve. Both come out of
     /// `bridge::high`, which is the one place the shape is written.
-    fn draw_bridge(&self, scene: &mut Scene) {
-        if !bridge::shows(&self.trail) {
-            return;
-        }
-
-        let Some(cube) = self.cube else {
-            return;
-        };
-
+    /// The landing at the top, and the piers, balusters and rail that
+    /// stand on it. Spec 0117 split this out of [`Self::draw_bridge`] so the
+    /// deck could be drawn without it.
+    fn draw_the_landing(&self, scene: &mut Scene, cube: blitzkit::renderer::scene::MeshId) {
         // the landing first, which is stone and not light: it is what the
         // bridge arrives at. Spec 0055.
         for (n, box_) in bridge::landing(self.room.reaches, &self.trail)
@@ -3557,6 +3567,22 @@ impl Arcade {
                 aim::BALUSTER,
             );
         }
+    }
+
+    fn draw_bridge(&self, scene: &mut Scene) {
+        let Some(cube) = self.cube else {
+            return;
+        };
+
+        // **The landing and what stands on it only when it is finished.**
+        // Spec 0117 lets the deck grow a span at a time, and the landing is
+        // what the bridge arrives at: there is nothing to arrive at until
+        // the last span is in, and a stone platform hanging in the air
+        // ahead of the deck would be the end given away. The deck below
+        // this is drawn at every length including the first.
+        if bridge::whole(&self.trail) {
+            self.draw_the_landing(scene, cube);
+        }
 
         // and the deck, which is one mesh built along the arc rather than a
         // row of boxes: see `bridge::deck_mesh`. It is already in the
@@ -3564,6 +3590,47 @@ impl Arcade {
         let (Some(deck), Some(rainbow)) = (self.deck, self.rainbow) else {
             return;
         };
+
+        // the earth the bridge comes out of, under the deck and banked
+        // either side of it, per spec 0117. Drawn before the kerbs so the
+        // verge reads as sitting on it.
+        //
+        // **Granite, and it was the field's own turf.** The argument for
+        // turf was `rubble`'s one object along: a bank in a colour of its
+        // own is a grey wedge in a green field. It is the wrong argument
+        // here. The runestone's mound is earth thrown up round a stone
+        // somebody dug in, so it is earth; this is what a bridge is founded
+        // on. Jake, 2026-11-18, looking at the turf one: sand and gravel,
+        // rocks, those would make sense as abutments.
+        if let (Some(bank), Some(granite)) = (self.bank, self.granite) {
+            scene.push_textured(
+                bank,
+                granite,
+                &Transform::at(Vec3::ZERO),
+                aim::RUBBLE,
+                aim::MATTE,
+            );
+
+            // **And loose stone lying on it**, which is what makes it
+            // gravel rather than a grey surface, exactly as `rubble` does
+            // for the runestone's footing. Jake, 2026-11-18: the gravel
+            // doesn't quite land. Same cheap lump as the rubble below.
+            for (which, (where_, size, round)) in
+                bridge::bank_stones(self.room.reaches, self.deck_reaches)
+                    .into_iter()
+                    .enumerate()
+            {
+                let cut = match self.stones.get(which % self.stones.len().max(1)) {
+                    Some(cut) => *cut,
+                    None => cube,
+                };
+                let sat = Transform::at(where_)
+                    .with_rotation(glam::Quat::from_rotation_y(round))
+                    .with_scale(size);
+
+                scene.push_textured(cut, granite, &sat, aim::RUBBLE, aim::MATTE);
+            }
+        }
 
         // and a kerb down either side of it, which is what stops you
         // walking off a six metre road at eleven metres a second. See
@@ -3679,8 +3746,15 @@ impl Arcade {
             }
         }
 
-        self.draw_valhalla(scene, cube);
-        self.draw_the_gate(scene, cube);
+        // **And what is at the top, only when there is a top.** Spec 0117:
+        // these hung in the sky over a field with no way up to them the
+        // moment the deck stopped gating the whole of this function, which
+        // is the ending given away to anybody who walked out of the garden
+        // on their first minute.
+        if bridge::whole(&self.trail) {
+            self.draw_valhalla(scene, cube);
+            self.draw_the_gate(scene, cube);
+        }
     }
 
     /// The gate in the way through, per spec 0058.
@@ -3726,7 +3800,7 @@ impl Arcade {
             );
         }
 
-        if !gate::shows(&self.trail) {
+        if !gate::whole(&self.trail) {
             return;
         }
 
@@ -5713,7 +5787,7 @@ impl Arcade {
         // and the watchman at the top of the bridge, who is there exactly
         // when the bridge is. Spec 0055: he stands, he faces the climb, and
         // nothing is said.
-        if bridge::shows(&self.trail) {
+        if bridge::whole(&self.trail) {
             let (at, facing) = bridge::watchman(reaches);
 
             stand(
@@ -8218,6 +8292,30 @@ impl Game for Arcade {
             });
         }
 
+        // and the deck, when a span has been given since the last frame.
+        // Spec 0117. Asked every frame and acted on almost never: what
+        // changes it is answering one of five questions in a whole run.
+        {
+            let far = bridge::reach(&self.trail);
+
+            if (far - self.deck_reaches).abs() > 1e-4 {
+                self.deck_reaches = far;
+
+                if let Some(deck) = self.deck {
+                    renderer.update_mesh(deck, &bridge::deck_mesh(self.room.reaches, far));
+                }
+                if let Some(soffit) = self.soffit {
+                    renderer.update_mesh(soffit, &bridge::soffit_mesh(self.room.reaches, far));
+                }
+                if let Some(bank) = self.bank {
+                    renderer.update_mesh(bank, &bridge::bank_mesh(self.room.reaches, far));
+                }
+                for (side, kerb) in [-1.0f32, 1.0].iter().zip(self.kerbs.iter().flatten()) {
+                    renderer.update_mesh(*kerb, &bridge::kerb_mesh(self.room.reaches, *side, far));
+                }
+            }
+        }
+
         // the water, written over rather than uploaded again. Spec 0042 of the
         // engine is what this is for: without it a surface that moves is a new
         // mesh every frame and a program that grows until it stops.
@@ -8500,8 +8598,22 @@ impl Game for Arcade {
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 8, people::log_profile)));
         self.sack =
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 12, people::sack_profile)));
-        self.kerbs = [-1.0f32, 1.0]
-            .map(|side| Some(renderer.add_mesh(&bridge::kerb_mesh(self.room.reaches, side))));
+        // **Asked of the trail and not of `deck_reaches`.** That field is
+        // set with the deck a hundred lines below this, so reading it here
+        // built both kerbs at nought and the per-frame check then found
+        // nothing to correct: the verges went missing from a finished
+        // bridge and `tests::the_horizon_is_drawn` was what said so.
+        self.bank = Some(renderer.add_mesh(&bridge::bank_mesh(
+            self.room.reaches,
+            bridge::reach(&self.trail),
+        )));
+        self.kerbs = [-1.0f32, 1.0].map(|side| {
+            Some(renderer.add_mesh(&bridge::kerb_mesh(
+                self.room.reaches,
+                side,
+                bridge::reach(&self.trail),
+            )))
+        });
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
         self.moon = Some(renderer.add_mesh(&moon::mesh()));
         self.moon_face = Some(renderer.add_texture(&moon::face()));
@@ -8631,8 +8743,11 @@ impl Game for Arcade {
             .iter()
             .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
             .collect();
-        self.deck = Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches)));
-        self.soffit = Some(renderer.add_mesh(&bridge::soffit_mesh(self.room.reaches)));
+        self.deck_reaches = bridge::reach(&self.trail);
+        self.deck =
+            Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches, self.deck_reaches)));
+        self.soffit =
+            Some(renderer.add_mesh(&bridge::soffit_mesh(self.room.reaches, self.deck_reaches)));
         self.rainbow = Some(renderer.add_texture(&bridge::rainbow()));
         // **Stencilled and not drawn.** `drawn` keeps the ground opaque,
         // which is right for the nook's sign because a dark plate behind
