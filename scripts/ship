@@ -23,6 +23,12 @@
 # A `git push` in here would be a second, and the pair would go out of step
 # the first time the engine changed with the game.
 #
+# **And one check that is not about the code at all.** `../check-specs` reads
+# every criterion's citation, and only `../check-all` used to run it, so a
+# commit from here could kill a test a spec names and go out green. It is
+# asked of this repo alone, which is the difference between under a minute
+# and five.
+#
 # There is nothing to deploy from this repo. The game is a binary somebody
 # builds, and blitzkit's site is the engine's to publish.
 #
@@ -32,7 +38,12 @@
 set -uo pipefail
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] || [ "$#" -eq 0 ]; then
-  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+  # **The header to its end, and not a line range.** This read `2,32p`,
+  # which is a number that has to be moved every time the header grows and
+  # was not: adding the specs step pushed the usage block past it. The
+  # header is every comment line from the second to the first line that is
+  # not one, which is a thing the file can answer for itself.
+  awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
   [ "$#" -eq 0 ] && exit 1
   exit 0
 fi
@@ -138,6 +149,31 @@ fi
 echo "== clippy"
 if ! cargo clippy --all-targets -- -D warnings; then
   stop "clippy is unhappy"
+fi
+
+# **The one check here that is not about this repo's code.** A spec cites the
+# test that holds each of its criteria, and nothing in a cargo run reads a
+# spec, so a test renamed or deleted leaves the spec citing a name that
+# answers to nothing. That reads like the behaviour is covered, which is
+# worse than no citation.
+#
+# **It was not here, and that cost a commit.** `a3db293` deleted two tests
+# spec 0054 cited and went out green, because this script runs the repo's own
+# gate and `../check-all` is the only thing that ran `../check-specs`. Three
+# dead citations across two specs were found by hand afterwards.
+#
+# Asked of this repo alone. Checking a citation means listing the tests, and
+# listing them means building them: the whole project is five minutes and
+# this repo is under one, which is the difference between a check that runs
+# on every ship and one that does not.
+echo "== specs"
+# **The path from the project root and not `basename`.** `check-specs`
+# names its repos the way `../list-repos` prints them, and a game is
+# `games/lantern` there: a basename would hand it "lantern", which is not a
+# directory at the root, and anything copying this script would find that
+# out rather than reading it here.
+if ! "$project/check-specs" "${here#"$project"/}"; then
+  stop "a spec cites something that is not there"
 fi
 
 echo "== tests"
