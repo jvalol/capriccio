@@ -23,6 +23,8 @@
 //! one with the reading and editing in it was looking at the other
 //! half.
 
+use blitzkit::{Asked, Options};
+
 /// The name on the runestone at the foot of the bridge, in the Latin
 /// letters under the runes. Spec 0054.
 pub const BIFROST: &str = "BIFROST";
@@ -47,43 +49,109 @@ pub const BIFROST: &str = "BIFROST";
 pub const WATCHMAN_LETS_YOU_BY: &str =
     "I have stood at this gate since the beginning of time. You may go on through.";
 
-/// What `--help` says about the arcade's own options, above the engine's.
+/// What the arcade takes of its own, which `--help` prints above the
+/// engine's. Spec 0069.
 ///
-/// **One block with one marker on a line of its own**, which is the form
-/// that leaves nothing behind when `sign-copy` takes the marker out. A
-/// marker per line would sign off into eight stray gaps.
-///
-/// Spec 0069: every one of these was an environment variable until Jake
-/// said the arguments seem to belong in different places. They do not any
-/// more, and `tests::the_help_names_every_option_the_arcade_takes` holds
-/// this list against the one the code actually reads.
-pub const OPTIONS: &str = "\
-The arcade takes these of its own:
-
-  --done                   every question on the trail already answered, so
-                           the bridge and the hall at the top of it are there
-  --pose <seven numbers>   stand here, at this moment, rather than at the
-                           door in the afternoon: the line the plate prints
-                           under M, with or without commas
-  --where                  print where you are standing, twice a second, on
-                           stderr
-  --cost                   open with the frame readout up, rather than
-                           reaching for F
-  --at <0 to 1>            what time it is when the run starts: nought dawn,
-                           a quarter noon, a half dusk
-  --day <seconds>          how long a day lasts
-  --sky <name>             hold the weather: clear, fair, overcast or storm
-  --fly                    fly rather than walk
-  --open-case              hold the hall of mirrors' bookcase open
-  --dump-mirrors           write every mirror's view into /tmp, once
-  --screenshot [<name>]    take the poster, or one of the others by name
-  --screenshots            print the pictures and their files, and stop
-  --walk <route>           walk a written route with no window, and fail if
-                           it no longer goes where it says
-  --tour <x,y,z>           work a route out to a place, and print it
-  --film <clip>            film a clip
-
-";
+/// **A list rather than a paragraph, since engine spec 0109.** The columns
+/// used to be typed into the text and the whole block printed as it stood,
+/// so nothing could ask it what is *not* an option and `--flyy` opened the
+/// building and walked. The words are the same words; where they sit is
+/// worked out where they are printed.
+pub const OPTIONS: Options = Options {
+    says: "The arcade takes these of its own:",
+    each: &[
+        Asked {
+            name: "--done",
+            also: "",
+            takes: "",
+            says: "every question on the trail already answered, so the bridge and the hall at the top of it are there",
+        },
+        Asked {
+            name: "--pose",
+            also: "",
+            takes: "<seven numbers>",
+            says: "stand here, at this moment, rather than at the door in the afternoon: the line the plate prints under M, with or without commas",
+        },
+        Asked {
+            name: "--where",
+            also: "",
+            takes: "",
+            says: "print where you are standing, twice a second, on stderr",
+        },
+        Asked {
+            name: "--cost",
+            also: "",
+            takes: "",
+            says: "open with the frame readout up, rather than reaching for F",
+        },
+        Asked {
+            name: "--at",
+            also: "",
+            takes: "<0 to 1>",
+            says: "what time it is when the run starts: nought dawn, a quarter noon, a half dusk",
+        },
+        Asked {
+            name: "--day",
+            also: "",
+            takes: "<seconds>",
+            says: "how long a day lasts",
+        },
+        Asked {
+            name: "--sky",
+            also: "",
+            takes: "<name>",
+            says: "hold the weather: clear, fair, overcast or storm",
+        },
+        Asked {
+            name: "--fly",
+            also: "",
+            takes: "",
+            says: "fly rather than walk",
+        },
+        Asked {
+            name: "--open-case",
+            also: "",
+            takes: "",
+            says: "hold the hall of mirrors' bookcase open",
+        },
+        Asked {
+            name: "--dump-mirrors",
+            also: "",
+            takes: "",
+            says: "write every mirror's view into /tmp, once",
+        },
+        Asked {
+            name: "--screenshot",
+            also: "",
+            takes: "[<name>]",
+            says: "take the poster, or one of the others by name",
+        },
+        Asked {
+            name: "--screenshots",
+            also: "",
+            takes: "",
+            says: "print the pictures and their files, and stop",
+        },
+        Asked {
+            name: "--walk",
+            also: "",
+            takes: "<route>",
+            says: "walk a written route with no window, and fail if it no longer goes where it says",
+        },
+        Asked {
+            name: "--tour",
+            also: "",
+            takes: "<x,y,z>",
+            says: "work a route out to a place, and print it",
+        },
+        Asked {
+            name: "--film",
+            also: "",
+            takes: "<clip>",
+            says: "film a clip",
+        },
+    ],
+};
 
 /// What the stone at the foot of the bridge says the building is still
 /// holding. Spec 0118.

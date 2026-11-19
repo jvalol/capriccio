@@ -8195,7 +8195,7 @@ fn art_of(name: &str) -> Option<TextureData> {
 impl Game for Arcade {
     /// Spec 0069: this building's own options, which `--help` prints above
     /// the engine's.
-    fn options(&self) -> &'static str {
+    fn options(&self) -> blitzkit::Options {
         says::OPTIONS
     }
 
@@ -18353,8 +18353,8 @@ mod tests {
 
         for flag in found {
             assert!(
-                says::OPTIONS.contains(&flag),
-                "the arcade reads {} and --help does not name it",
+                says::OPTIONS.each.iter().any(|one| one.is(&flag)),
+                "the arcade reads {} and the list does not name it",
                 flag
             );
         }

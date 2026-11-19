@@ -31,8 +31,22 @@ and `--name=value` both work, which they did not before: `--walk` and `--film`
 took only the second and `--done` took neither.
 
 **`says::OPTIONS` is the list**, with the engine's printed under it by
-`Game::options`. It is one block of copy with one marker on a line of its own,
-which is the form `sign-copy` leaves nothing behind in.
+`Game::options`. It was one block of copy with one marker on a line of its
+own, which is the form `sign-copy` leaves nothing behind in.
+
+**And a list rather than that block, since engine spec 0109, 2026-11-19.**
+The columns were typed into the text and the whole thing printed as it
+stood, so nothing could ask it what is *not* an option and `--flyy` opened
+the building and walked. Each option is an `Asked` now, carrying its name,
+what its value is called and one sentence; where it all sits on the line is
+worked out where it is printed. The words are the same words. The building
+refuses an option it does not take before the window opens.
+
+**Except the ones answered before the engine sees them.** `--screenshots`,
+`--walk`, `--tour` and `--film` are read in this game's own `main` and
+answered there, so a typo of one of those still falls through to the window.
+Engine spec 0109 leaves that where it is: moving them behind the engine is a
+change to how this game starts.
 
 **Nothing says a trail exists.** Spec 0036 is plain that somebody who never
 finds the trail must not be able to tell it is there, and `--done` is now in a
@@ -42,11 +56,14 @@ line here says what it does without saying there is anything to find.
 
 ## Acceptance criteria
 
-- Every option the arcade reads is named in its help. — `tests::the_help_names_every_option_the_arcade_takes`
+- Every option the arcade reads is in its list. — `tests::the_help_names_every_option_the_arcade_takes`
 
 ### Verified by hand
 
-- `cargo run --release -- --help` prints both lists and opens no window.
+- `cargo run --release -- --help` prints both lists and opens no window,
+  the two sharing one column.
+- `cargo run --release -- --flyy` says it is not an option and opens no
+  window, where it used to open one and walk.
 - `cargo run --release -- --where --done 2> /tmp/arcade.log` does what the old
   line did.
 
