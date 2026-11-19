@@ -9314,18 +9314,20 @@ impl Game for Arcade {
                 self.stand(pose);
             }
         }
-        // **Two rooms answer by being reached, and neither needs anything
-        // planted in it.** Spec 0011's space behind the hall's end wall is
-        // the answer to the question spec 0020's worn track asks by being
-        // there, and spec 0040's field answers whether the ground stops by
-        // not stopping. Asked of where the feet are, which `noise::room_at`
+        // **One room answers by being reached, and needs nothing planted
+        // in it.** Spec 0011's space behind the hall's end wall is the
+        // answer to the question spec 0020's worn track asks by being
+        // there. Asked of where the feet are, which `noise::room_at`
         // already works out every frame for what you can hear, rather than
         // of a flag set at a doorway: this building has learned what two
         // accounts of one thing do.
-        match noise::room_at(self.room.reaches, self.at) {
-            noise::Room::Behind => self.trail.gave(trail::Asked::GotBehindTheWall),
-            noise::Room::Field => self.trail.gave(trail::Asked::WentOutIntoTheField),
-            _ => (),
+        //
+        // **The field was the other one** until 2026-11-18, when it came
+        // out of the trail: the stone that names what is left stands in
+        // the field, so reading it meant having answered that one, and a
+        // question answered by arriving where it is asked is not one.
+        if noise::room_at(self.room.reaches, self.at) == noise::Room::Behind {
+            self.trail.gave(trail::Asked::GotBehindTheWall);
         }
 
         // and the two that answer by being done rather than by being
@@ -16321,10 +16323,8 @@ mod tests {
             noise::Room::Hall,
             "the middle of the hall is not the hall, so this proves nothing"
         );
-        match noise::room_at(reaches, arcade.at) {
-            noise::Room::Behind => arcade.trail.gave(trail::Asked::GotBehindTheWall),
-            noise::Room::Field => arcade.trail.gave(trail::Asked::WentOutIntoTheField),
-            _ => (),
+        if noise::room_at(reaches, arcade.at) == noise::Room::Behind {
+            arcade.trail.gave(trail::Asked::GotBehindTheWall);
         }
         assert!(
             arcade.trail.is_empty(),
@@ -16338,10 +16338,8 @@ mod tests {
             noise::Room::Behind,
             "that point is not behind the wall, so this proves nothing"
         );
-        match noise::room_at(reaches, arcade.at) {
-            noise::Room::Behind => arcade.trail.gave(trail::Asked::GotBehindTheWall),
-            noise::Room::Field => arcade.trail.gave(trail::Asked::WentOutIntoTheField),
-            _ => (),
+        if noise::room_at(reaches, arcade.at) == noise::Room::Behind {
+            arcade.trail.gave(trail::Asked::GotBehindTheWall);
         }
         assert_eq!(
             arcade.trail.given(),

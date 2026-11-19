@@ -134,21 +134,16 @@ The arcade takes these of its own:
 ///
 /// **A match and not a table**, so a station added to `trail::Asked`
 /// stops this compiling rather than quietly carving nothing.
-///
-/// `WentOutIntoTheField` has a line it can never show, this stone
-/// standing out in the field: nobody can read it without having answered
-/// that one. It is written anyway, because "the stone is in the field" is
-/// a fact about where the stone is today and leaving the line out would
-/// tie the copy to it. Move the stone and the hole would be silent.
 pub fn still_held(what: crate::trail::Asked) -> &'static str {
     use crate::trail::Asked;
 
     match what {
-        Asked::WentOutIntoTheField => "The grass past the garden wall has not been walked.",
         Asked::OpenedTheCase => "A book is a handle, and nobody has pulled it.",
         Asked::WadedInThePool => "Nobody has been in the water.",
-        Asked::SolvedTheCube => "The cube on the bench is not as it was handed over.",
-        Asked::GotBehindTheWall => "The hall's end wall has a secret nobody has walked through.",
+        Asked::SolvedTheCube => "Nobody has played with the cube and then solved it.",
+        Asked::GotBehindTheWall => {
+            "The room you started in has a secret nobody has walked through."
+        }
         Asked::RodeToTheSun => "Nobody has ridden out as far as the sun.",
     }
 }

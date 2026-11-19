@@ -1885,7 +1885,7 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
 /// compile time. What keeps it honest is
 /// `tests::there_is_a_slot_for_every_span`, the same device
 /// `trail::tests::every_one_of_them_is_in_every` uses on the list itself.
-pub const SPANS: usize = 7;
+pub const SPANS: usize = 6;
 
 /// The strip of colours the kerbs are drawn through: one slot a span, in
 /// the order the rooms answered. Spec 0118.
@@ -1961,7 +1961,6 @@ fn room_colour_own(what: crate::trail::Asked) -> glam::Vec4 {
     use crate::trail::Asked;
 
     match what {
-        Asked::WentOutIntoTheField => crate::aim::LEAF,
         Asked::OpenedTheCase => crate::aim::SHELF,
         Asked::WadedInThePool => {
             let water = crate::aim::WATER;

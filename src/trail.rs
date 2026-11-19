@@ -43,6 +43,15 @@
 /// between somebody and the end of the trail. Working the sixth display
 /// still takes you inside, and nothing records that you went.
 ///
+/// **Five, where there were six.** The field went on 2026-11-18, the day it
+/// arrived. It was written first on the grounds that it was free, spec
+/// 0118's stone standing out in the field, so anybody who could read the
+/// stone had answered it already and it was never the line the stone named.
+/// Jake, looking at it in the game: by the time you'd see it you've already
+/// gotten there. A rung everybody is standing on before they can learn the
+/// ladder is there is not a rung, and the count it padded was the only thing
+/// it did.
+///
 /// **Six, where there were seven, where there were five, where there were
 /// eight.** Jake,
 /// 2026-11-18, asked what the trail actually is and whether it is the most
@@ -85,14 +94,6 @@
 /// takes to walk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Asked {
-    /// Walking out past the garden's west wall, where the ground does not
-    /// stop. Spec 0040.
-    ///
-    /// **First because it is free.** Spec 0118's stone stands at the foot
-    /// of the bridge, which is out here, so anybody who can read what the
-    /// stone says has already answered this one and it is never the thing
-    /// named.
-    WentOutIntoTheField,
     /// Opening the bookcase in the cellar, by the one leaf in it that is a
     /// handle. Spec 0007.
     OpenedTheCase,
@@ -142,7 +143,6 @@ impl Asked {
     /// then says this list is short.
     pub fn every() -> &'static [Asked] {
         &[
-            Asked::WentOutIntoTheField,
             Asked::OpenedTheCase,
             Asked::WadedInThePool,
             Asked::SolvedTheCube,
@@ -216,12 +216,11 @@ mod tests {
     /// checked nothing.
     fn sits_at(what: Asked) -> usize {
         match what {
-            Asked::WentOutIntoTheField => 0,
-            Asked::OpenedTheCase => 1,
-            Asked::WadedInThePool => 2,
-            Asked::SolvedTheCube => 3,
-            Asked::GotBehindTheWall => 4,
-            Asked::RodeToTheSun => 5,
+            Asked::OpenedTheCase => 0,
+            Asked::WadedInThePool => 1,
+            Asked::SolvedTheCube => 2,
+            Asked::GotBehindTheWall => 3,
+            Asked::RodeToTheSun => 4,
         }
     }
 
