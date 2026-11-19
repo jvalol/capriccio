@@ -1,7 +1,7 @@
 # 0036 The whole building as one game
 
-**Status:** draft
-**Date:** 2026-10-22, amended 2026-11-07
+**Status:** implemented
+**Date:** 2026-10-22, amended 2026-11-07 and 2026-11-19
 
 ## Goal
 
@@ -128,7 +128,7 @@ and the only sight of the arcade from outside itself. Eleven rooms and you
 have been in all of them; nobody has ever seen the building whole.
 
 **The plumbing.** Spec 0051 built it for the two rooms that asked anything at
-the time. All eight of `trail::Asked` are wired now, in the rooms that
+the time. Every one of `trail::Asked` is wired now, in the rooms that
 already ask them, and the bridge reads the list rather than a count: a room
 that starts asking something joins the condition without either spec being
 touched.
@@ -149,6 +149,13 @@ work that was four days finished. Spec 0055's own "this does not build"
 section and spec 0037's tail were stale the same day, which is three in one
 building. What follows is left as written, because it is why those two specs
 exist.
+
+The status at the top said draft until 2026-11-19, thirteen days after the
+line above. The count in the plumbing note was wrong for longer: eight was
+right when it was written on 2026-11-04 and stopped being right on
+2026-11-11, when spec 0063 parked three rooms, in a sentence whose very next
+clause says the bridge reads the list rather than a count. It says no number
+now, for the same reason the bridge does not hold one.
 
 **The room behind Heimdall, and the puzzle he asks you first.** Spec 0055
 built the threshold and the watchman and said there was nothing behind him.
