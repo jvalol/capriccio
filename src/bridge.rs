@@ -1042,7 +1042,7 @@ pub fn slab_at() -> (Vec3, f32) {
     (vec3(SLAB_OUT, on, 0.0), -SLAB_TIPS)
 }
 
-/// And what is cut into it, or nothing once every room has answered./// And what is cut into it, or nothing once every room has answered.
+/// And what is cut into it, or nothing once every room has answered.
 pub fn said_cut(held: Option<&str>) -> blitzkit::texture::TextureData {
     let mut pixels = vec![0u8; (SAID_ACROSS * SAID_DOWN * 4) as usize];
 
