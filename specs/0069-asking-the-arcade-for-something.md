@@ -42,11 +42,13 @@ what its value is called and one sentence; where it all sits on the line is
 worked out where it is printed. The words are the same words. The building
 refuses an option it does not take before the window opens.
 
-**Except the ones answered before the engine sees them.** `--screenshots`,
-`--walk`, `--tour` and `--film` are read in this game's own `main` and
-answered there, so a typo of one of those still falls through to the window.
-Engine spec 0109 leaves that where it is: moving them behind the engine is a
-change to how this game starts.
+**Including the four this game answers before the engine sees them.**
+`--screenshots`, `--walk`, `--tour` and `--film` are read in this game's own
+`main`, which returns without ever calling `start`, so for a few hours they
+were the four options a person is most likely to mistype and the four a typo
+of which fell through to the window. `blitzkit::refuse_unknown` is the
+refusal on its own and this game's `main` calls it first, before it answers
+anything.
 
 **Nothing says a trail exists.** Spec 0036 is plain that somebody who never
 finds the trail must not be able to tell it is there, and `--done` is now in a
@@ -64,6 +66,9 @@ line here says what it does without saying there is anything to find.
   the two sharing one column.
 - `cargo run --release -- --flyy` says it is not an option and opens no
   window, where it used to open one and walk.
+- `--screenshotss` and `--wal /tmp/route` are refused and exit 2, where both
+  used to fall past the four answers above. `--screenshots` still prints its
+  list and `--walk nonsense` still reaches the walking.
 - `cargo run --release -- --where --done 2> /tmp/arcade.log` does what the old
   line did.
 

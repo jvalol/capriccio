@@ -14647,6 +14647,15 @@ fn toured(where_: &str) -> bool {
 }
 
 fn main() {
+    // **Before anything is answered.** Engine spec 0109 refuses an option
+    // nothing takes, and it does it inside `start`, which the four answers
+    // below return without ever reaching. So `--screenshotss` printed
+    // nothing, fell past every one of them, and opened the building; and
+    // `--wal /tmp/route` walked nothing and played it instead. Asked here,
+    // where this game starts, rather than left to the one gate this game
+    // steps around.
+    blitzkit::refuse_unknown(&says::OPTIONS);
+
     // asked what it can photograph rather than told, so the list lives in one
     // place and that place is the game
     // and walked rather than told, for the same reason: the rule about which
