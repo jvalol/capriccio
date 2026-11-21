@@ -98,8 +98,18 @@ over what was there as it goes.
 
 - **Ignored rather than deleted.** A flag that deletes is a flag that deletes
   when you fat-finger it.
-- **And a run given `--done` writes nothing at all.** It is a diagnostic, like
-  `--pose` and `--fly`, and a diagnostic that overwrites a real save is a trap.
+- **And a diagnostic run writes nothing at all.** `--done`, `--pose` and
+  `--fly` each leave `remembers` unset, because a diagnostic that overwrites a
+  real save is a trap.
+
+  This said all three and guarded only `--done`, and the trap sprung on
+  2026-11-21. A day of posed screenshots went into the room behind the wall,
+  which `noise::room_at` rightly calls Behind on the first frame, so every one
+  of them answered that station and wrote a one line trail over the four Jake
+  had walked. `a_diagnostic` is the one place the three are named now, and it
+  is asked of the flag rather than of what the flag parsed: a pose typed wrong
+  comes to nothing, and a run that meant to be posed is still a run that must
+  not write.
 
 ### What this costs, and it is worth saying
 
@@ -139,11 +149,12 @@ rather than a flag is a real question. It is not this spec's.
   the building does not sound the whole run at you. —
   `tests::a_walked_trail_brings_the_deck_with_it`
 
-  **`--done` has no test of its own.** What it does is leave `remembers`
-  unset, and that it writes nothing once unset is the control in the test
-  above. Whether the flag leaves it unset is `main`'s, which no test reaches
-  without an argv to hand it, and inventing one for this is more machinery
-  than the thing. It is checked by hand instead.
+  **The flags have no test of their own.** What each does is leave
+  `remembers` unset, and that it writes nothing once unset is the control in
+  the test above. Whether a flag leaves it unset is `main`'s, which no test
+  reaches without an argv to hand it, and inventing one for this is more
+  machinery than the thing. They are checked by hand instead, and the check
+  earned its keep.
 
 ### Verified by hand
 
@@ -157,6 +168,10 @@ rather than a flag is a real question. It is not this spec's.
   and the stone still says it. — play it twice.
 - A run given `--done` leaves the file as it was. — play it, then look at the
   file's time.
+- And a run given `--pose` leaves it as it was. — **done 2026-11-21**: the
+  four stations written back by hand, then the run that had clobbered them
+  repeated, `--pose` into the room behind the wall. The file came out the same
+  four lines, byte for byte.
 - The file reads as a list of what you did. — open it.
 
 ## Out of scope

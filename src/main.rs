@@ -355,6 +355,31 @@ fn forgetting() -> bool {
     blitzkit::asked_for("--forget")
 }
 
+/// Whether this run is a diagnostic, and so writes nothing.
+///
+/// **Because a diagnostic that overwrites a real save is a trap**, which
+/// is what the note beside `remembers` in `main` already said, naming
+/// `--pose` and `--fly` as the other two while guarding only `--done`.
+/// It sprung on 2026-11-21. Every picture taken that day was a `--pose`
+/// into the room behind the wall, which `noise::room_at` rightly calls
+/// Behind on the first frame, so each run answered that station and wrote
+/// a one line trail over the four Jake had walked.
+///
+/// **Asked of the flag and not of what it parsed.** `posed_at` is a pose
+/// or nothing, and nothing is also what a pose typed wrong comes to: a
+/// run that meant to be posed and landed in the hall instead is still a
+/// run that must not write.
+///
+/// It is about writing alone. `--pose` and `--fly` read what is there,
+/// since standing in a real save is most of what they are for.
+///
+/// `--forget` is not one of these and must not become one. Starting again
+/// means starting again and saving as you go, which is what its own note
+/// says.
+fn a_diagnostic() -> bool {
+    done_already() || flying() || blitzkit::one_argument("--pose").is_some()
+}
+
 /// Whether this run flies rather than walks. `--fly`.
 ///
 /// **Because the slow part of finding a fault in this building is getting to
@@ -15016,15 +15041,22 @@ fn main() {
     // what the building remembers between visits. Spec 0120, and here
     // rather than in `Arcade::new` for the reason `remembers` gives.
     //
-    // **A run given `--done` keeps nothing and writes nothing.** It is a
-    // diagnostic, like `--pose` and `--fly`, and a diagnostic that
-    // overwrites a real save is a trap.
-    if !done_already() {
-        if let Some(at) = kept::where_it_remembers() {
-            if !forgetting() {
-                arcade.has_walked(kept::read(&at));
-            }
+    // **Reading it and writing it are two questions.** They were one `if`,
+    // which is why the trap below was easy to walk into: a flag that
+    // wanted one of the two had to take both.
+    if let Some(at) = kept::where_it_remembers() {
+        // what it remembers, unless this run was told to open with nothing
+        // (`--forget`) or has been handed a whole trail of its own
+        // (`--done`, in `Arcade::new`), which reading over would undo
+        if !forgetting() && !done_already() {
+            arcade.has_walked(kept::read(&at));
+        }
 
+        // and somewhere to write it, unless this run is a diagnostic, per
+        // `a_diagnostic`. `--pose` and `--fly` still read, since standing
+        // in a real save is most of what they are for; what they must not
+        // do is save over it.
+        if !a_diagnostic() {
             arcade.remembers = Some(at);
         }
     }
@@ -17687,9 +17719,13 @@ mod tests {
     /// run.
     ///
     /// **And a building that remembers nowhere writes nothing**, which is
-    /// what a run given `--done` is: that flag leaves `remembers` unset
-    /// rather than being asked about down here. Whether the flag does
-    /// leave it unset is `main`'s, and is checked by hand.
+    /// what a diagnostic run is: `--done`, `--pose` and `--fly` leave
+    /// `remembers` unset rather than being asked about down here. Whether
+    /// they do leave it unset is `main`'s and cannot be reached from a
+    /// test, since the flags are this process's own arguments, so it is
+    /// checked by hand. It wanted checking: only `--done` was guarded
+    /// until 2026-11-21, and a day of posed screenshots wrote over a real
+    /// trail.
     #[test]
     fn the_file_is_written_when_a_room_answers() {
         let at = std::env::temp_dir()
