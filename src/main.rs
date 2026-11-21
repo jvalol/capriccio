@@ -1340,6 +1340,19 @@ struct Arcade {
     /// writes a patched mesh over its own ranges is the mesh and not the
     /// pool.
     deck_reaches: f32,
+    /// What the deck's meshes were last built at. Spec 0119.
+    ///
+    /// **A second number, because a span takes six seconds now.** Until
+    /// this, `deck_reaches` was both what the deck is and what the meshes
+    /// hold, which is one number only while they can never disagree. The
+    /// winding is exactly the stretch where they do: `deck_reaches` moves
+    /// every frame for six seconds and the meshes follow it a frame behind.
+    /// So that one stays the truth, which the walking and the carrying
+    /// read, and this is the mark that says whether the meshes have caught
+    /// up. The same shape as `spans_painted` and `carved_says`.
+    deck_built: f32,
+    /// How many spans had sounded when this was last looked at. Spec 0119.
+    spans_sounded: usize,
     /// Whether the list of every key is up, per spec 0116. Off until asked:
     /// the corner already says how to walk, and the rest is for somebody who
     /// has wondered whether there is more.
@@ -1402,6 +1415,30 @@ impl Arcade {
         let (cradle, ropes) = cradle::strung();
 
         let reaches = room.reaches;
+        // what the building has been told it has already been given, which
+        // on an ordinary run is nothing. `--done` is spec 0013's kind of
+        // flag and gives the trail rather than forcing the bridge, so that
+        // everything which reads the trail sees one account of a building
+        // that has been done.
+        let trail = {
+            let mut trail = trail::Trail::new();
+
+            if done_already() {
+                for one in trail::Asked::every() {
+                    trail.gave(*one);
+                }
+            }
+
+            trail
+        };
+        // **And how far the deck has come, from the same place.** Spec
+        // 0119: what the trail owes and what has arrived are two numbers
+        // now, and they are equal everywhere except the six seconds a span
+        // is winding in. A build that left this at nought while the trail
+        // was full was a finished trail with a stub to stand on, which is
+        // what `--done` would have got and what seven tests did get.
+        let deck_reaches = bridge::reach(&trail);
+        let spans_sounded = trail.given().len();
         // worked out before `room` is moved into the struct below, because
         // the tesseract's pose needs somewhere in the building to come back
         // down to.
@@ -1556,17 +1593,7 @@ impl Arcade {
             bottle: None,
             peg: None,
             gate: 0.0,
-            trail: {
-                let mut trail = trail::Trail::new();
-
-                if done_already() {
-                    for one in trail::Asked::every() {
-                        trail.gave(*one);
-                    }
-                }
-
-                trail
-            },
+            trail,
             bag: None,
             baluster: None,
             column: None,
@@ -1753,7 +1780,9 @@ impl Arcade {
             showing_solid: false,
             showing_cost: showing_cost(),
             showing_keys: false,
-            deck_reaches: 0.0,
+            deck_reaches,
+            deck_built: deck_reaches,
+            spans_sounded,
             rig_step: 2,
             rig_many: false,
             rig_meshes: Vec::new(),
@@ -2883,13 +2912,45 @@ impl Arcade {
 
     /// How fast you are getting about: walking, running, or wading.
     ///
+    /// Which spans have gone up since this was last asked, as the steps
+    /// to sound for them. Spec 0119.
+    ///
+    /// **A method rather than three lines in `update`, so a test can ask
+    /// it**, which is `pace`'s own reason one function along and is not
+    /// tidiness here either: `SoundSystem` takes what it is handed and
+    /// says nothing back, so the only way to test that a room answering
+    /// sounds once is to ask what would be played. The first version of
+    /// this was a loop in `update` and a test that read the mark
+    /// afterwards, and it passed against a version that played a note
+    /// every frame.
+    ///
+    /// **Seeded in `new` rather than on the first frame.** A run given
+    /// `--done` starts with every question answered, and a mark starting
+    /// at nought would sound five notes into the first frame of a
+    /// finished building.
+    ///
+    /// Empty on almost every frame of a run: five of them are not.
+    fn notes_due(&mut self) -> std::ops::Range<usize> {
+        let given = self.trail.given().len();
+        let due = self.spans_sounded..given;
+
+        self.spans_sounded = given;
+
+        due
+    }
+
     /// A method rather than three lines in `update`, so a test can ask it.
     fn pace(&self) -> f32 {
         let own = if self.running() { SPEED * RUNS } else { SPEED };
 
         // and the bridge carries you up itself, per `bridge::CARRIES`
         spa::pace(self.room.reaches, self.at, own)
-            * bridge::carries(self.room.reaches, self.at, self.forward(), &self.trail)
+            * bridge::carries(
+                self.room.reaches,
+                self.at,
+                self.forward(),
+                self.deck_reaches,
+            )
     }
 
     /// What the line under the sight says about a toy.
@@ -3528,7 +3589,7 @@ impl Arcade {
     fn draw_the_landing(&self, scene: &mut Scene, cube: blitzkit::renderer::scene::MeshId) {
         // the landing first, which is stone and not light: it is what the
         // bridge arrives at. Spec 0055.
-        for (n, box_) in bridge::landing(self.room.reaches, &self.trail)
+        for (n, box_) in bridge::landing(self.room.reaches, self.deck_reaches)
             .into_iter()
             .enumerate()
         {
@@ -3548,7 +3609,7 @@ impl Arcade {
         // photograph of City Creek and The Witness's flat colour: two
         // materials in a rhythm, with no grain on either, so the edge
         // between two colours is what carries the form.
-        for at in bridge::piers(self.room.reaches, &self.trail) {
+        for at in bridge::piers(self.room.reaches, self.deck_reaches) {
             scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * bridge::PIER_UP * 0.5).with_scale(vec3(
@@ -3572,7 +3633,7 @@ impl Arcade {
             );
         }
 
-        for at in bridge::balusters(self.room.reaches, &self.trail) {
+        for at in bridge::balusters(self.room.reaches, self.deck_reaches) {
             scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * bridge::RAIL_HIGH * 0.5).with_scale(vec3(
@@ -3585,7 +3646,7 @@ impl Arcade {
         }
 
         // and the rail they carry, along the top of each run
-        for (from, to) in bridge::parapet_runs(self.room.reaches, &self.trail) {
+        for (from, to) in bridge::parapet_runs(self.room.reaches, self.deck_reaches) {
             let along = to - from;
             let up = Vec3::Y * (bridge::RAIL_HIGH - bridge::BALUSTER * 0.5);
 
@@ -4941,7 +5002,7 @@ impl Arcade {
         // and the bridge, which is out in the field and is not there at
         // all until every room has given up what it asks. Spec 0054, and
         // spec 0056's Valhalla at the top of it on the same condition.
-        out.extend(bridge::solid(self.room.reaches, &self.trail));
+        out.extend(bridge::solid(self.room.reaches, self.deck_reaches));
         out.extend(gate::solid(self.room.reaches, &self.trail, self.gate));
         out.extend(valhalla::solid(self.room.reaches, &self.trail));
         // and spec 0068's village, which is out in the field and so is there
@@ -8407,14 +8468,15 @@ impl Game for Arcade {
             }
         }
 
-        // and the deck, when a span has been given since the last frame.
-        // Spec 0117. Asked every frame and acted on almost never: what
-        // changes it is answering one of five questions in a whole run.
+        // and the deck, while a span is winding in. Specs 0117 and 0119.
+        // Asked every frame and acted on for six seconds at a time, five
+        // times in a whole run: `update` walks `deck_reaches` toward what
+        // the trail owes it and this is the meshes catching up.
         {
-            let far = bridge::reach(&self.trail);
+            let far = self.deck_reaches;
 
-            if (far - self.deck_reaches).abs() > 1e-4 {
-                self.deck_reaches = far;
+            if (far - self.deck_built).abs() > 1e-5 {
+                self.deck_built = far;
 
                 if let Some(deck) = self.deck {
                     renderer.update_mesh(deck, &bridge::deck_mesh(self.room.reaches, far));
@@ -8858,7 +8920,9 @@ impl Game for Arcade {
             .iter()
             .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
             .collect();
-        self.deck_reaches = bridge::reach(&self.trail);
+        // **Read and not set.** `new` works this out from the trail, and
+        // setting it again here was the second account of it: a span given
+        // between the two would have been undone. Spec 0119.
         self.deck =
             Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches, self.deck_reaches)));
         self.soffit =
@@ -9572,6 +9636,38 @@ impl Game for Arcade {
                 }
             }
         }
+
+        // and the span that was just paid for, which is the one thing this
+        // building does that you are never in the room for. Spec 0119.
+        //
+        // **Asked of the count here rather than sounded where the room
+        // answers.** The five `gave` calls are in five places, three of
+        // them in a key press and two in the walking, and a note played at
+        // each would be five copies of this with five chances to differ.
+        // The trail is one list and the length of it is the whole question.
+        //
+        // **Mixed rather than queued, the way thunder is.** `play_at`
+        // queues, and a room's voice ahead of this would land the note
+        // after the span had finished arriving. And there is nowhere to
+        // play it from in any case: the bridge is a place, but what you
+        // are being told is that the building did something, and a sound
+        // coming from a point a hundred metres west would be inaudible
+        // from the one room nobody can hear the field from.
+        //
+        // **In every room, where the thunder is only under the sky.** Spec
+        // 0016 keeps the weather out of doors on purpose. This is about
+        // the building rather than about the weather, and indoors is where
+        // you always are when it fires.
+        {
+            for step in self.notes_due() {
+                sound.play(&noise::span(step, bridge::WINDS));
+            }
+        }
+
+        // and the deck walking out to meet it. Spec 0119, which is spec
+        // 0117's winding built: what is drawn moves every frame for six
+        // seconds and `before_frame` rebuilds the meshes behind it.
+        self.deck_reaches = bridge::winding(self.deck_reaches, bridge::reach(&self.trail), dt);
 
         // and the nearest voice, a piece at a time, queued again as each runs
         // out. Nothing here loops: a sound that goes on for ever is a sound a
@@ -14943,6 +15039,13 @@ mod tests {
             for one in trail::Asked::every() {
                 arcade.trail.gave(*one);
             }
+
+            // **And the deck with it.** Spec 0119: how far the deck has
+            // come is its own field and `new` works it out from the trail,
+            // so a trail filled afterwards leaves a finished building with
+            // a stub in the field. `the_horizon_is_drawn` is what says so.
+            arcade.deck_reaches = bridge::reach(&arcade.trail);
+            arcade.deck_built = arcade.deck_reaches;
         }
 
         arcade.art_from = stand_in_art;
@@ -17035,13 +17138,9 @@ mod tests {
     fn the_bridge_is_climbed_at_the_pace_it_was_given() {
         for rate in [60.0f32, 90.0, 120.0, 144.0] {
             let dt = 1.0 / rate;
-            let mut one = Arcade::new();
+            let mut one = on_a_finished_bridge();
 
             one.shifted = true;
-
-            for asked in trail::Asked::every() {
-                one.trail.gave(*asked);
-            }
 
             let foot = bridge::foot(one.room.reaches);
 
@@ -17148,11 +17247,7 @@ mod tests {
     /// Frames to get nine tenths of the way up Bifrost at a run, or
     /// `None` for a line that never gets there.
     fn nine_tenths_up_the_bridge(askew: f32) -> Option<u32> {
-        let mut one = Arcade::new();
-
-        for asked in trail::Asked::every() {
-            one.trail.gave(*asked);
-        }
+        let mut one = on_a_finished_bridge();
 
         let foot = bridge::foot(one.room.reaches);
 
@@ -17186,11 +17281,7 @@ mod tests {
     fn the_kerb_keeps_you_on_the_bridge() {
         for tenth in -6..=6 {
             let askew = tenth as f32 * 0.05;
-            let mut one = Arcade::new();
-
-            for asked in trail::Asked::every() {
-                one.trail.gave(*asked);
-            }
+            let mut one = on_a_finished_bridge();
 
             let foot = bridge::foot(one.room.reaches);
 
@@ -17240,14 +17331,176 @@ mod tests {
         climbed_the_bridge_from(running, dt, frames, 0.0);
     }
 
-    fn climbed_the_bridge_from(running: bool, dt: f32, frames: u32, askew: f32) {
-        let mut one = Arcade::new();
+    /// Spec 0119: a span that is still arriving is not there yet.
+    ///
+    /// **The field and not the function.** `bridge::solid` and
+    /// `bridge::carries` take how far the deck has come and can only
+    /// answer about that, so what is worth testing is one step up: that
+    /// the arcade hands them `deck_reaches` and not `reach(&trail)`. Those
+    /// two agree everywhere except the six seconds this is about, and the
+    /// code this replaced read the second one.
+    ///
+    /// **Both ways round**, because an arcade that carried you nowhere at
+    /// all would pass half of this.
+    #[test]
+    fn you_cannot_walk_onto_a_span_that_is_still_coming() {
+        let mut one = on_a_finished_bridge();
 
-        one.shifted = running;
+        // the trail is finished and one span of it has arrived, which is
+        // the first frame of the last five seconds of a run
+        one.deck_reaches = bridge::reach(&trail::Trail::new());
+        one.deck_built = one.deck_reaches;
+
+        let foot = bridge::foot(one.room.reaches);
+        let over = |along: f32| {
+            vec3(
+                foot.x - along * bridge::RUN,
+                bridge::high(along) + 0.1,
+                foot.z,
+            )
+        };
+        // halfway between the cut end and the top, which is deck the trail
+        // has paid for and the building has not laid
+        let coming = (one.deck_reaches + 1.0) * 0.5;
+
+        // **Facing up the climb, which is the whole of what `carries`
+        // asks about.** Without this the first version of this test was
+        // vacuous: yaw nought faces -z, the climb runs toward -x, and a
+        // body facing across the deck is not carried whatever the deck is
+        // doing. It passed its own negative control.
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.at = over(coming);
+        assert_eq!(
+            one.pace(),
+            SPEED,
+            "the deck carried you at {:.2} of the way along, where it has \
+             only reached {:.2}",
+            coming,
+            one.deck_reaches
+        );
+        assert!(
+            !one.standing_on()
+                .iter()
+                .any(|box_| box_.contains_point(over(coming) - Vec3::Y * 0.2)),
+            "there is something to stand on at {:.2} of the way along, \
+             where the deck has only reached {:.2}",
+            coming,
+            one.deck_reaches
+        );
+
+        // and the control, on the span that has arrived
+        let here = one.deck_reaches * 0.5;
+
+        one.at = over(here);
+        assert!(
+            one.pace() > SPEED,
+            "the deck did not carry you at {:.2} of the way along, which \
+             it has reached, so the other half of this proves nothing",
+            here
+        );
+        assert!(
+            one.standing_on()
+                .iter()
+                .any(|box_| box_.contains_point(over(here) - Vec3::Y * 0.2)),
+            "there is nothing to stand on at {:.2} of the way along, which \
+             the deck has reached",
+            here
+        );
+    }
+
+    /// Spec 0119: a room answering sounds once, and only a room answering.
+    ///
+    /// **The note is counted and not heard.** `SoundSystem` hands what it
+    /// is given to the mixer and says nothing back, so what this reads is
+    /// the mark that decides whether to play: a note is played exactly
+    /// when that moves. The sound itself is `noise::tests` and the ear.
+    #[test]
+    fn a_room_answering_sounds_once() {
+        let mut one = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+        let dt = 1.0 / 60.0;
+
+        assert!(
+            one.trail.is_empty(),
+            "a run begins with a room already answered, so this proves \
+             nothing"
+        );
+
+        // **Through `update` and not by calling `notes_due` five times.**
+        // What is being tested is that a frame of the game sounds what the
+        // frame earned, and `update` is what empties it.
+        one.update(dt, &mut geometry, &mut text, &sound);
+        assert_eq!(
+            one.notes_due().len(),
+            0,
+            "a run that has answered nothing has a note waiting"
+        );
+
+        one.trail.gave(trail::Asked::OpenedTheCase);
+        assert_eq!(
+            one.notes_due().collect::<Vec<usize>>(),
+            vec![0],
+            "the cellar answered and the first span was silent"
+        );
+
+        one.trail.gave(trail::Asked::WadedInThePool);
+        one.update(dt, &mut geometry, &mut text, &sound);
+        assert_eq!(
+            one.notes_due().len(),
+            0,
+            "the frame that answered the baths left its note unplayed"
+        );
+
+        one.trail.gave(trail::Asked::OpenedTheCase);
+        one.update(dt, &mut geometry, &mut text, &sound);
+        assert_eq!(
+            one.notes_due().len(),
+            0,
+            "answering the same room twice sounded twice"
+        );
+
+        // and the control: the mark is what makes it once, so a run that
+        // has answered two rooms and sounded neither owes two notes
+        let mut fresh = Arcade::new();
+
+        fresh.trail.gave(trail::Asked::OpenedTheCase);
+        fresh.trail.gave(trail::Asked::WadedInThePool);
+        assert_eq!(
+            fresh.notes_due().collect::<Vec<usize>>(),
+            vec![0, 1],
+            "two rooms answered and the notes are not the first two spans"
+        );
+    }
+
+    /// An arcade standing in a building whose trail is finished, which is
+    /// what every test that walks Bifröst wants.
+    ///
+    /// **Both numbers, which is the whole reason this exists.** Since spec
+    /// 0119 what the trail owes and how much deck has arrived are two
+    /// fields, equal everywhere except the six seconds a span is winding
+    /// in. `Arcade::new` works the second out from the first and these
+    /// tests then fill the trail by hand, which leaves the deck where it
+    /// was: seven of them walked off a stub and said the bridge had a hole
+    /// in it.
+    fn on_a_finished_bridge() -> Arcade {
+        let mut one = Arcade::new();
 
         for asked in trail::Asked::every() {
             one.trail.gave(*asked);
         }
+
+        one.deck_reaches = bridge::reach(&one.trail);
+        one.deck_built = one.deck_reaches;
+
+        one
+    }
+
+    fn climbed_the_bridge_from(running: bool, dt: f32, frames: u32, askew: f32) {
+        let mut one = on_a_finished_bridge();
+
+        one.shifted = running;
 
         let foot = bridge::foot(one.room.reaches);
 

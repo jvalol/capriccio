@@ -1543,7 +1543,7 @@ mod tests {
             trail
         };
 
-        for one in crate::bridge::solid(REACHES, &trail) {
+        for one in crate::bridge::solid(REACHES, crate::bridge::reach(&trail)) {
             assert!(
                 !box_.intersects(&one),
                 "the bridge runs through the village at {:?}",

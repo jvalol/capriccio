@@ -66,12 +66,25 @@ already reasons about rounding "while a span winds in". That winding does not
 exist.
 
 - `Arcade` keeps the reach it is drawing and walks it toward `reach(&trail)`
-  over `bridge::WINDS`, which is 6 seconds, eased the way everything else here
-  is wound rather than switched.
+  over `bridge::WINDS`, which is 6 seconds.
+- **At one pace and not eased**, which is where this differs from everything
+  else here that is wound rather than switched. The rest of it is a light
+  coming up or a view swinging round, and those ease because that is what
+  they do. A deck is laid, and a thing being laid goes at the speed it goes
+  at. An eased span slides into place, which is a different thing happening.
 - The meshes are rebuilt each frame that it moves and not otherwise, which is
   six seconds of rebuilds five times in a run.
-- Nothing else reads the walked value: what holds you up and what carries you
-  read it too, so you cannot walk out onto a span that is still arriving.
+- **Everything physical reads the walked value and not the trail.** This is
+  the part that makes the criterion below true by construction rather than by
+  a check: `carries`, `solid`, `landing` and the piers and balusters on it
+  took a `&Trail` and worked the fraction out again, which is the second
+  account of it that spec 0117 spent a change getting rid of. They take the
+  fraction. A landing asked of the trail would stand in the air for six
+  seconds at the end of a deck that had not arrived.
+- **And `Arcade::new` works the drawn reach out from the trail**, rather than
+  `load` doing it, so a run given `--done` has a bridge before it has a
+  renderer. Seven walking tests and two pictures filled the trail after `new`
+  and walked a stub.
 
 ### A note, wherever you are
 
@@ -122,13 +135,24 @@ given. It carries what has been answered as well.
 ## Acceptance criteria
 
 - The deck's drawn reach walks toward the trail's rather than jumping to it,
-  and arrives. — `bridge::tests::a_span_takes_time_to_arrive`
-- Nothing holds you up past where the deck is drawn while a span is arriving. —
-  `bridge::tests::you_cannot_walk_onto_a_span_that_is_still_coming`
+  takes `WINDS` to do it, and lands exactly on it. —
+  `bridge::tests::a_span_takes_time_to_arrive`
+- Nothing holds you up and nothing carries you past where the deck is drawn
+  while a span is arriving. —
+  `main::tests::you_cannot_walk_onto_a_span_that_is_still_coming`
 - A station given makes a note, and the same station given twice makes one. —
   `main::tests::a_room_answering_sounds_once`
-- The note for a later span is higher than the one before it. —
-  `noise::tests::each_span_is_a_step_up`
+
+  **Asked of `Arcade::notes_due` and not of the mark afterwards.**
+  `SoundSystem` takes what it is handed and says nothing back, so a test that
+  read the count after the frame passed against a version that played a note
+  every frame. What decides is a method now, for the reason `pace` is one.
+- The note for a later span is higher than the one before it, and the last
+  lands on the octave. — `noise::tests::each_span_is_a_step_up`
+- The note is struck and dies away rather than stopping while still loud. —
+  `noise::tests::a_span_note_is_struck_and_dies_away`
+- There is a note for every span the deck grows in. —
+  `bridge::tests::there_is_a_note_for_every_span`
 - The face names every station given, in the order given, and the first one not
   given after them. — `bridge::tests::the_stone_says_what_was_done_and_what_is_left`
 - Every station has a line for having been given as well as for being held. —

@@ -1709,7 +1709,7 @@ mod tests {
     /// Everything you can walk into up here, which is this place and the
     /// bridge it stands on the end of.
     fn everything() -> Vec<Aabb> {
-        let mut out = crate::bridge::solid(REACHES, &done());
+        let mut out = crate::bridge::solid(REACHES, crate::bridge::reach(&done()));
         out.extend(solid(REACHES, &done()));
         out
     }
@@ -1806,7 +1806,7 @@ mod tests {
     #[test]
     fn the_ground_is_flush_with_the_landing() {
         let ours = ground(REACHES);
-        let landing = crate::bridge::landing(REACHES, &done())[0];
+        let landing = crate::bridge::landing(REACHES, crate::bridge::reach(&done()))[0];
         let under = landing.max.y - ours.max.y;
 
         assert!(
@@ -1901,10 +1901,10 @@ mod tests {
 
     #[test]
     fn walked_from_the_landing_into_valhalla() {
-        let mut solid = crate::bridge::solid(REACHES, &done());
+        let mut solid = crate::bridge::solid(REACHES, crate::bridge::reach(&done()));
         solid.extend(super::solid(REACHES, &done()));
 
-        let landing = crate::bridge::landing(REACHES, &done())[0];
+        let landing = crate::bridge::landing(REACHES, crate::bridge::reach(&done()))[0];
         let middle = at(REACHES);
         let start = vec3(landing.max.x - 1.5, landing.max.y + 0.4, middle.z);
         // in along the lane, which is east of the hall

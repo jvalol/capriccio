@@ -191,6 +191,45 @@ pub fn reach(trail: &Trail) -> f32 {
     (given + 1) as f32 / (every.len() + 1) as f32
 }
 
+/// How long one span takes to arrive. Spec 0119.
+///
+/// **Because spec 0117 said it took a few seconds and it took one frame.**
+/// That spec's own words are that a span which popped would be a
+/// notification, and `stations`' doc reasons about rounding "while a span
+/// winds in", written as though the winding were there. It was not: `reach`
+/// is a step function of the trail and the deck, soffit, bank and kerbs
+/// were rebuilt in the single frame the count changed.
+///
+/// Six seconds, which is long enough to catch from the garden's opening if
+/// you happen to be looking and short enough to be over before you could
+/// walk out to it.
+pub const WINDS: f32 = 6.0;
+
+/// The deck's reach a moment later, walking toward what the trail owes it.
+///
+/// **At one pace and not eased.** Everything else in this building is wound
+/// on rather than switched and most of it is eased, because most of it is a
+/// light coming up or a view swinging round. A deck is laid, and a thing
+/// being laid goes at the speed it goes at: an eased span would slide into
+/// place, which is a different thing happening.
+///
+/// **One span's worth over `WINDS`**, counted off `Asked::every` the way
+/// [`reach`] is, so a sixth question makes the run longer rather than each
+/// span faster.
+///
+/// It lands exactly on what is owed rather than near it, so a finished
+/// bridge reads 1.0 and the landing, which asks for that, is not kept out
+/// by a millionth.
+pub fn winding(drawn: f32, owed: f32, dt: f32) -> f32 {
+    if drawn >= owed {
+        return owed;
+    }
+
+    let span = 1.0 / (Asked::every().len() + 1) as f32;
+
+    (drawn + span / WINDS * dt.max(0.0)).min(owed)
+}
+
 /// The name under the runes, which lives in [`crate::says`] with the
 /// rest of the drafted copy so that signing it off is one command.
 pub use crate::says::BIFROST as SAYS;
@@ -1690,7 +1729,7 @@ pub const CARRIES: f32 = 2.8;
 /// Measured off the same `treads` the walking is done on, rather than
 /// off the deck's drawn shape: two answers to where the bridge is would
 /// come apart the first time either moved.
-pub fn carries(reaches: f32, at: Vec3, going: Vec3, trail: &Trail) -> f32 {
+pub fn carries(reaches: f32, at: Vec3, going: Vec3, far: f32) -> f32 {
     let foot = foot(reaches);
 
     if (at.z - foot.z).abs() > WIDE * 0.5 || at.y < 0.4 {
@@ -1702,7 +1741,7 @@ pub fn carries(reaches: f32, at: Vec3, going: Vec3, trail: &Trail) -> f32 {
     // **Only over deck that is there.** Spec 0117: past the cut end there is
     // nothing to be carried up, and a carry that reached further would hold
     // you walking on air.
-    if !(0.0..=reach(trail)).contains(&along) {
+    if !(0.0..=far).contains(&along) {
         return 1.0;
     }
 
@@ -2859,8 +2898,8 @@ pub fn top(reaches: f32) -> Vec3 {
 /// surface stop a walk dead and `walk` reports nothing whatever, which this
 /// building has been caught by three times in one day before now. The slab
 /// runs back under the last stretch of deck by a tread's length.
-pub fn landing(reaches: f32, trail: &Trail) -> Vec<Aabb> {
-    if !whole(trail) {
+pub fn landing(reaches: f32, far: f32) -> Vec<Aabb> {
+    if far < 1.0 {
         return Vec::new();
     }
 
@@ -2928,11 +2967,10 @@ pub fn watchman(reaches: f32) -> (Vec3, f32) {
 }
 
 /// What you can stand on, which is the treads and nothing else.
-pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
+pub fn solid(reaches: f32, far: f32) -> Vec<Aabb> {
     // **As far as it has got, and no further.** Spec 0117: the deck is
     // drawn to `reach` and this is what you stand on, so the two read the
     // same number or there is invisible deck past the cut end.
-    let far = reach(trail);
     let mut out = treads(reaches, far);
 
     out.extend(kerbs(reaches, far));
@@ -2943,20 +2981,32 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
     // and the landing and what stands on it, which are the finished
     // bridge's rather than the reaching one's: there is no top to arrive at
     // until the last span is in.
-    if !whole(trail) {
+    //
+    // **Asked of the reach and not of the trail.** They say the same thing
+    // at rest, `reach` being exactly 1.0 when every question is given, and
+    // they come apart for the six seconds the last span is winding in:
+    // asked of the trail, a landing and the piers on it would stand in the
+    // air at the end of a deck that has not arrived. Spec 0119.
+    if far < 1.0 {
         return out;
     }
 
-    out.extend(landing(reaches, trail));
+    out.extend(landing(reaches, far));
     // and the piers, which oversail the kerb they stand on by enough to
     // put your head in one if they were only drawn
-    out.extend(piers(reaches, trail).into_iter().map(|at| {
+    out.extend(piers(reaches, far).into_iter().map(|at| {
         Aabb::from_center_size(
             at + Vec3::Y * (PIER_UP + PIER_CAP) * 0.5,
             vec3(PIER_WIDE, PIER_UP + PIER_CAP, PIER_WIDE),
         )
     }));
-    out.extend(runestone(reaches, trail).map(|(at, size)| Aabb::from_center_size(at, size)));
+    // **`runestone_at` and not `runestone`.** That one takes a trail it
+    // has not read since spec 0118 and hands back an `Option` that is
+    // always `Some`; this is the place that is left and the stone's own
+    // account of where it stands.
+    let (stone, size) = runestone_at(reaches);
+
+    out.push(Aabb::from_center_size(stone, size));
 
     out
 }
@@ -3060,7 +3110,7 @@ pub mod tests {
         // a bridge that is nothing until the first question is answered is
         // the same surprise moved one step earlier rather than a promise.
         assert!(
-            !solid(REACHES, &empty).is_empty(),
+            !solid(REACHES, reach(&empty)).is_empty(),
             "the foot is not there to stand on"
         );
 
@@ -3081,7 +3131,7 @@ pub mod tests {
 
         assert!(!whole(&nearly), "one answer short and it is still there");
         assert!(
-            !solid(REACHES, &nearly).is_empty(),
+            !solid(REACHES, reach(&nearly)).is_empty(),
             "five sixths of a bridge is still a bridge"
         );
 
@@ -3089,10 +3139,13 @@ pub mod tests {
         // at: a stone platform standing in the air ahead of the deck would
         // be the ending given away. Spec 0117.
         assert!(
-            landing(REACHES, &nearly).is_empty(),
+            landing(REACHES, reach(&nearly)).is_empty(),
             "there is a landing before there is a top"
         );
-        assert!(piers(REACHES, &nearly).is_empty(), "piers on no landing");
+        assert!(
+            piers(REACHES, reach(&nearly)).is_empty(),
+            "piers on no landing"
+        );
     }
 
     /// Spec 0117: the bank runs exactly the stretch you cannot pass.
@@ -3390,6 +3443,66 @@ pub mod tests {
         );
     }
 
+    /// Spec 0119: a span is laid rather than switched on.
+    ///
+    /// **One frame is the control.** What this replaced was a step
+    /// function, so a test that only checked the end arrives would have
+    /// passed against the code that had the fault.
+    #[test]
+    fn a_span_takes_time_to_arrive() {
+        let every = Asked::every();
+        let span = 1.0 / (every.len() + 1) as f32;
+        let mut trail = Trail::new();
+        let was = reach(&trail);
+
+        trail.gave(every[0]);
+
+        let owed = reach(&trail);
+        let dt = 1.0 / 60.0;
+
+        assert!(
+            winding(was, owed, dt) < owed - span * 0.5,
+            "one frame of sixty got more than half the span in"
+        );
+
+        let mut drawn = was;
+        let mut frames = 0;
+
+        while drawn < owed && frames < 60 * 60 {
+            drawn = winding(drawn, owed, dt);
+            frames += 1;
+        }
+
+        let took = frames as f32 * dt;
+
+        assert!(
+            (took - WINDS).abs() < dt * 2.0,
+            "a span took {}s and `WINDS` is {}",
+            took,
+            WINDS
+        );
+        assert_eq!(
+            drawn, owed,
+            "it stopped near what was owed rather than on it, which is              what keeps a finished bridge's landing from being kept out              by a millionth"
+        );
+    }
+
+    /// Spec 0119: there is a note for every span the deck grows in.
+    ///
+    /// **The one number this building writes down twice.** The notes are a
+    /// list of ratios and nothing can derive them, so a sixth question
+    /// would leave the sixth span silent and nothing else would say so.
+    #[test]
+    fn there_is_a_note_for_every_span() {
+        assert_eq!(
+            crate::noise::STEPS.len(),
+            Asked::every().len(),
+            "there are {} notes and {} questions",
+            crate::noise::STEPS.len(),
+            Asked::every().len()
+        );
+    }
+
     /// Spec 0117: what holds you up stops where what is drawn stops.
     ///
     /// **Both ways round.** Deck past the treads is a step into the air on
@@ -3433,7 +3546,7 @@ pub mod tests {
             let at = vec3(foot.x - beyond * RUN, high(beyond), foot.z);
 
             assert_eq!(
-                carries(REACHES, at, up, &trail),
+                carries(REACHES, at, up, reach(&trail)),
                 1.0,
                 "it carried at {} of the run with {} built",
                 beyond,
@@ -3486,12 +3599,12 @@ pub mod tests {
     fn it_is_there_once_every_room_has_answered() {
         assert!(whole(&done()));
         assert_eq!(
-            solid(REACHES, &done()).len(),
+            solid(REACHES, reach(&done())).len(),
             (RUN / TREAD).ceil() as usize
                 + kerbs(REACHES, 1.0).len()
                 + abutment(REACHES, 1.0).len()
-                + landing(REACHES, &done()).len()
-                + piers(REACHES, &done()).len()
+                + landing(REACHES, reach(&done())).len()
+                + piers(REACHES, reach(&done())).len()
                 + runestone(REACHES, &done()).iter().count()
         );
     }
@@ -4292,15 +4405,15 @@ pub mod tests {
     #[test]
     fn no_threshold_until_the_building_is_done() {
         assert!(
-            landing(REACHES, &Trail::new()).is_empty(),
+            landing(REACHES, reach(&Trail::new())).is_empty(),
             "the landing is up before anything has been given"
         );
         assert!(
-            landing(REACHES, &nearly()).is_empty(),
+            landing(REACHES, reach(&nearly())).is_empty(),
             "the landing is up one question short"
         );
         assert!(
-            !landing(REACHES, &done()).is_empty(),
+            !landing(REACHES, reach(&done())).is_empty(),
             "the building is done and there is nothing at the top"
         );
     }
@@ -4308,7 +4421,7 @@ pub mod tests {
     /// Spec 0055: you step out onto it rather than up onto it.
     #[test]
     fn the_landing_is_flush_with_the_deck() {
-        let slab = landing(REACHES, &done())[0];
+        let slab = landing(REACHES, reach(&done()))[0];
 
         assert!(
             (slab.max.y - top(REACHES).y).abs() < 1e-4,
@@ -4322,7 +4435,7 @@ pub mod tests {
     /// the walking surface stop a walk dead and `walk` reports nothing.
     #[test]
     fn the_landing_laps_the_deck() {
-        let slab = landing(REACHES, &done())[0];
+        let slab = landing(REACHES, reach(&done()))[0];
         let top = top(REACHES);
 
         assert!(
@@ -4337,7 +4450,7 @@ pub mod tests {
     /// Spec 0055: wider than the deck, on both sides.
     #[test]
     fn the_landing_is_wider_than_the_deck() {
-        let slab = landing(REACHES, &done())[0];
+        let slab = landing(REACHES, reach(&done()))[0];
         let top = top(REACHES);
 
         for (side, got) in [
@@ -4357,7 +4470,7 @@ pub mod tests {
     /// arrive open, and spec 0056's way through is cut in the far one.
     #[test]
     fn the_parapet_leaves_the_arriving_side_open() {
-        let built = landing(REACHES, &done());
+        let built = landing(REACHES, reach(&done()));
         let top = top(REACHES);
         let rails = &built[1..];
 
@@ -4387,7 +4500,7 @@ pub mod tests {
     /// the edge, against a rail built to stop somebody falling.
     #[test]
     fn the_far_parapet_has_a_way_through_it() {
-        let built = landing(REACHES, &done());
+        let built = landing(REACHES, reach(&done()));
         let top = top(REACHES);
         // the far ones are the thin-in-x pieces. Taken by where they
         // start instead, the north and south rails come too: they run the
@@ -4485,7 +4598,7 @@ pub mod tests {
     /// Spec 0055: you can walk off the end of the deck onto it.
     #[test]
     fn walked_from_the_top_of_the_deck_onto_the_landing() {
-        let solid = solid(REACHES, &done());
+        let solid = solid(REACHES, reach(&done()));
         let top = top(REACHES);
         // standing on the last of the level stretch, walking on west
         let start = vec3(top.x + 6.0, top.y + 0.6, top.z);
@@ -4516,9 +4629,9 @@ pub mod tests {
     /// Twenty-six metres up, which is the whole reason for a kerb.
     #[test]
     fn the_parapet_stops_you_at_the_far_edge() {
-        let solid = solid(REACHES, &done());
+        let solid = solid(REACHES, reach(&done()));
         let top = top(REACHES);
-        let slab = landing(REACHES, &done())[0];
+        let slab = landing(REACHES, reach(&done()))[0];
         // off the middle line, because the middle of the far side is the
         // way through to spec 0056 and is meant to be open
         let aside = top.z + WAY_WIDE * 0.5 + crate::RADIUS * 2.0;
@@ -4544,7 +4657,7 @@ pub mod tests {
     /// parapet.
     #[test]
     fn the_watchman_stands_on_the_landing() {
-        let built = landing(REACHES, &done());
+        let built = landing(REACHES, reach(&done()));
         let slab = built[0];
         let (at, _) = watchman(REACHES);
 
@@ -4632,7 +4745,7 @@ pub mod tests {
                 // **Carried where the game carries you**, or this walks
                 // the bridge at a pace nobody playing ever walks it at
                 // and the time it reports is a time nobody waits.
-                going * crate::SPEED * super::carries(REACHES, at, going, &done())
+                going * crate::SPEED * super::carries(REACHES, at, going, reach(&done()))
             } else {
                 Vec3::ZERO
             };
@@ -4654,9 +4767,9 @@ pub mod tests {
         let down = vec3(1.0, 0.0, 0.0);
         let on = vec3(foot.x - RUN * 0.5, high(0.5), foot.z);
 
-        assert_eq!(carries(REACHES, on, up, &done()), CARRIES);
+        assert_eq!(carries(REACHES, on, up, reach(&done())), CARRIES);
         assert_eq!(
-            carries(REACHES, on, down, &done()),
+            carries(REACHES, on, down, reach(&done())),
             1.0,
             "it pushes you back"
         );
@@ -4664,23 +4777,35 @@ pub mod tests {
         // carries you there now. Spec 0117, and
         // `nothing_carries_you_past_the_end` holds the other side.
         assert_eq!(
-            carries(REACHES, on, up, &nearly()),
+            carries(REACHES, on, up, reach(&nearly())),
             CARRIES,
             "five sixths of a bridge does not carry you at halfway"
         );
 
         let aside = vec3(on.x, on.y, foot.z + WIDE);
-        assert_eq!(carries(REACHES, aside, up, &done()), 1.0, "off the side");
+        assert_eq!(
+            carries(REACHES, aside, up, reach(&done())),
+            1.0,
+            "off the side"
+        );
 
         let under = vec3(on.x, 0.0, foot.z);
-        assert_eq!(carries(REACHES, under, up, &done()), 1.0, "underneath it");
+        assert_eq!(
+            carries(REACHES, under, up, reach(&done())),
+            1.0,
+            "underneath it"
+        );
 
         let past = vec3(foot.x - RUN * 1.4, on.y, foot.z);
-        assert_eq!(carries(REACHES, past, up, &done()), 1.0, "past the top");
+        assert_eq!(
+            carries(REACHES, past, up, reach(&done())),
+            1.0,
+            "past the top"
+        );
 
         let behind = vec3(foot.x + 6.0, 1.4, foot.z);
         assert_eq!(
-            carries(REACHES, behind, up, &done()),
+            carries(REACHES, behind, up, reach(&done())),
             1.0,
             "short of the foot"
         );
@@ -4688,7 +4813,7 @@ pub mod tests {
 
     #[test]
     fn walked_from_the_foot_to_the_top() {
-        let solid = solid(REACHES, &done());
+        let solid = solid(REACHES, reach(&done()));
         let foot = foot(REACHES);
         let top = vec3(foot.x - RUN + 2.0, RISE, foot.z);
 
@@ -4729,7 +4854,7 @@ pub mod tests {
     /// one flat slab at the height of the foot.
     #[test]
     fn a_walk_off_the_side_does_not_climb() {
-        let solid = solid(REACHES, &done());
+        let solid = solid(REACHES, reach(&done()));
         let foot = foot(REACHES);
         let beside = vec3(foot.x - 1.0, 1.4, foot.z + WIDE);
         let ended = walked(beside, vec3(foot.x - RUN, 0.0, foot.z + WIDE), 60.0, &solid);
@@ -4855,8 +4980,8 @@ pub const BALUSTER_STEP: f32 = 0.14;
 ///
 /// Taken off `landing` rather than written again, so a parapet that
 /// moves takes its railing with it.
-pub fn parapet_runs(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3)> {
-    landing(reaches, trail)
+pub fn parapet_runs(reaches: f32, far: f32) -> Vec<(Vec3, Vec3)> {
+    landing(reaches, far)
         .into_iter()
         .skip(1)
         .map(|box_| {
@@ -4885,10 +5010,10 @@ pub fn parapet_runs(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3)> {
 /// One at each end of every run, so two runs meeting at a corner put a
 /// pier on the corner rather than leaving the two railings to meet in
 /// mid air.
-pub fn piers(reaches: f32, trail: &Trail) -> Vec<Vec3> {
+pub fn piers(reaches: f32, far: f32) -> Vec<Vec3> {
     let mut out: Vec<Vec3> = Vec::new();
 
-    for (from, to) in parapet_runs(reaches, trail) {
+    for (from, to) in parapet_runs(reaches, far) {
         for end in [from, to] {
             let foot = end - Vec3::Y * PIER_SINKS;
 
@@ -4914,12 +5039,12 @@ pub fn piers(reaches: f32, trail: &Trail) -> Vec<Vec3> {
 /// found it. The piers are placed first and the iron fits between them,
 /// which is both the order a mason works in and the only way the two
 /// cannot disagree.
-pub fn balusters(reaches: f32, trail: &Trail) -> Vec<Vec3> {
-    let piers = piers(reaches, trail);
+pub fn balusters(reaches: f32, far: f32) -> Vec<Vec3> {
+    let piers = piers(reaches, far);
     let clear = (PIER_WIDE + BALUSTER) * 0.5;
     let mut out = Vec::new();
 
-    for (from, to) in parapet_runs(reaches, trail) {
+    for (from, to) in parapet_runs(reaches, far) {
         let along = to - from;
         let fits = (along.length() / BALUSTER_STEP) as u32;
         let spread = fits as f32 * BALUSTER_STEP;
@@ -4966,7 +5091,7 @@ mod railing_tests {
     /// pier drawn twice is a pier with a face in its own plane.
     #[test]
     fn a_corner_has_one_pier_and_not_two() {
-        let piers = piers(REACHES, &done());
+        let piers = piers(REACHES, reach(&done()));
 
         assert_eq!(piers.len(), 6, "four runs, eight ends, two corners shared");
 
@@ -4987,7 +5112,7 @@ mod railing_tests {
     fn a_pier_is_sunk_into_the_kerb_it_stands_on() {
         let top = top(REACHES).y + RAIL_UP;
 
-        for at in piers(REACHES, &done()) {
+        for at in piers(REACHES, reach(&done())) {
             assert!(
                 at.y < top - 1e-3,
                 "a pier foot at {:.3} sits in the plane of the kerb top at {:.3}",
@@ -5000,9 +5125,9 @@ mod railing_tests {
     /// Spec 0055: every baluster stands between two piers and none in one.
     #[test]
     fn no_baluster_stands_inside_a_pier() {
-        let piers = piers(REACHES, &done());
+        let piers = piers(REACHES, reach(&done()));
 
-        for bar in balusters(REACHES, &done()) {
+        for bar in balusters(REACHES, reach(&done())) {
             for pier in piers.iter() {
                 let apart = glam::vec2(bar.x - pier.x, bar.z - pier.z).abs();
 

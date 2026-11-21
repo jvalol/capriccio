@@ -445,7 +445,7 @@ mod tests {
     /// open: the bridge, the gate and the place through it.
     fn up_here(swung: f32) -> Vec<Aabb> {
         let trail = done();
-        let mut out = bridge::solid(REACHES, &trail);
+        let mut out = bridge::solid(REACHES, bridge::reach(&trail));
 
         out.extend(solid(REACHES, &trail, swung));
         out.extend(crate::valhalla::solid(REACHES, &trail));

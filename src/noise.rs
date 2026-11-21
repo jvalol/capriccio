@@ -1107,8 +1107,139 @@ pub fn steam(seed: u32) -> Samples {
     joined(samples)
 }
 
+/// What a span of Bifröst sounds like going up. Spec 0119.
+///
+/// **A note and not a chime.** Spec 0117 ruled out a span that pops on the
+/// grounds that it would be a notification, and a sound can be a
+/// notification just as easily. The line it was drawing is between the
+/// building doing something and the game telling you something, so this is
+/// low, struck once, and long enough to be over by the time you have worked
+/// out what it was. Nothing is drawn with it and nothing waits for it.
+///
+/// **Low, because it has to arrive through the building.** Every one of the
+/// five questions is answered indoors and the thing it changes is out in
+/// the field, so this is the one sound here that is never in the room with
+/// you. A high note is what a wall takes off first.
+pub const NOTE: f32 = 110.0;
+
+/// Where each span's note sits above the first one's.
+///
+/// **It climbs, and the last one is the octave.** The bridge is finished on
+/// the fifth, so the fifth note is the one the ear was waiting for from the
+/// first, and somebody who has heard three knows roughly where they are
+/// without a numeral anywhere. Spec 0036 forbids a count and this is not
+/// one: there is nothing to read off it and nothing says what it means.
+///
+/// **Five, for the five questions**, which is the one number here that is
+/// written down twice and is held by
+/// `crate::bridge::tests::there_is_a_note_for_every_span`.
+pub const STEPS: [f32; 5] = [1.0, 9.0 / 8.0, 5.0 / 4.0, 3.0 / 2.0, 2.0];
+
+/// The partials over the fundamental, and how loud each starts.
+///
+/// **The fourth is not a whole multiple**, which is what makes this a struck
+/// thing rather than an organ: a bar or a bell rings at ratios its own shape
+/// decides and a pipe rings at whole ones. Each fades faster than the one
+/// under it, by the same `FADES`, which is the other half of the same thing.
+pub const PARTIALS: [(f32, f32); 4] = [(1.0, 1.0), (2.0, 0.42), (3.0, 0.2), (4.19, 0.1)];
+
+/// How fast the fundamental dies away, per second. The partials over it die
+/// at this times their own ratio.
+pub const FADES: f32 = 0.55;
+
+/// How much of the note's run the strike takes. `shaped` is already the
+/// shape of a thing being struck; this says how hard.
+pub const STRUCK: f32 = 0.004;
+
+/// How loud it is against the room it arrives in.
+pub const NOTE_LOUD: f32 = 0.35;
+
+/// The note for the `step`th span, running for `seconds`.
+///
+/// **As long as the span takes**, which the caller says rather than this,
+/// because how long a span takes is `crate::bridge::WINDS` and belongs with
+/// the bridge. A note that outlasted the thing it is about would be a sound
+/// playing over a finished bridge.
+pub fn span(step: usize, seconds: f32) -> Samples {
+    let hz = NOTE * STEPS[step.min(STEPS.len() - 1)];
+    let count = (RATE as f32 * seconds.max(0.0)) as usize;
+    let samples: Vec<f32> = (0..count)
+        .map(|n| {
+            let t = n as f32 / RATE as f32;
+            let mut sum = 0.0;
+
+            for (ratio, loud) in PARTIALS {
+                sum += (t * hz * ratio * std::f32::consts::TAU).sin()
+                    * loud
+                    * (-t * FADES * ratio).exp();
+            }
+
+            sum * NOTE_LOUD
+        })
+        .collect();
+
+    shaped(samples, STRUCK)
+}
+
 #[cfg(test)]
 mod tests {
+    /// Spec 0119: the notes climb, and the last one is the octave.
+    ///
+    /// **Strictly, and not merely sorted.** Two spans at one pitch would
+    /// sound like the same thing happening twice, which is the opposite of
+    /// what this is for.
+    #[test]
+    fn each_span_is_a_step_up() {
+        for pair in super::STEPS.windows(2) {
+            assert!(
+                pair[1] > pair[0],
+                "a span's note is {} and the one before it {}",
+                pair[1],
+                pair[0]
+            );
+        }
+
+        assert_eq!(
+            super::STEPS[0],
+            1.0,
+            "the first span's note is not the note itself"
+        );
+        assert_eq!(
+            *super::STEPS.last().expect("notes"),
+            2.0,
+            "the last span does not land on the octave, which is the only              thing in the run that says the bridge is finished"
+        );
+    }
+
+    /// Spec 0119: a note is a struck thing that dies away.
+    ///
+    /// **The end is the control.** A run that is still loud at the end of
+    /// itself is one that will click when it stops, which is what `shaped`
+    /// exists to prevent and what a test of the start alone would miss.
+    #[test]
+    fn a_span_note_is_struck_and_dies_away() {
+        let note: Vec<f32> = super::span(0, 6.0).collect();
+
+        assert!(!note.is_empty(), "no note at all");
+
+        let piece = note.len() / 8;
+        let loudest = |from: usize| {
+            note[from..(from + piece).min(note.len())]
+                .iter()
+                .fold(0.0f32, |most, one| most.max(one.abs()))
+        };
+        let (first, last) = (loudest(0), loudest(note.len() - piece));
+
+        assert!(first > 0.1, "the strike is only {} loud", first);
+        assert!(
+            last < first * 0.2,
+            "it ends at {} against a strike of {}, which is a note still \
+             going when it stops",
+            last,
+            first
+        );
+    }
+
     /// Spec 0011: the space behind the wall is its own room, and silent.
     ///
     /// It was answered as the hall, because `room_at` ended by returning the
