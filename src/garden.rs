@@ -2878,7 +2878,28 @@ pub fn pole_mesh() -> blitzkit::mesh::MeshData {
 pub fn screen(reaches: f32) -> Vec<Vec3> {
     let mut out_ = Vec::new();
 
+    // **Where the walls stop, asked of the walls.** A pole may not stand past
+    // the end of the one it hangs on: the north face runs a little longer than
+    // the wall's own box, so its last five poles stood at -2.374 where the
+    // walls end at -2.55, out in the room beyond the corner with nothing
+    // behind them. Jake walked into the solar room on 2026-11-20 and found
+    // bamboo growing in it.
     for face in screens(reaches) {
+        out_.extend(poles_on(reaches, &face));
+    }
+
+    out_
+}
+
+/// Every pole that stands on one wall of the garden.
+///
+/// One list, so the rails that hold them cannot disagree with them about
+/// where the screen ends.
+fn poles_on(reaches: f32, face: &Face) -> Vec<Vec3> {
+    let mut out_ = Vec::new();
+    let (lo, hi) = walled(reaches);
+
+    {
         let (middle, size, looks) = face.plane();
         let step = POLE + POLE_GAP;
         let many = ((size.x - POLE) / step).floor().max(0.0) as usize;
@@ -2887,36 +2908,109 @@ pub fn screen(reaches: f32) -> Vec<Vec3> {
         let run = many as f32 * step;
         let start = -run * 0.5 + step * 0.5;
         let out = looks * SCREEN_OFF;
+        // which way this face runs, off the face rather than guessed: the
+        // same question `the_screen_stays_on_its_wall` asks of it.
+        let along_z = looks.x.abs() > 0.5;
 
-        out_.extend((0..many).map(|n| {
+        out_.extend((0..many).filter_map(|n| {
             let along = start + n as f32 * step;
 
-            vec3(
-                middle.x + out.x + if looks.x.abs() > 0.5 { 0.0 } else { along },
+            let at_ = vec3(
+                middle.x + out.x + if along_z { 0.0 } else { along },
                 0.0,
-                middle.z + out.z + if looks.x.abs() > 0.5 { along } else { 0.0 },
-            )
+                middle.z + out.z + if along_z { along } else { 0.0 },
+            );
+
+            // clipped along the run only. A pole stands `SCREEN_OFF` off its
+            // wall, so it is outside the wall's box across the run by design,
+            // and clipping that way would take the whole screen with it.
+            let on_the_wall = if along_z {
+                at_.z >= lo.z && at_.z <= hi.z
+            } else {
+                at_.x >= lo.x && at_.x <= hi.x
+            };
+
+            // **And the wall's own end is not far enough.** The box reaches
+            // 0.25 past where the garden stops, because it carries the
+            // corner's thickness, so two poles still stood in the room beyond
+            // after the clip above. What says where a room ends is
+            // `noise::room_at`, which is the account the `--where` readout
+            // prints, and asking it is cheaper than keeping a second one.
+            //
+            // Only the room beyond is refused. The nook's share of the run
+            // stands on a wall the two rooms share, which is what it is for.
+            let beyond = matches!(
+                crate::noise::room_at(reaches, at_),
+                crate::noise::Room::Behind
+            );
+
+            (on_the_wall && !beyond).then_some(at_)
         }));
     }
 
     out_
 }
 
+/// How far the garden's own walls reach, asked of the walls.
+///
+/// The screen hangs on them and has to stop where they do. Written down a
+/// second time it would go stale the first time a wall moved, which is the
+/// fault this building has recorded under five other names.
+fn walled(reaches: f32) -> (Vec3, Vec3) {
+    let mut lo = Vec3::splat(f32::MAX);
+    let mut hi = Vec3::splat(f32::MIN);
+
+    for box_ in solid(reaches) {
+        lo = lo.min(box_.min);
+        hi = hi.max(box_.max);
+    }
+
+    (lo, hi)
+}
+
 /// The two rails that hold the screen together, as boxes.
+///
+/// **Measured off the poles they hold, not off the wall.** They were taken
+/// from the face's own length, which is the same number the poles started
+/// from and a second account of it the moment the poles stop short. Clipping
+/// the run on 2026-11-20 left the rails reaching past the corner on their
+/// own: two bars hanging in the room beyond with nothing under them, which is
+/// a worse picture than the bamboo that was there before.
 pub fn rails(reaches: f32) -> Vec<(Vec3, Vec3)> {
     let mut out_ = Vec::new();
 
     for face in screens(reaches) {
-        let (middle, size, looks) = face.plane();
+        let (middle, _, looks) = face.plane();
         let along = looks.x.abs() > 0.5;
         let out = looks * (SCREEN_OFF + POLE * 0.5);
 
+        let poles = poles_on(reaches, &face);
+        let Some((first, last)) = poles.first().zip(poles.last()) else {
+            continue;
+        };
+
+        // **Centre to centre, not outside to outside.** Carrying the extra
+        // half pole at each end put the rail's tip 2.75 cm past the last
+        // pole, which at this corner is 2.75 cm into the room beyond. A rail
+        // that stops at the last pole's middle is hidden by that pole's own
+        // girth, so nothing is lost by it.
+        let run = if along {
+            (last.z - first.z).abs()
+        } else {
+            (last.x - first.x).abs()
+        };
+        let midway = (*first + *last) * 0.5;
+
         out_.extend(RAILS.iter().copied().map(|up| {
-            let at_ = vec3(middle.x + out.x, up * SCREEN_UP, middle.z + out.z);
+            let at_ = vec3(
+                if along { middle.x + out.x } else { midway.x },
+                up * SCREEN_UP,
+                if along { midway.z } else { middle.z + out.z },
+            );
             let size = if along {
-                vec3(RAIL, RAIL, size.x)
+                vec3(RAIL, RAIL, run)
             } else {
-                vec3(size.x, RAIL, RAIL)
+                vec3(run, RAIL, RAIL)
             };
 
             (at_, size)
@@ -5912,6 +6006,60 @@ mod tests {
                  stands proud of it",
                 looks, run
             );
+        }
+    }
+
+    /// Spec 0010: no pole of the screen stands in another room.
+    ///
+    /// **The test below guards the pole against its wall, and that was not
+    /// enough.** A pole can sit correctly off a wall's face and still be past
+    /// the end of it, which is what the north run did: it finished at -2.374
+    /// where the garden's walls stop at -2.55, and the last five poles stood
+    /// in the room beyond the corner. Jake walked into the solar room on
+    /// 2026-11-20 and found bamboo in it, with nothing failing.
+    ///
+    /// Asked of `noise::room_at`, which is the building's own account of
+    /// which room a point is in and the one the `--where` readout prints.
+    /// The nook's share of the screen is left alone: those poles run along a
+    /// wall the two rooms share, and standing on it is what they are for.
+    #[test]
+    fn no_pole_of_the_screen_stands_in_the_room_beyond() {
+        let reaches = room().reaches;
+        let strays: Vec<Vec3> = screen(reaches)
+            .into_iter()
+            .filter(|at_| {
+                matches!(
+                    crate::noise::room_at(reaches, *at_),
+                    crate::noise::Room::Behind
+                )
+            })
+            .collect();
+
+        assert!(
+            strays.is_empty(),
+            "{} poles of the bamboo screen stand in the room beyond the garden, \
+             the first at {:?}",
+            strays.len(),
+            strays.first()
+        );
+
+        // **And the rails with them.** Clipping the poles alone left the rails
+        // running their old length: two bars in the room beyond with no bamboo
+        // under them. Each end of each rail is asked, since a rail is long and
+        // its middle says nothing about where it stops.
+        for (at_, size) in rails(reaches) {
+            for end in [-0.5f32, 0.5] {
+                let tip = at_ + vec3(size.x * end, 0.0, size.z * end);
+
+                assert!(
+                    !matches!(
+                        crate::noise::room_at(reaches, tip),
+                        crate::noise::Room::Behind
+                    ),
+                    "a rail of the screen reaches into the room beyond, to {:?}",
+                    tip
+                );
+            }
         }
     }
 
