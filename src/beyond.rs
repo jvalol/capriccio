@@ -806,7 +806,8 @@ pub const KERB_THICK: f32 = 0.5;
 /// that no face of it lies in a plane the floor already has.
 pub const KERB_PROUD: f32 = 0.04;
 
-/// The two of them, as a middle and a size apiece.
+/// The three of them, as a middle and a size apiece: the two sides and the
+/// far end.
 ///
 /// **From the door and not from the floor's own south end.** The floor laps
 /// `LAPS` back under the hidden room, per `floor`, and a kerb on that
@@ -817,27 +818,45 @@ pub const KERB_PROUD: f32 = 0.04;
 /// It reaches down to the floor's underside rather than standing on its
 /// top, so that the floor's side face is behind the kerb rather than level
 /// with it.
-pub fn kerbs(door: Vec3) -> [(Vec3, Vec3); 2] {
+///
+/// **And across the far end, where the sides alone left it open.** The
+/// floor runs `SPARE` past the last body and then stops, and Jake walked
+/// off the end of it on 2026-11-21. The south end wants nothing: that is
+/// the wall the door is in.
+pub fn kerbs(door: Vec3) -> [(Vec3, Vec3); 3] {
     let (middle, size) = floor(door);
     let from = door.z;
     let to = middle.z + size.z * 0.5;
+    let out = size.x * 0.5 + KERB_PROUD;
+    let high = (KERB_UP - THICK) * 0.5;
+    let tall = KERB_UP + THICK;
 
-    [-1.0f32, 1.0].map(|side| {
-        let out = middle.x + side * (size.x * 0.5 + KERB_PROUD);
-
+    let [west, east] = [-1.0f32, 1.0].map(|side| {
         (
             vec3(
-                out - side * KERB_THICK * 0.5,
-                (KERB_UP - THICK) * 0.5,
+                middle.x + side * (out - KERB_THICK * 0.5),
+                high,
                 (from + to) * 0.5,
             ),
-            vec3(KERB_THICK, KERB_UP + THICK, to - from),
+            vec3(KERB_THICK, tall, to - from),
         )
-    })
+    });
+
+    [
+        west,
+        east,
+        // and the end, which runs the full width the other two stand at,
+        // so the three meet at the corners rather than leaving a gap at
+        // each one for a body to walk through
+        (
+            vec3(middle.x, high, to + KERB_PROUD - KERB_THICK * 0.5),
+            vec3(out * 2.0, tall, KERB_THICK),
+        ),
+    ]
 }
 
-/// The same two as boxes you cannot walk through.
-pub fn kerb_solid(reaches: f32) -> [blitzkit::collision::Aabb; 2] {
+/// The same three as boxes you cannot walk through.
+pub fn kerb_solid(reaches: f32) -> [blitzkit::collision::Aabb; 3] {
     kerbs(at(reaches))
         .map(|(middle, size)| blitzkit::collision::Aabb::from_center_size(middle, size))
 }

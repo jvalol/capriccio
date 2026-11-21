@@ -20705,11 +20705,30 @@ mod tests {
         let west = middle.x - size.x * 0.5;
         let east = middle.x + size.x * 0.5;
 
-        for side in [-1.0f32, 1.0] {
-            one.at = vec3(middle.x, 0.0, door.z + 60.0);
+        let north = middle.z + size.z * 0.5;
+
+        for (yaw, from, toward) in [
+            (
+                -std::f32::consts::FRAC_PI_2,
+                vec3(middle.x, 0.0, door.z + 60.0),
+                "west",
+            ),
+            (
+                std::f32::consts::FRAC_PI_2,
+                vec3(middle.x, 0.0, door.z + 60.0),
+                "east",
+            ),
+            (
+                std::f32::consts::PI,
+                vec3(middle.x, 0.0, north - 60.0),
+                "far end",
+            ),
+        ] {
+            let side = if toward == "west" { -1.0f32 } else { 1.0 };
+            one.at = from;
             one.eye = one.at.y;
             one.falling = 0.0;
-            one.yaw = side * std::f32::consts::FRAC_PI_2;
+            one.yaw = yaw;
             one.walking = [true, false, false, false];
             one.shifted = true;
 
@@ -20719,26 +20738,33 @@ mod tests {
 
             // it is standing at the edge, which is the assertion that
             // catches a missing kerb: a body that went over is given the
-            // door back and ends in the middle of the floor, passing both
-            // of the two below.
+            // door back and ends in the middle of the floor, passing the
+            // two below.
+            let reached = if toward == "far end" {
+                (one.at.z - north).abs()
+            } else {
+                (one.at.x - (middle.x + side * size.x * 0.5)).abs()
+            };
+
             assert!(
-                (one.at.x - (middle.x + side * size.x * 0.5)).abs() < 2.0,
-                "twenty seconds of running at the {} edge ended at x {:.2} \
-                 rather than against it, and the door is at {:.2}",
-                if side < 0.0 { "west" } else { "east" },
-                one.at.x,
-                door.x
+                reached < 2.0,
+                "twenty seconds of running at the {} ended at {}, {:.2} short \
+                 of it, and the door is at {:.2}",
+                toward,
+                one.at,
+                reached,
+                door.z
             );
             assert!(
-                one.at.x > west && one.at.x < east,
-                "it ran off the {} edge and ended at {}",
-                if side < 0.0 { "west" } else { "east" },
+                one.at.x > west && one.at.x < east && one.at.z < north,
+                "it ran off the {} and ended at {}",
+                toward,
                 one.at
             );
             assert!(
                 one.at.y > -0.1,
-                "it went over the {} edge and ended at {}",
-                if side < 0.0 { "west" } else { "east" },
+                "it went over the {} and ended at {}",
+                toward,
                 one.at
             );
         }

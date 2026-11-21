@@ -427,8 +427,13 @@ answering the same question, not because either read the other's number.
 It starts at the door and not at the floor's own south end, since the floor
 laps `LAPS` back under the hidden room and a kerb along that stretch is half a
 metre of stone standing up through that room's floor twenty metres either side
-of its door. With it there the catch becomes a backstop that nothing in
-ordinary walking reaches.
+of its door. The south end wants nothing else: that is the wall the door is in.
+
+The far end wants a third piece, which the first build left off. The floor runs
+`SPARE` past the last body and then stops, and Jake walked off the end of it.
+It runs the full width the other two stand at, so the three meet at the corners
+rather than leaving a gap at each one. With all three there the catch becomes a
+backstop that nothing in ordinary walking reaches.
 
 **And the catch is the depth and nothing else.** It was the depth and being
 out past the door, and the second half is a line you can walk over while you
@@ -510,7 +515,7 @@ for.
 - The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
 - And nothing in the building is as low as the catch. — `tests::nothing_in_the_building_is_as_low_as_the_catch`
-- And the kerb keeps you on it, run at from the middle, either side. — `tests::the_kerb_keeps_you_on_the_floor_out_there`
+- And the kerb keeps you on it, run at from the middle, both sides and the far end. — `tests::the_kerb_keeps_you_on_the_floor_out_there`
 - And the way back is marked on the far face of its wall. — `behind::tests::the_way_back_is_marked_on_the_far_face`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 - And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
