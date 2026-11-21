@@ -425,6 +425,17 @@ took it out from under your feet as well. The line is the field's own number,
 read from both sides, because the two meet along it and a wall that moved and
 left them disagreeing would be a gap to fall through.
 
+**And the field's sky is not over it either.** The moon and the sun hung off
+the eye asked `Room::out_of_doors`, which is a question about a roof, and
+nothing stands over this floor. So the overworld's moon hung in among the
+planets, with the deep's own sky taking a corner out of it where a 33 kilometre
+far plane leaves no depth to tell 230 metres from 36. Jake filmed it on
+2026-11-21 at (61.26, 0.00, 180.27). `outdoors` had been put right for this a
+fortnight before and those two were left on the old question, which is the same
+fault this file keeps making: a test of where your feet are answering a question
+about what you can see. It is one call now, `Arcade::in_the_open`, and the two
+of them and `outdoors` all ask it.
+
 Behind the building, east of that line and north of the door, there is no wall
 to draw a line on, and it still reads as this room with no floor in it. What
 makes that safe is that you cannot get there. `field::wall` follows you the way
@@ -478,6 +489,7 @@ for.
 - And nothing in the building is as low as the catch. — `tests::nothing_in_the_building_is_as_low_as_the_catch`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 - And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
+- And the field's sky does not hang over it. — `tests::the_field_s_sky_is_not_over_the_solar_system`
 
 ### Verified by hand
 

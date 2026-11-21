@@ -3256,6 +3256,24 @@ impl Arcade {
         eye.z > self.the_door().z && eye.x > field::starts(self.room.reaches)
     }
 
+    /// Whether the building's own sky is over you.
+    ///
+    /// **Two questions and not one.** `Room::out_of_doors` asks about a
+    /// roof, and out past the door there is no roof: spec 0018's floor
+    /// runs into the dark with nothing standing over any of it, so that
+    /// room answers yes to a question about weather it has no part in.
+    ///
+    /// Everything that belongs to the field's sky asks this. The moon and
+    /// the sun hung off the eye asked the roof alone, so the overworld's
+    /// moon hung in among the planets with the deep's own sky cutting a
+    /// corner out of it, which Jake filmed on 2026-11-21. `outdoors` was
+    /// put right for this a fortnight ago and those two were left behind,
+    /// which is why it is a call now rather than an expression written
+    /// out wherever it is wanted.
+    fn in_the_open(&self) -> bool {
+        !self.in_the_deep() && self.room.out_of_doors(self.looking_from())
+    }
+
     /// What the lit parts of the map in your hand mean, at the foot of the
     /// screen. Spec 0021.
     ///
@@ -9596,7 +9614,7 @@ impl Game for Arcade {
         // back with a green horizon and a cloudy sky behind it. `afoot` was
         // false out there, which is the half of the old question that was
         // doing this work and the half I replaced.
-        self.outdoors = !self.in_the_deep() && self.room.out_of_doors(self.looking_from());
+        self.outdoors = self.in_the_open();
         // and whether it is worth drawing, which is a question about sight.
         // The engine's spec 0086.
         self.sees_outdoors = !self.in_the_deep()
@@ -11427,7 +11445,7 @@ impl Game for Arcade {
             if let (Some(ball), Some(face)) = (self.moon, self.moon_face) {
                 let showing = moon::showing(self.since);
 
-                if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
+                if showing > 0.01 && self.in_the_open() {
                     let out = moon::at(self.since);
                     let eye = self.looking_from();
                     let off = moon::off(eye);
@@ -11465,7 +11483,7 @@ impl Game for Arcade {
             if let Some(ball) = self.sun {
                 let showing = garden::sun_showing(self.since);
 
-                if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
+                if showing > 0.01 && self.in_the_open() {
                     let eye = self.looking_from();
                     let off = moon::off(eye);
                     let hung = eye + garden::sun_at(self.since) * off;
@@ -20635,6 +20653,47 @@ mod tests {
             went.distance(was) < SPEED * RUNS + 0.01,
             "a second of shift out there covered {}",
             went.distance(was)
+        );
+    }
+
+    /// Spec 0018: the field's own sky does not hang over the solar system.
+    ///
+    /// The moon and the sun hung off the eye asked `Room::out_of_doors`,
+    /// which is a question about a roof, and out past the door there is no
+    /// roof. So the overworld's moon hung in among the planets, with the
+    /// deep's own sky taking a wedge out of it where the far plane out
+    /// there leaves no depth to tell 230 metres from 36 kilometres. Jake
+    /// filmed it on 2026-11-21 at (61.26, 0.00, 180.27).
+    ///
+    /// The point of the test is the pair of answers, not either one:
+    /// out there the roof says one thing and the sky says another, which
+    /// is the whole of what was being got wrong.
+    #[test]
+    fn the_field_s_sky_is_not_over_the_solar_system() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+
+        one.at = vec3(door.x, 0.0, door.z + 12.0);
+        one.eye = one.at.y;
+
+        assert!(one.in_the_deep(), "that is not out past the door");
+        assert!(
+            one.room.out_of_doors(one.looking_from()),
+            "nothing stands over the floor out there, so the roof question \
+             has to say yes or this test is about nothing"
+        );
+        assert!(
+            !one.in_the_open(),
+            "the field's sky hangs over the solar system"
+        );
+
+        // and out in the field, where it is the field's sky and has to be
+        one.at = vec3(field::starts(one.room.reaches) - 20.0, 0.0, 0.0);
+        one.eye = one.at.y;
+
+        assert!(
+            one.in_the_open(),
+            "the field's sky does not hang over the field"
         );
     }
 
