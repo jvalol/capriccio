@@ -391,6 +391,22 @@ This replaces the 24 by 24 landing of spec 0017, which was that spec saying
 where it stopped. Two floors beyond that door would be two accounts of one
 thing, and this building knows what those do.
 
+**And its edges are the edges of the space.** Nothing out here is below the
+walking surface, so a drop off the slab has nothing at the bottom of it.
+Everywhere else in this building a fall lands on the field's ground, off the
+bridge, off Valhalla, off the garden's roof, and `field::ground` is a plane
+that follows the eye rather than a square, so it was underfoot out here too:
+two centimetres down, undrawn, either side of the slab for the whole of its
+length. Jake found it on 2026-11-21, standing four and a half metres west of
+the slab on nothing.
+
+The drawn half had already decided this, `draw_the_field` gives up when
+`in_the_deep`, and the solid half had not, which is `afoot` left behind when
+it stopped being a region. So the field is not underfoot past the door now,
+and a fall out here hands the door back. Falling for ever is the one state
+this game would have that you cannot get out of, and it would be a worse
+fault than the one it fixed.
+
 ## Acceptance criteria
 
 - The scale comes off the smallest body in the tables, and that body is drawn
@@ -428,6 +444,8 @@ thing, and this building knows what those do.
 - The sun reaches Neptune with something left. — `beyond::tests::the_sun_still_reaches_neptune`
 - And you can see it from there, which the building's own far plane does not
   allow. — `beyond::tests::the_far_plane_reaches_the_sun_from_neptune`
+- The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
+- And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
 
 ### Verified by hand
 

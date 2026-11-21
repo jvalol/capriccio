@@ -2691,6 +2691,18 @@ impl Arcade {
         self.at = at;
         self.falling = falling;
 
+        // and out past the door, where there is nothing at the bottom of a
+        // drop, the space hands the door back rather than letting you fall
+        // for ever. Spec 0018, and after `went` so that a body put back at
+        // the threshold does not report the whole way there as a footstep.
+        //
+        // Not in flight, which is allowed to be under the floor: that is
+        // what `--fly` is for and the one place out here worth looking at
+        // the floor from is under it.
+        if !flight && self.in_the_deep() && beyond::fallen(self.the_door(), self.at) {
+            self.the_way_back();
+        }
+
         // **Up is up, so there is nothing for the view to roll after.**
         // Spec 0047 lagged it behind a frame that could change under you,
         // which only the imaginarium ever did; spec 0063 parked that room.
@@ -5047,10 +5059,24 @@ impl Arcade {
     /// under the building, which is right from outside, where it keeps the
     /// garden's floor and the field's from meeting edge to edge, and wrong
     /// from inside, where it would be a lid over the cellar stair.
+    ///
+    /// **And not out past the door, where the drawing already says it is
+    /// not.** `sees_outdoors` is `!in_the_deep() && ...` and
+    /// `draw_the_field` gives up on that, so no grass is drawn out there;
+    /// `afoot` is a different question and said yes, so spec 0018's floor
+    /// had solid grass either side of it with nothing drawn on it, for the
+    /// whole of its length. Jake walked off the west edge at z 270 and kept
+    /// going on the dark, two centimetres down, which is [`field::DROP`].
+    ///
+    /// The old test here was `afoot` itself, back when it was a region
+    /// that was false past the door. When it stopped being a region and
+    /// became "if nothing of the building is under your feet, the field
+    /// is", the drawn half moved to `in_the_deep` and this half stayed
+    /// where it was. See the note on `outdoors` in `before_frame`.
     fn standing_on(&self) -> Vec<Aabb> {
         let mut out = self.room.solid();
 
-        if field::afoot(&out, self.at) {
+        if !self.in_the_deep() && field::afoot(&out, self.at) {
             out.extend(field::solid(self.room.reaches, self.at));
         }
 
@@ -7519,6 +7545,34 @@ impl Arcade {
             self.riding_to = None;
             self.listing = None;
         }
+    }
+
+    /// Puts you back in the doorway after a fall out past it. Spec 0018.
+    ///
+    /// **The one place in this building where a drop does not land.**
+    /// Everywhere else the field's ground is what catches you, off the
+    /// bridge, off Valhalla, off the garden's roof, and out past the door
+    /// the field is neither drawn nor underfoot. See `standing_on`.
+    ///
+    /// Back to the door rather than back to the floor's edge, because the
+    /// edge is where you just made the mistake, and because the door is
+    /// already what this space calls the way back: it is `stops`' first
+    /// entry and where the ride returns you.
+    ///
+    /// The view is left where it is. What went wrong is where you are and
+    /// not which way you are looking, and a reset that turned you as well
+    /// would take the one thing you still had your bearings by.
+    fn the_way_back(&mut self) {
+        self.at = self.the_door();
+        // the eye cut rather than eased: the easing in `aimed_and_moved` is
+        // for a body that walked, and trailing this one would draw the
+        // doorway from wherever the fall had got to.
+        self.eye = self.at.y;
+        self.falling = 0.0;
+        self.climbs = 0.0;
+        // and the chain of spec 0018 with it, which is what standing
+        // anywhere but out there means and is written once, up there.
+        self.mind_the_threshold();
     }
 
     /// Everything you can be holding down, let go of at once.
@@ -20523,6 +20577,104 @@ mod tests {
             went.distance(was) < SPEED * RUNS + 0.01,
             "a second of shift out there covered {}",
             went.distance(was)
+        );
+    }
+
+    /// Spec 0018: the floor out past the door is the whole of what holds
+    /// you up out there.
+    ///
+    /// Jake, 2026-11-21, from the space beyond the door: there is a kind of
+    /// ledge I can walk off of and not fall. He was at
+    /// (52.27, -0.02, 270.76), four and a half metres west of the floor's
+    /// west face, and the only box under him was the field's ground. The
+    /// field is not drawn out there, because `sees_outdoors` is
+    /// `!in_the_deep() && ...`, and `field::ground` follows the eye rather
+    /// than being a square, so it is underfoot everywhere.
+    ///
+    /// The second and third arms are the ones that make the first mean
+    /// something: the floor still carries you, and the field still carries
+    /// you where the field is.
+    #[test]
+    fn nothing_but_the_floor_holds_you_up_out_past_the_door() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let (middle, size) = beyond::floor(door);
+        let west = middle.x - size.x * 0.5;
+        let out = door.z + 100.0;
+        let under = |one: &Arcade| {
+            one.standing_on()
+                .iter()
+                .any(|box_| box_.contains_point(one.at - Vec3::Y * 0.1))
+        };
+
+        one.at = vec3(west - 4.5, 0.0, out);
+        assert!(one.in_the_deep(), "that is not out past the door");
+        assert!(
+            !under(&one),
+            "something holds you up 4.5 m west of the floor's edge at z {:.1}",
+            out
+        );
+
+        one.at = vec3(west + 4.5, 0.0, out);
+        assert!(
+            under(&one),
+            "the floor itself is not under you, so the first half of this \
+             proves nothing"
+        );
+
+        one.at = vec3(field::starts(one.room.reaches) - 20.0, 0.0, 0.0);
+        assert!(!one.in_the_deep(), "that is not in the field");
+        assert!(
+            under(&one),
+            "the guard took the field's ground away from the field"
+        );
+    }
+
+    /// Spec 0018: a fall out past the door ends at the door.
+    ///
+    /// Nothing out there is below the walking surface, so without this the
+    /// guard above turns one fault into a worse one: a drop with no bottom
+    /// and no way back, which is the only state this game would have that
+    /// you cannot get out of.
+    #[test]
+    fn a_fall_out_past_the_door_gives_the_door_back() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let (middle, size) = beyond::floor(door);
+        let west = middle.x - size.x * 0.5;
+
+        one.at = vec3(west - 1.0, 0.0, door.z + 100.0);
+        one.eye = one.at.y;
+
+        for _ in 0..120 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        // five centimetres, because the doorway's own sill is 3 cm proud of
+        // the floor and `walk` settles a body a millimetre or two north of
+        // the threshold off it. What this is about is the door and not the
+        // millimetre.
+        assert!(
+            one.at.distance(door) < 0.05,
+            "two seconds off the edge left you at {}, not at the door {}",
+            one.at,
+            door
+        );
+        assert_eq!(one.falling, 0.0, "it put you at the door still falling");
+
+        // and the control: a body on the floor is not caught by this at all
+        let stood = vec3(west + 1.0, 0.0, door.z + 100.0);
+        one.at = stood;
+        one.eye = one.at.y;
+
+        for _ in 0..120 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            one.at.distance(stood) < 1e-3,
+            "standing on the floor moved you to {}",
+            one.at
         );
     }
 

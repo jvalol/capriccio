@@ -728,6 +728,34 @@ pub fn at(reaches: f32) -> Vec3 {
     )
 }
 
+/// How far under the floor you have to have fallen before the space gives
+/// you the door back.
+///
+/// **Because out here a drop has nothing at the bottom of it.** Everywhere
+/// else in this building a fall lands: off the bridge, off Valhalla, off
+/// the roof, it is the field's ground that catches you, and the field is
+/// not out past the door. The floor is `WIDE` across with 33 kilometres of
+/// nothing either side, so walking off the edge was a fall with no end and
+/// no way back, which is the one thing this game cannot be left able to do.
+///
+/// Five metres, which is further than any step and well under a second's
+/// fall. It only has to be past the floor's own `THICK`, since nothing else
+/// out here is below the walking surface at all.
+pub const LOST: f32 = 5.0;
+
+/// Whether a body out here has fallen off the floor.
+///
+/// Measured from the door, which is where the floor is, rather than from
+/// nought: the one place this space's walking surface is written down is
+/// `at`, and a 0.0 here would be a second account of it.
+///
+/// Asked of the depth alone. Whether you are out past the door at all is
+/// `Arcade::in_the_deep`, and asking it twice is two tests that would come
+/// apart the first time the door moved.
+pub fn fallen(door: Vec3, at: Vec3) -> bool {
+    at.y < door.y - LOST
+}
+
 pub fn floor(door: Vec3) -> (Vec3, Vec3) {
     let from = door.z - LAPS;
     let to = sun(door).z + reach() + SPARE;
