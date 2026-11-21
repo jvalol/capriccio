@@ -2926,6 +2926,16 @@ impl Arcade {
         if self.puzzle.brought_home() {
             self.trail.gave(trail::Asked::SolvedTheCube);
         }
+
+        // and the sun out past the door, which is the third of the same
+        // kind. It hung off the ride's arrival instead, so the sun you had
+        // walked out to did not count, and the ride is eight seconds of
+        // walking away: Jake went to it on foot on 2026-11-21 and the stone
+        // said nobody had. Spec 0018's room is the distance, and a station
+        // that asks how you covered it is asking the wrong thing.
+        if beyond::at_the_sun(self.the_door(), self.at) {
+            self.trail.gave(trail::Asked::RodeToTheSun);
+        }
     }
 
     /// Which line the corner says, which is the one true where you are
@@ -7498,14 +7508,6 @@ impl Arcade {
             if there {
                 self.stop = to;
                 self.riding_to = None;
-
-                // **And the sun is the one stop that is the reading.** Spec
-                // 0018 is the system at true scale and spec 0036 names this
-                // ride as what that room asks. Arriving rather than setting
-                // out, because a leg you turned round on is not the trip.
-                if beyond::is_the_sun(self.stop) {
-                    self.trail.gave(trail::Asked::RodeToTheSun);
-                }
             }
 
             return (at, 0.0);
@@ -16638,43 +16640,68 @@ mod tests {
         );
     }
 
-    /// Spec 0051: the ride out to the sun, which is the one stop out there
-    /// that is the reading rather than a place.
+    /// Specs 0051 and 0036: the sun out past the door, which is the one
+    /// stop out there that is the reading rather than a place.
     ///
-    /// **Arriving, not setting out.** A leg you turn round on is not the
-    /// trip, so this ends the ride by hand at the sun's stop and then at a
-    /// planet's, and only the first is the room answering.
+    /// **Where you are and not how you came.** It hung off the ride's own
+    /// arrival, so the sun Jake walked the thirty metres out to on
+    /// 2026-11-21 did not count and the stone still said nobody had been.
+    /// A room whose reading is the distance should not care which way you
+    /// covered it.
+    ///
+    /// Two halves. Every stop's own arrival point reads as the sun or does
+    /// not, which is what keeps the circle wide enough for the ride to
+    /// pass through its own landing; and a body that walks out of the door
+    /// gets there, which is the half that was missing.
     #[test]
-    fn arriving_at_the_sun_gives_the_system_up() {
+    fn standing_at_the_sun_gives_the_system_up() {
         let mut arcade = Arcade::new();
-        let stops = beyond::stops(arcade.the_door());
+        let door = arcade.the_door();
+        let stops = beyond::stops(door);
 
-        // **Which stop that is comes from the list, not from the constant
-        // this is testing.** The first version of this set the stop to
-        // SUN_STOP and then asked whether SUN_STOP was the sun, which is
-        // the same question twice: pointing the constant at the way back
-        // left it passing.
+        // **Which stop that is comes from the list.** The first version of
+        // this set the stop to a constant and then asked whether that
+        // constant was the sun, which is one question twice.
         let sun = stops
             .iter()
             .position(|stop| stop.name == orrery::SUN.name)
             .expect("the sun is a stop you can ride to");
 
-        for (n, _) in stops.iter().enumerate() {
-            arcade.stop = n;
-            if beyond::is_the_sun(arcade.stop) {
-                arcade.trail.gave(trail::Asked::RodeToTheSun);
-            }
+        for (n, stop) in stops.iter().enumerate() {
+            let at = beyond::arriving(door, stop).0;
+
+            assert_eq!(
+                beyond::at_the_sun(door, at),
+                n == sun,
+                "the ride sets you down at {} and the building reads that \
+                 as {}being at the sun",
+                stop.name,
+                if n == sun { "not " } else { "" }
+            );
         }
 
+        // and on foot out of the doorway, which is what Jake did
+        arcade.at = door;
+        arcade.eye = arcade.at.y;
+        arcade.yaw = std::f32::consts::PI;
+        arcade.walking = [true, false, false, false];
+
+        for _ in 0..120 {
+            arcade.aimed_and_moved(1.0 / 60.0);
+            arcade.what_the_rooms_give();
+        }
+
+        assert!(
+            arcade.at.z > door.z + 4.0,
+            "two seconds north of the door only reached z {:.2}, so the \
+             walk is not the thing under test",
+            arcade.at.z
+        );
         assert_eq!(
             arcade.trail.given(),
             [trail::Asked::RodeToTheSun],
-            "riding every stop in turn answered the room {} times, not once",
+            "walking out to the sun answered the room {} times, not once",
             arcade.trail.given().len()
-        );
-        assert!(
-            beyond::is_the_sun(sun),
-            "the stop the list calls the sun is not the one is_the_sun names"
         );
     }
 

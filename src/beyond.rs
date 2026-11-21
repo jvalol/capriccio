@@ -189,19 +189,6 @@ pub fn sun(door: Vec3) -> Vec3 {
 ///
 /// The one account of where anything in this space is. The drawing reads it,
 /// the jump reads it, and the tests read it.
-/// Which stop is the sun.
-///
-/// **Named here because this is where the list is built.** `stops` puts the
-/// way back first and the sun straight after it, and a 1 written anywhere
-/// else is a second account of an order only this function decides.
-pub const SUN_STOP: usize = 1;
-
-/// Whether that stop is the sun, which is the one out here that is the
-/// reading rather than a place. Specs 0018 and 0036.
-pub fn is_the_sun(stop: usize) -> bool {
-    stop == SUN_STOP
-}
-
 pub fn stops(door: Vec3) -> Vec<Stop> {
     let sun_at = sun(door);
     let mut out = vec![
@@ -272,6 +259,33 @@ pub fn arriving(from: Vec3, stop: &Stop) -> (Vec3, Vec3) {
     let at = stop.at - along * stands_off(stop.across);
 
     (vec3(at.x, 0.0, at.z), along)
+}
+
+/// Whether you are at the sun, which is what spec 0036 asks for out here.
+///
+/// **A place you are at and not a ride you took.** It was given by the
+/// ride's own arrival, so the sun you had walked thirty metres to did not
+/// count: Jake did that on 2026-11-21 and the stone still said nobody had
+/// ridden out as far as the sun. The room asks for the sun, so this asks
+/// where you are.
+///
+/// **As near as the ride sets you down and no nearer.** `arriving` stops
+/// at `stands_off`, so a tighter circle is one the ride could not pass and
+/// the station would go back to depending on how you came. It leaves you
+/// 25.33 metres out, against a circle of 25.70, and
+/// `tests::the_ride_s_own_arrival_is_at_the_sun` is what holds that.
+///
+/// Measured flat, because the sun's middle is 5.14 up and a body stands on
+/// the floor: the ride's landing is 25.85 from that middle, which is
+/// outside its own standoff.
+///
+/// The sun is 30 out from the door, so the last four metres of the way out
+/// are already at it. Nothing else is out here to be at.
+pub fn at_the_sun(door: Vec3, at: Vec3) -> bool {
+    let sun = sun(door);
+    let flat = glam::vec2(at.x - sun.x, at.z - sun.z);
+
+    flat.length() <= stands_off(drawn(SUN.across))
 }
 
 /// How fast the ride carries you down the line, per spec 0018.
