@@ -438,6 +438,35 @@ the end of a branch is a place rather than a corridor.
 **The koi are not simulated.** They swim their own circles at their own speeds.
 A fish that avoids another fish is a spec of its own and this is not it.
 
+### The way in has two walls meeting in it
+
+The east side is two walls end to end: the hall's for the first half metre and
+the hidden room's for the rest, and they are half a wall's thickness apart in
+x, which the lining that draws them says at length. Nothing closed the step
+between them where the opening ends.
+
+Standing in the way in and looking along the wall, a sight line eleven degrees
+off the straight crosses the further plane six centimetres short of where that
+piece begins, slips past its end into the step, and comes out the far side.
+Jake found it on 2026-11-21: grass and sky through a slot in a wall you cannot
+walk through, 75 pixels of it.
+
+So the opening gets a jamb at each end. Across, it runs between the two planes
+and no further east than the nearer, since anything further dresses the inside
+of the building. Along, it is as deep as the wall and sits outside the opening,
+so the way in keeps its full width and the plug is in the wall behind its edge.
+
+They go at the end of the face list and not beside the pieces they close,
+because the plaster is seeded by a face's place in it: dropped in the middle
+they re-stained five walls that had not moved, which `tests::the_garden_is_drawn`
+is what caught.
+
+**A plug on the opening's own plane is not enough.** Two centimetres of it left
+four pixels of the slot still showing at that angle. Why so little depth failed
+is not pinned down; the wall's own thickness closes it, and what answered both
+times was the picture rather than the arithmetic. A list of boxes cannot say
+how wide a slot a grazing angle leaves.
+
 ## Acceptance criteria
 
 - You can walk into it from where you wake. — `garden::tests::you_can_walk_in_from_where_you_wake`
@@ -472,6 +501,8 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - Every mass of it hangs off a limb that starts on the trunk. — `garden::tests::every_sprig_hangs_off_the_trunk`
 - And no tree's foliage crosses a wall of the garden. — `garden::tests::no_tree_grows_through_a_wall`
 - Every wall is capped end to end by a cope that stands proud of it. — `garden::tests::every_wall_is_capped_end_to_end_and_oversails_it`
+- The way in is jambed, so the step between the two walls that make the east
+  side is closed at both ends of it. — `garden::tests::the_way_in_is_jambed`
 
 ## Verified by hand
 

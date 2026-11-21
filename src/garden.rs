@@ -2464,6 +2464,11 @@ pub fn facing(reaches: f32) -> Vec<Face> {
 
     // the garden looks west at the east wall, north at the south wall, and so
     // on, so each face looks back at the middle of the room
+    // how far across the way in's jambs run: from the further out of the two
+    // east planes to the nearer, skins included, so that the step between
+    // them is inside the jamb rather than beside it
+    let (jamb_from, jamb_to) = (wall_at() - THICK - proud, wall_at() - THICK * 0.5 + proud);
+
     let lining = |at_: Vec3, size: Vec3, looks: Vec3| Face {
         at: at_,
         size,
@@ -2611,6 +2616,56 @@ pub fn facing(reaches: f32) -> Vec<Face> {
             size: vec3(DEEP + WALL_THICK * 2.0, HIGH, proud * 2.0),
             looks: Vec3::Z,
             solid: false,
+            caps: false,
+        },
+        // and last, the two jambs of the way in, each the whole thickness
+        // of the wall rather than a skin on one face of it.
+        //
+        // **Last because the plaster is seeded by a face's place in this
+        // list.** `PLASTER_SEED` is stepped by the index, so a face put in
+        // the middle re-stains every wall after it: dropped in beside the
+        // two east pieces, these two changed the marks on five walls that
+        // had not moved, and `tests::the_garden_is_drawn` was what said so.
+        //
+        // **Because the two pieces either side of the opening are not in
+        // the same plane.** They are half a wall's thickness apart in x,
+        // for the reason the second one gives, and nothing closed the step
+        // between them at either end of the opening. Standing in the way in
+        // and looking along the wall, a sight line eleven degrees off the
+        // straight crosses the north piece's plane six centimetres short of
+        // where that piece begins, slips past its end into the step, and
+        // comes out the far side: Jake, 2026-11-21, with grass and sky
+        // through a slot in a wall you cannot walk through.
+        //
+        // The same fault as the band above the opening, which is solid for
+        // the same reason, and the same answer.
+        //
+        // Across, it runs between the two planes and no further east than
+        // the nearer of them. The wall's own thickness about `wall_at`
+        // leaves the step open at one end and dresses the inside of the
+        // building at the other, which
+        // `tests::every_face_of_the_garden_is_out_of_doors` says is not
+        // the garden's to dress.
+        //
+        // **Along, it is as deep as the wall and sits outside the
+        // opening**, so the way in keeps its full width and the plug is in
+        // the wall behind its edge. A two centimetre plug on the opening's
+        // own plane left four pixels of the slot still showing at that
+        // angle; the wall's thickness closed it. Why the thin one did not
+        // is not something I pinned down, and what answered both times was
+        // the picture rather than the arithmetic.
+        Face {
+            at: vec3((jamb_from + jamb_to) * 0.5, up, way_from - THICK * 0.5),
+            size: vec3(jamb_to - jamb_from, HIGH, THICK),
+            looks: Vec3::Z,
+            solid: true,
+            caps: false,
+        },
+        Face {
+            at: vec3((jamb_from + jamb_to) * 0.5, up, way_to + THICK * 0.5),
+            size: vec3(jamb_to - jamb_from, HIGH, THICK),
+            looks: -Vec3::Z,
+            solid: true,
             caps: false,
         },
     ]
@@ -6240,6 +6295,45 @@ mod tests {
                     out
                 );
             }
+        }
+    }
+
+    /// Spec 0040: the way in is jambed, so the step between the two east
+    /// walls is closed at both ends of it.
+    ///
+    /// **The garden's east side is two walls end to end, half a thickness
+    /// apart in x**, for the reason the second lining gives. Nothing closed
+    /// the step between them where the opening ends, so from inside the way
+    /// in, looking along the wall at a shallow angle, a sight line slipped
+    /// past the end of the plaster into the step and came out the far side:
+    /// Jake, 2026-11-21, grass and sky through a wall you cannot walk
+    /// through.
+    ///
+    /// What this holds is that something spans the two planes at each end.
+    /// How wide a slot that leaves at a grazing angle is not something a
+    /// list of boxes can answer, and the picture is what answered it.
+    #[test]
+    fn the_way_in_is_jambed() {
+        let reaches = room().reaches;
+        let (from, to) = way(reaches);
+        let proud = 0.01;
+        let (near, far) = (wall_at() - THICK - proud, wall_at() - THICK * 0.5 + proud);
+
+        for (name, end) in [("south", from), ("north", to)] {
+            assert!(
+                facing(reaches).iter().any(|face| {
+                    let half = face.size * 0.5;
+
+                    face.at.x - half.x <= near + 1e-4
+                        && face.at.x + half.x >= far - 1e-4
+                        && face.at.z - half.z <= end
+                        && face.at.z + half.z >= end
+                }),
+                "nothing spans the two east planes at the {} end of the way \
+                 in, which is z {:.2}",
+                name,
+                end
+            );
         }
     }
 
