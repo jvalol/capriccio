@@ -407,6 +407,19 @@ and a fall out here hands the door back. Falling for ever is the one state
 this game would have that you cannot get out of, and it would be a worse
 fault than the one it fixed.
 
+**And where this room is, is the door's z and the field's wall.** `in_the_deep`
+was the z alone, which is a half space, and the field runs north alongside the
+building: its wall stands at `field::starts` and ends at z 260, 91 metres past
+the door. So the far corner of the field read as this room, which took the
+grass out of the drawing, and once the solid half asked the same question it
+took it out from under your feet as well. The line is the field's own number,
+read from both sides, because the two meet along it and a wall that moved and
+left them disagreeing would be a gap to fall through.
+
+Behind the building, east of that line and north of the door, there is no wall
+to draw a line on. It still reads as this room with no floor in it, which is
+where it was before and where nothing is.
+
 ## Acceptance criteria
 
 - The scale comes off the smallest body in the tables, and that body is drawn
@@ -446,6 +459,7 @@ fault than the one it fixed.
   allow. — `beyond::tests::the_far_plane_reaches_the_sun_from_neptune`
 - The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
+- And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 
 ### Verified by hand
 

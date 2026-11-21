@@ -3211,8 +3211,30 @@ impl Arcade {
     ///
     /// By where you stand and not by a flag. A flag is a second account of
     /// which side of a wall you are on, and the wall already knows.
+    ///
+    /// **Past the door and east of the field's own wall.** The z on its own
+    /// is a half space, and the field runs north alongside the building:
+    /// `field::wall` stands at `field::starts` from z -60 to 260, which is
+    /// 91 metres past the door. So the far corner of the field counted as
+    /// the deep, which took the grass out of the drawing (`sees_outdoors`
+    /// is this, negated) and, once `standing_on` was gated the same way,
+    /// out from under your feet as well.
+    ///
+    /// One line for two regions that meet along it, which is why it is the
+    /// field's own number and not a second one written here: the field is
+    /// west of its wall and the space beyond the door is east of it, and a
+    /// wall that moved and left them disagreeing would be a gap you could
+    /// fall through.
+    ///
+    /// It still leaves the ground behind the building, east of that line
+    /// and north of the door, reading as the deep with no floor in it. That
+    /// is where it was before and nothing is there; the wall is what makes
+    /// this line the one worth drawing, and behind the building there is no
+    /// wall to draw one on.
     fn in_the_deep(&self) -> bool {
-        self.looking_from().z > self.the_door().z
+        let eye = self.looking_from();
+
+        eye.z > self.the_door().z && eye.x > field::starts(self.room.reaches)
     }
 
     /// What the lit parts of the map in your hand mean, at the foot of the
@@ -20577,6 +20599,60 @@ mod tests {
             went.distance(was) < SPEED * RUNS + 0.01,
             "a second of shift out there covered {}",
             went.distance(was)
+        );
+    }
+
+    /// Spec 0018: the space beyond the door is east of the field's wall.
+    ///
+    /// `in_the_deep` was the z past the door and nothing else, and the
+    /// field runs north alongside the building: its wall stands at
+    /// `field::starts` and ends at z 260, which is 91 metres past the door.
+    /// So the far corner of the field was drawn as the deep, and once
+    /// `standing_on` asked the same question it was the deep underfoot as
+    /// well: no grass, nothing to stand on, and the catch setting you down
+    /// at the solar system's door.
+    #[test]
+    fn the_far_corner_of_the_field_is_still_the_field() {
+        let mut one = Arcade::new();
+        let reaches = one.room.reaches;
+        let door = beyond::at(reaches);
+        let out = door.z + 50.0;
+
+        // the wall is what makes this the line worth drawing, so the test
+        // says it is there rather than taking the x on faith
+        assert!(
+            field::wall(reaches, vec3(-50.0, 0.0, out))
+                .iter()
+                .any(|box_| box_.min.z <= out && box_.max.z >= out),
+            "the field's wall does not reach z {:.1}, so this is not the line",
+            out
+        );
+
+        one.at = vec3(field::starts(reaches) - 20.0, 0.0, out);
+
+        assert!(
+            !one.in_the_deep(),
+            "the field at z {:.1} reads as the space beyond the door",
+            out
+        );
+        assert!(
+            one.standing_on()
+                .iter()
+                .any(|box_| box_.contains_point(one.at - Vec3::Y * 0.1)),
+            "there is nothing under you in the field at z {:.1}",
+            out
+        );
+
+        // and the control, which is that the floor at the same z still is
+        // the deep and so still has the room's own sky and ride
+        let (middle, _) = beyond::floor(door);
+        one.at = vec3(middle.x, 0.0, out);
+
+        assert!(
+            one.in_the_deep(),
+            "the floor itself at z {:.1} is not the deep, so the rest of \
+             this proves nothing",
+            out
         );
     }
 
