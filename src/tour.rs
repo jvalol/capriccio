@@ -473,6 +473,116 @@ impl Ways {
         queue
     }
 
+    /// Places a body can walk to from the biggest part of this lattice and
+    /// not walk back from.
+    ///
+    /// **The fault a measurement cannot see.** The joins above are made by
+    /// asking `walk`, one direction at a time, because `walk` slides a body
+    /// along what it meets and the sliding is not symmetric: a gap too
+    /// narrow for a body can let one in and then refuse to let it back out.
+    /// The east side of the back room's bay did exactly that, and Jake was
+    /// stuck in it on 2026-11-21 with every test in the building green.
+    ///
+    /// **Not every one-way pair, which is the tempting question and is the
+    /// wrong one.** Anything standing higher than `walk` climbs has a top a
+    /// body fits on, and from that top it can step down and not get back:
+    /// Valhalla's flank benches are 0.52 and gave half a million one-way
+    /// pairs, every one of them about a place no walk can ever reach. What
+    /// matters is being shut in somewhere you can get to, so the question is
+    /// asked of the biggest part a body can walk around freely. Somewhere
+    /// nothing can reach is a different thing and this says nothing about
+    /// it.
+    /// Only the tests ask for this, the same as `Arcade::reachable`.
+    #[cfg(test)]
+    pub fn shut_in(&self) -> Vec<usize> {
+        let back = {
+            let mut back = vec![Vec::new(); self.spots.len()];
+
+            for (here, onward) in self.next.iter().enumerate() {
+                for &there in onward.iter() {
+                    back[there].push(here);
+                }
+            }
+
+            back
+        };
+        // the parts a body can walk around freely, by Kosaraju: finishing
+        // order on the lattice, then fill on the lattice reversed
+        let mut order = Vec::with_capacity(self.spots.len());
+        let mut seen = vec![false; self.spots.len()];
+
+        for from in 0..self.spots.len() {
+            if seen[from] {
+                continue;
+            }
+
+            seen[from] = true;
+
+            let mut stack = vec![(from, 0usize)];
+
+            while let Some((here, n)) = stack.pop() {
+                match self.next[here].get(n) {
+                    Some(&there) => {
+                        stack.push((here, n + 1));
+
+                        if !seen[there] {
+                            seen[there] = true;
+                            stack.push((there, 0));
+                        }
+                    }
+                    None => order.push(here),
+                }
+            }
+        }
+
+        let mut part = vec![usize::MAX; self.spots.len()];
+        let mut sizes: Vec<usize> = Vec::new();
+
+        for &from in order.iter().rev() {
+            if part[from] != usize::MAX {
+                continue;
+            }
+
+            let which = sizes.len();
+            let mut queue = vec![from];
+
+            part[from] = which;
+
+            let mut n = 0;
+
+            while n < queue.len() {
+                let here = queue[n];
+                n += 1;
+
+                for &there in back[here].iter() {
+                    if part[there] == usize::MAX {
+                        part[there] = which;
+                        queue.push(there);
+                    }
+                }
+            }
+
+            sizes.push(queue.len());
+        }
+
+        let Some(main) = sizes
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, size)| **size)
+            .map(|(which, _)| which)
+        else {
+            return Vec::new();
+        };
+        let Some(from) = (0..self.spots.len()).find(|n| part[*n] == main) else {
+            return Vec::new();
+        };
+        let out: std::collections::HashSet<usize> = self.reached_from(from).into_iter().collect();
+
+        (0..self.spots.len())
+            .filter(|n| part[*n] != main && out.contains(n))
+            .collect()
+    }
+
     /// And which place is where, for the same reason.
     pub fn spot(&self, n: usize) -> Spot {
         self.spots[n]

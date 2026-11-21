@@ -5207,8 +5207,43 @@ mod tests {
     #[test]
     fn no_room_lets_you_in_and_not_out() {
         let room = Room::of(crate::games());
-        let solid = room.solid();
-        let grounds = room.grounds();
+        let reaches = room.reaches;
+        let mut trail = crate::trail::Trail::new();
+
+        for one in crate::trail::Asked::every() {
+            trail.gave(*one);
+        }
+
+        // **What `Arcade::standing_on` puts underfoot, not what the building
+        // is made of.** Three of the places you can walk are not rooms and
+        // so are not grounds: spec 0054's bridge, spec 0056's Valhalla at
+        // the top of it, and spec 0068's village out in the field. Nothing
+        // in this spec had ever looked at them, and Valhalla is a longhouse
+        // and a steading, which is exactly the shape a pocket hides in. The
+        // trail is given in full, because none of Valhalla is there until
+        // it is.
+        let mut solid = room.solid();
+
+        solid.extend(crate::bridge::solid(reaches, 1.0));
+        solid.extend(crate::valhalla::solid(reaches, &trail));
+        solid.extend(crate::village::solid(reaches));
+        solid.extend(crate::field::solid(reaches, crate::village::at(reaches)));
+
+        let mut grounds = room.grounds();
+
+        grounds.push(("valhalla", crate::valhalla::ground(reaches)));
+        // the village stands on the field, which re-centres on the eye and
+        // so can never be a ground. Its own patch of it, cut to the village
+        grounds.push(("the village", {
+            let round = crate::village::around(reaches);
+            let under = crate::field::ground(crate::village::at(reaches));
+
+            Aabb::new(
+                vec3(round.min.x, under.min.y, round.min.z),
+                vec3(round.max.x, under.max.y, round.max.z),
+            )
+        }));
+
         // **The two big outdoor grounds are not asked.** The field behind
         // the wall is a hundred and sixty metres square and the space
         // beyond the door runs to thirty three thousand, which is a
@@ -5216,8 +5251,9 @@ mod tests {
         // 0018 holds those two from the other end: a kerb down each side
         // and a catch under the floor, so the fault they can have is
         // falling off rather than being shut in.
-        let big = 400.0;
+        let big = 3000.0;
         let mut done: Vec<Aabb> = Vec::new();
+        let mut asked: Vec<&str> = Vec::new();
 
         for (name, ground) in grounds.iter() {
             let across = (ground.max.x - ground.min.x) * (ground.max.z - ground.min.z);
@@ -5231,48 +5267,52 @@ mod tests {
                 ground.max + Vec3::splat(crate::tour::APART),
             );
             let ways = crate::tour::ways(&grounds, &solid, within);
-            // every place in the region, not the ones this ground is
-            // named on: a gallery full of plinths keeps most of its
-            // standing room on the tops of solids, which the lattice
-            // calls a step
-            let here: Vec<usize> = (0..ways.places())
+            // counted over the region and not over the places this ground
+            // is named on: a gallery full of plinths keeps most of its
+            // standing room on the tops of solids, which the lattice calls
+            // a step
+            let here = (0..ways.places())
                 .filter(|n| within.contains_point(ways.spot(*n).at))
-                .collect();
-            let reach: Vec<std::collections::HashSet<usize>> = (0..ways.places())
-                .map(|n| ways.reached_from(n).into_iter().collect())
-                .collect();
+                .count();
 
-            for shut in here.iter() {
-                for open in here.iter() {
-                    if shut == open || !reach[*open].contains(shut) || reach[*shut].contains(open) {
-                        continue;
-                    }
+            for shut in ways.shut_in() {
+                let at = ways.spot(shut);
 
-                    let (from, to) = (ways.spot(*open), ways.spot(*shut));
-
-                    panic!(
-                        "by {}, a body walks from {:.2} {:.2} {:.2} on {} to \
-                         {:.2} {:.2} {:.2} on {} and cannot walk back",
-                        name,
-                        from.at.x,
-                        from.at.y,
-                        from.at.z,
-                        from.ground,
-                        to.at.x,
-                        to.at.y,
-                        to.at.z,
-                        to.ground
-                    );
-                }
+                assert!(
+                    !within.contains_point(at.at),
+                    "by {}, a body can walk to {:.2} {:.2} {:.2} on {} and \
+                     cannot walk back",
+                    name,
+                    at.at.x,
+                    at.at.y,
+                    at.at.z,
+                    at.ground
+                );
             }
 
             assert!(
-                here.len() > 20,
+                here > 20,
                 "only {} places laid round {}, so this asked nothing",
-                here.len(),
+                here,
                 name
             );
             done.push(within);
+            asked.push(*name);
+        }
+
+        // **And that the two outdoor places were among them.** Valhalla is
+        // what holds the other half of `shut_in`: its flank benches stand
+        // 0.52 and `walk` climbs 0.42, so every one of the five thousand
+        // places over there answers to a one-way pair and to nothing you
+        // can be shut in by. Drop it out of this sweep and the distinction
+        // stops being tested at all.
+        for want in ["valhalla", "the village"] {
+            assert!(
+                asked.contains(&want),
+                "{} was not asked, and {:?} were",
+                want,
+                asked
+            );
         }
     }
 

@@ -76,14 +76,37 @@ thing that graph already knows and that nobody had asked it for. Choosing the
 walk myself is what let the west side of the same bay through, where a walk to
 a spot I picked arrived and said nothing about the 0.91 it had squeezed past.
 
-Pairs, not islands. Floor nothing can reach is ordinary in here: the lattice
-runs under the koi pond and under the plunge basin, and the sauna's places are
-behind a shut door. Floor you can reach and not leave is never ordinary.
+**Parts, and not pairs.** Every one-way pair is the obvious question and it is
+the wrong one. Anything standing higher than `walk` climbs has a top a body
+fits on, and from that top a body could step down and never get back:
+Valhalla's flank benches are 0.52 against a climb of 0.42 and answer half a
+million times over, every one of them about a place no walk can reach. So
+`Ways::shut_in` finds the biggest part a body can walk freely around, by
+Kosaraju on the lattice, and names what that part reaches and cannot be
+reached from. Somewhere nothing can get to is a different thing and this says
+nothing about it: the lattice runs under the koi pond and the plunge basin,
+and the sauna's places are behind a shut door.
 
-The two big outdoor grounds are left out, because a lattice over them is a
-hundred thousand places. Spec 0018 holds those from the other end, with a
+**And the places that are not rooms.** Three of the walks in this building are
+not grounds, because they are not floors of rooms: spec 0054's bridge, spec
+0056's Valhalla at the top of it, and spec 0068's village out in the field.
+`Arcade::standing_on` puts them underfoot and nothing in this spec had ever
+looked at them, which for a longhouse with a steading round it is exactly the
+shape a pocket hides in. They are asked now, with the trail given in full
+because none of Valhalla is there until it is. Valhalla is also what keeps the
+paragraph above honest: ask for pairs instead of parts and it fails on those
+benches.
+
+The two big outdoor grounds are still left out, because a lattice over them is
+a hundred thousand places. Spec 0018 holds those from the other end, with a
 kerb down each side and a catch under the floor: the fault they can have is
 falling off, not being shut in.
+
+**What it cannot see is a drop.** The lattice only joins two places within a
+step of each other in height, so a pit you fall into and cannot climb out of
+is not a one-way way: it is no way at all, and reads as floor nothing can
+reach. This rule would be silent about one. The building has no such pit and
+nothing here would say so if it grew one.
 
 ## Acceptance criteria
 
@@ -94,6 +117,17 @@ falling off, not being shut in.
   of. — `room::tests::no_room_lets_you_in_and_not_out`
 - A floor and the hall's leave no hole and no ledge, in the room that used to own this question. — `behind::tests::the_floors_leave_no_hole_and_no_ledge`
 - And in the back room. — `back::tests::the_floors_leave_no_hole_and_no_ledge`
+
+### Verified by hand
+
+- The rule names a real one. — **done 2026-11-21**: `back::WIDE` put back to
+  4.6, which is the back room as Jake was stuck in it, and
+  `no_room_lets_you_in_and_not_out` fails with three places named and the
+  first at 6.40, -15.05, which is the west side of the bay. Put back to 5.1
+  and it passes. There is no fixture for this half: every edge in the lattice
+  goes through `walk`, so a built one turns on where the half metre lands
+  either side of a gap, and two attempts at one produced a sealed pocket
+  rather than a one-way one. A fixture that delicate holds nothing.
 
 ## Out of scope
 
