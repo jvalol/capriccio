@@ -8058,6 +8058,17 @@ impl Arcade {
                 );
             }
 
+            // and the verge down either side of it, which is what stops you
+            // walking off into the dark
+            for (middle, size) in beyond::kerbs(door) {
+                scene.push_material(
+                    cube,
+                    &Transform::at(middle).with_scale(size),
+                    aim::BEHIND_FLOOR,
+                    aim::VOID,
+                );
+            }
+
             // and the floor they stand on
             let (middle, size) = beyond::floor(door);
 
@@ -20654,6 +20665,65 @@ mod tests {
             "a second of shift out there covered {}",
             went.distance(was)
         );
+    }
+
+    /// Spec 0018: the kerb keeps you on the floor out past the door.
+    ///
+    /// **Walking off it was a second's work.** Forty metres across with
+    /// nothing either side, and Jake went out of the door, turned west and
+    /// was over the edge: his recording of 2026-11-21 has him at
+    /// (51.63, -3.74, 169.79), falling, six seconds after stepping
+    /// through. What the catch does about that is right and reads as a
+    /// glitch, so the floor gets a verge the way the bridge's deck did.
+    ///
+    /// Run at it rather than walked, which is the case the bridge's own
+    /// kerb was written for, and from the middle so that reaching the edge
+    /// at all is part of what this says.
+    #[test]
+    fn the_kerb_keeps_you_on_the_floor_out_there() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let (middle, size) = beyond::floor(door);
+        let west = middle.x - size.x * 0.5;
+        let east = middle.x + size.x * 0.5;
+
+        for side in [-1.0f32, 1.0] {
+            one.at = vec3(middle.x, 0.0, door.z + 60.0);
+            one.eye = one.at.y;
+            one.falling = 0.0;
+            one.yaw = side * std::f32::consts::FRAC_PI_2;
+            one.walking = [true, false, false, false];
+            one.shifted = true;
+
+            for _ in 0..(60 * 20) {
+                one.aimed_and_moved(1.0 / 60.0);
+            }
+
+            // it is standing at the edge, which is the assertion that
+            // catches a missing kerb: a body that went over is given the
+            // door back and ends in the middle of the floor, passing both
+            // of the two below.
+            assert!(
+                (one.at.x - (middle.x + side * size.x * 0.5)).abs() < 2.0,
+                "twenty seconds of running at the {} edge ended at x {:.2} \
+                 rather than against it, and the door is at {:.2}",
+                if side < 0.0 { "west" } else { "east" },
+                one.at.x,
+                door.x
+            );
+            assert!(
+                one.at.x > west && one.at.x < east,
+                "it ran off the {} edge and ended at {}",
+                if side < 0.0 { "west" } else { "east" },
+                one.at
+            );
+            assert!(
+                one.at.y > -0.1,
+                "it went over the {} edge and ended at {}",
+                if side < 0.0 { "west" } else { "east" },
+                one.at
+            );
+        }
     }
 
     /// Spec 0018: the field's own sky does not hang over the solar system.

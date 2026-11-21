@@ -779,6 +779,69 @@ pub fn fallen(door: Vec3, at: Vec3) -> bool {
     at.y < door.y - LOST
 }
 
+/// The verge down either side of the floor: how high it stands, how thick
+/// it is, and how far the drawn edge of it sits outside the floor's own.
+///
+/// **Because the floor had no edge at all.** Forty metres across, 33
+/// kilometres long, and either side of it nothing: Jake walked out of the
+/// door, turned west and was over the side in a second, and what the catch
+/// does about that is correct and reads as a glitch. He filmed it on
+/// 2026-11-21 and called it unpolished, which it was.
+///
+/// So the floor gets a verge, which is what the bridge's deck got after he
+/// went over its side for the same reason. The number is its own, because
+/// what it has to clear is `walk::STEP`: under that you walk up a kerb
+/// instead of being stopped by it, and the two roads arriving at the same
+/// height is the two of them answering one question, not sharing one
+/// answer. `tests::the_kerb_keeps_you_on_the_floor_out_there` is what holds
+/// it.
+///
+/// Thick enough to read as a kerb from the middle of a forty metre floor
+/// and no thicker: what it costs is half a metre a side of somewhere to
+/// walk, out of forty.
+pub const KERB_UP: f32 = 0.52;
+pub const KERB_THICK: f32 = 0.5;
+
+/// How far the drawn kerb stands outside the floor's edge, which is only so
+/// that no face of it lies in a plane the floor already has.
+pub const KERB_PROUD: f32 = 0.04;
+
+/// The two of them, as a middle and a size apiece.
+///
+/// **From the door and not from the floor's own south end.** The floor laps
+/// `LAPS` back under the hidden room, per `floor`, and a kerb on that
+/// stretch is half a metre of stone standing up through that room's floor
+/// twenty metres either side of its door. It starts in the plane of the
+/// wall instead, where its end is buried in the wall's own thickness.
+///
+/// It reaches down to the floor's underside rather than standing on its
+/// top, so that the floor's side face is behind the kerb rather than level
+/// with it.
+pub fn kerbs(door: Vec3) -> [(Vec3, Vec3); 2] {
+    let (middle, size) = floor(door);
+    let from = door.z;
+    let to = middle.z + size.z * 0.5;
+
+    [-1.0f32, 1.0].map(|side| {
+        let out = middle.x + side * (size.x * 0.5 + KERB_PROUD);
+
+        (
+            vec3(
+                out - side * KERB_THICK * 0.5,
+                (KERB_UP - THICK) * 0.5,
+                (from + to) * 0.5,
+            ),
+            vec3(KERB_THICK, KERB_UP + THICK, to - from),
+        )
+    })
+}
+
+/// The same two as boxes you cannot walk through.
+pub fn kerb_solid(reaches: f32) -> [blitzkit::collision::Aabb; 2] {
+    kerbs(at(reaches))
+        .map(|(middle, size)| blitzkit::collision::Aabb::from_center_size(middle, size))
+}
+
 pub fn floor(door: Vec3) -> (Vec3, Vec3) {
     let from = door.z - LAPS;
     let to = sun(door).z + reach() + SPARE;

@@ -407,6 +407,21 @@ and a fall out here hands the door back. Falling for ever is the one state
 this game would have that you cannot get out of, and it would be a worse
 fault than the one it fixed.
 
+**And a verge down either side of it.** Forty metres across with nothing to
+either side, and walking off it was a second's work: Jake went out of the door,
+turned west and was over the edge, and the catch handing him the door back is
+correct and reads as a glitch. He filmed it on 2026-11-21 and called it
+unpolished, which it was. So the floor gets what the bridge's deck got after he
+went over its side, a kerb higher than `walk::STEP` so that it stops you rather
+than being walked up. The two roads arrive at the same height because they are
+answering the same question, not because either read the other's number.
+
+It starts at the door and not at the floor's own south end, since the floor
+laps `LAPS` back under the hidden room and a kerb along that stretch is half a
+metre of stone standing up through that room's floor twenty metres either side
+of its door. With it there the catch becomes a backstop that nothing in
+ordinary walking reaches.
+
 **And the catch is the depth and nothing else.** It was the depth and being
 out past the door, and the second half is a line you can walk over while you
 fall. Jake stepped off the west edge beside the door, held a key that carried
@@ -487,6 +502,7 @@ for.
 - The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
 - And nothing in the building is as low as the catch. — `tests::nothing_in_the_building_is_as_low_as_the_catch`
+- And the kerb keeps you on it, run at from the middle, either side. — `tests::the_kerb_keeps_you_on_the_floor_out_there`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 - And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
 - And the field's sky does not hang over it. — `tests::the_field_s_sky_is_not_over_the_solar_system`

@@ -1653,6 +1653,8 @@ impl Room {
     pub fn solid(&self) -> Vec<Aabb> {
         let mut out = self.building();
         out.push(crate::beyond::solid(self.reaches));
+        // and the verge down either side of it, per spec 0018
+        out.extend(crate::beyond::kerb_solid(self.reaches));
 
         out
     }
@@ -3579,8 +3581,10 @@ mod tests {
                 + crate::mirrors::solid().len()
                 // and the room over the nook, per spec 0064
                 + crate::glass::solid(room.reaches).len()
-                // and the one slab beyond the door, per spec 0018
+                // and the slab beyond the door with its two verges, per
+                // spec 0018
                 + 1
+                + crate::beyond::kerb_solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
@@ -4458,8 +4462,10 @@ mod tests {
                 + crate::mirrors::solid().len()
                 // and the room over the nook, per spec 0064
                 + crate::glass::solid(room.reaches).len()
-                // and the one slab beyond the door, per spec 0018
+                // and the slab beyond the door with its two verges, per
+                // spec 0018
                 + 1
+                + crate::beyond::kerb_solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
