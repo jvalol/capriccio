@@ -2691,15 +2691,24 @@ impl Arcade {
         self.at = at;
         self.falling = falling;
 
-        // and out past the door, where there is nothing at the bottom of a
-        // drop, the space hands the door back rather than letting you fall
-        // for ever. Spec 0018, and after `went` so that a body put back at
-        // the threshold does not report the whole way there as a footstep.
+        // and a body that has fallen out of the world is given the door
+        // back rather than falling for ever. Spec 0018, and after `went` so
+        // that a body put back at the threshold does not report the whole
+        // way there as a footstep.
+        //
+        // **By the depth alone, and not by `in_the_deep` as well.** You can
+        // walk while you fall, and `in_the_deep` is the z past the door, so
+        // stepping off the floor's west edge near the door and holding a
+        // key that carries you south took you out of the question in under
+        // a second: Jake did it on his first walk and was 117 metres down
+        // and going. The depth cannot be steered out of, and it does not
+        // need help, because nothing of this building is that far down. See
+        // [`beyond::LOST`].
         //
         // Not in flight, which is allowed to be under the floor: that is
         // what `--fly` is for and the one place out here worth looking at
         // the floor from is under it.
-        if !flight && self.in_the_deep() && beyond::fallen(self.the_door(), self.at) {
+        if !flight && beyond::fallen(self.the_door(), self.at) {
             self.the_way_back();
         }
 
@@ -20860,6 +20869,54 @@ mod tests {
             one.at.distance(stood) < 1e-3,
             "standing on the floor moved you to {}",
             one.at
+        );
+
+        // and steering while you fall does not get you out of it, which is
+        // how Jake got out of it first: off the west edge beside the door
+        // and south, so the z past the door was behind him before he was
+        // five metres down. He was 117 metres under the world and going.
+        one.at = vec3(west - 1.0, 0.0, door.z + 2.0);
+        one.eye = one.at.y;
+        one.falling = 0.0;
+        one.yaw = 0.0;
+        one.walking = [true, false, false, false];
+
+        for _ in 0..120 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            one.at.y > -1.0,
+            "two seconds south off the edge beside the door left you at {}",
+            one.at
+        );
+    }
+
+    /// Spec 0018: nothing in the building is as low as the catch.
+    ///
+    /// The catch is the depth and nothing else, which is only safe while
+    /// `beyond::LOST` is under every floor there is. The building bottoms
+    /// out at -4.45 against a catch at -5.00, so there is 55 centimetres in
+    /// hand. Dig a room deeper than that and its floor starts handing
+    /// people the solar system's door.
+    #[test]
+    fn nothing_in_the_building_is_as_low_as_the_catch() {
+        let one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let catch = door.y - beyond::LOST;
+        let lowest = one
+            .room
+            .solid()
+            .iter()
+            .map(|box_| box_.min.y)
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            lowest > catch,
+            "the building reaches {:.2}, which is at or under the catch at \
+             {:.2}",
+            lowest,
+            catch
         );
     }
 

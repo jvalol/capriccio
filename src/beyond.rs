@@ -739,19 +739,28 @@ pub fn at(reaches: f32) -> Vec3 {
 /// no way back, which is the one thing this game cannot be left able to do.
 ///
 /// Five metres, which is further than any step and well under a second's
-/// fall. It only has to be past the floor's own `THICK`, since nothing else
-/// out here is below the walking surface at all.
+/// fall.
+///
+/// **And below everything this building has**, whose outline bottoms out at
+/// -4.45 and whose lowest floor is -4.15. That clearance is what lets the
+/// catch be the depth and nothing else, so a room dug deeper than this
+/// takes the catch down with it, and
+/// `tests::nothing_in_the_building_is_as_low_as_the_catch` is what will
+/// say so.
 pub const LOST: f32 = 5.0;
 
-/// Whether a body out here has fallen off the floor.
+/// Whether a body has fallen out of the world.
 ///
 /// Measured from the door, which is where the floor is, rather than from
 /// nought: the one place this space's walking surface is written down is
 /// `at`, and a 0.0 here would be a second account of it.
 ///
-/// Asked of the depth alone. Whether you are out past the door at all is
-/// `Arcade::in_the_deep`, and asking it twice is two tests that would come
-/// apart the first time the door moved.
+/// **The depth and nothing else.** It was this and `in_the_deep`, which is
+/// the z past the door, and you can walk while you fall: off the west edge
+/// by the door and south for half a second and you were out of the question
+/// with 117 metres already behind you. A fall cannot be steered out of a
+/// depth, and no second test is needed, because by [`LOST`] nothing of this
+/// building is down here to be caught by mistake.
 pub fn fallen(door: Vec3, at: Vec3) -> bool {
     at.y < door.y - LOST
 }

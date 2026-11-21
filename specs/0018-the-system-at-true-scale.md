@@ -407,6 +407,15 @@ and a fall out here hands the door back. Falling for ever is the one state
 this game would have that you cannot get out of, and it would be a worse
 fault than the one it fixed.
 
+**And the catch is the depth and nothing else.** It was the depth and being
+out past the door, and the second half is a line you can walk over while you
+fall. Jake stepped off the west edge beside the door, held a key that carried
+him south, and crossed back over that line before he was five metres down: his
+first walk ended 117 metres under the world and still going. A fall cannot be
+steered out of a depth. It needs no second test either, because nothing of this
+building is as low as five metres under the floor, the whole of it bottoming
+out at -4.45, and that clearance is held by a test rather than remembered.
+
 **And where this room is, is the door's z and the field's wall.** `in_the_deep`
 was the z alone, which is a half space, and the field runs north alongside the
 building: its wall stands at `field::starts` and ends at z 260, 91 metres past
@@ -466,6 +475,7 @@ for.
   allow. — `beyond::tests::the_far_plane_reaches_the_sun_from_neptune`
 - The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
+- And nothing in the building is as low as the catch. — `tests::nothing_in_the_building_is_as_low_as_the_catch`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 - And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
 
