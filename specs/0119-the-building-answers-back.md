@@ -1,6 +1,6 @@
 # 0119 The building answers back
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-20
 
 ## Goal
@@ -110,8 +110,8 @@ exist.
 
 ### The stone says both
 
-Spec 0118 gave the face one line under the name, for the first station not
-given. It carries what has been answered as well.
+Spec 0118 gave the ledger slab at the stone's foot one line, for the first
+station not given. It carries what has been answered as well, on five rows.
 
 - **The same sentence with the negative taken out.** `says::still_held` is in
   one register, "nobody has done the thing yet", settled on 2026-11-18 after
@@ -127,8 +127,32 @@ given. It carries what has been answered as well.
   anything. Then the one still held, as now.
 - When every one has been given the stone is the stone it was, per 0118, and
   the held line is gone while the given ones stay.
-- Recut with `write_texture` when the trail changes and at no other time, which
-  is what 0118 already does and is five times in a run.
+- Recut with `write_texture` when what it says changes and at no other time,
+  which is what 0118 already does and is five times in a run.
+- **Five rows, laid out for five however many are on it.** A block centred on
+  what it holds would walk every entry down the stone each time one was added,
+  and an entry already written is the one thing on a ledger that does not move.
+  The row a held line is in is the row its entry lands in, which is what makes
+  the line you read before doing the thing the line that has turned over when
+  you walk back out.
+- **One size for every row, which is the smallest any line could ever have.**
+  `cut_in` takes a line down on its own to fit the face, so left to itself a
+  short entry is cut half again as tall as a long one, and five entries at five
+  sizes is not a ledger. Sized over every line the stone could ever say rather
+  than over the ones on it today, or the type would change size as rows filled
+  in.
+- **And that costs the short lines their size.** One line had the slab to
+  itself and the cellar's was cut at 3.2 centimetres; every row is now cut at
+  what the longest has always had, which is 2.25 measured.
+  Widening the slab to buy it back was tried and put straight back: the
+  arithmetic said the footing would take 2.1 metres across and the picture said
+  otherwise at once, a mound falling away from its middle, so the slab stood
+  out past the rubble on both sides and read as a board laid on the grass,
+  which is the thing `slab_at` was written to avoid. **What buys the size back
+  is a shorter longest line**, and the longest is spec 0118's about the room
+  you started in.
+- The picture goes from 1024 across to 1536, at the slab's own aspect, so a
+  capital is twenty two pixels rather than thirteen.
 - Every new line is drafted copy and carries `[COPY - Jake]` until he has read
   it.
 
@@ -139,9 +163,9 @@ given. It carries what has been answered as well.
   `bridge::tests::a_span_takes_time_to_arrive`
 - Nothing holds you up and nothing carries you past where the deck is drawn
   while a span is arriving. —
-  `main::tests::you_cannot_walk_onto_a_span_that_is_still_coming`
+  `tests::you_cannot_walk_onto_a_span_that_is_still_coming`
 - A station given makes a note, and the same station given twice makes one. —
-  `main::tests::a_room_answering_sounds_once`
+  `tests::a_room_answering_sounds_once`
 
   **Asked of `Arcade::notes_due` and not of the mark afterwards.**
   `SoundSystem` takes what it is handed and says nothing back, so a test that
@@ -153,12 +177,25 @@ given. It carries what has been answered as well.
   `noise::tests::a_span_note_is_struck_and_dies_away`
 - There is a note for every span the deck grows in. —
   `bridge::tests::there_is_a_note_for_every_span`
-- The face names every station given, in the order given, and the first one not
-  given after them. — `bridge::tests::the_stone_says_what_was_done_and_what_is_left`
+- The ledger names every station given, in the order given, and the first one
+  not given after them. —
+  `bridge::tests::the_stone_says_what_was_done_and_what_is_left`
 - Every station has a line for having been given as well as for being held. —
   checked inside the test above, a station being half-written otherwise.
-- With everything given the face carries five lines and no held line. —
+- With everything given the ledger carries five entries and no held line. —
   `bridge::tests::a_finished_trail_leaves_nothing_held`
+- It never wants more rows than the slab has. —
+  `bridge::tests::the_ledger_never_wants_more_rows_than_it_has`
+- An entry already written does not move as the rows fill in. —
+  `bridge::tests::an_entry_already_written_does_not_move`
+- Every row is cut at one size and the rows sit evenly and clear of each other,
+  read off the picture rather than off the arithmetic. —
+  `bridge::tests::every_row_of_the_ledger_is_cut_at_one_size`
+- The picture is the slab's own shape, so no letter is stretched by being laid
+  on it. — `bridge::tests::the_ledgers_picture_is_the_slabs_own_shape`
+- A capital is writing rather than grain, and what it measures is written down
+  rather than asserted against a number, how big is big enough being Jake's. —
+  `bridge::tests::a_capital_on_the_ledger_is_worth_measuring`
 
 ### Verified by hand
 

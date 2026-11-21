@@ -1023,9 +1023,14 @@ struct Arcade {
     standing_stone: Option<MeshId>,
     rubble_mound: Option<MeshId>,
     carved_face: Option<MeshId>,
-    /// What the stone's face is currently cut with, so it is recut when
-    /// the answer changes and at no other time. Spec 0118.
-    carved_says: Option<trail::Asked>,
+    /// What the ledger at the stone's foot is currently cut with, so it is
+    /// recut when it changes and at no other time. Specs 0118 and 0119.
+    ///
+    /// **The lines themselves and not a count of them.** A mark that was
+    /// the number given would be a second account of what is on the stone,
+    /// and there are five pointers here: comparing what is drawn with what
+    /// should be drawn cannot drift from either.
+    carved_says: Vec<&'static str>,
     /// The band under the stone's name and what is cut into it, which is
     /// the only part of that stone that ever changes. Spec 0118.
     said_face: Option<MeshId>,
@@ -1677,7 +1682,7 @@ impl Arcade {
             standing_stone: None,
             rubble_mound: None,
             carved_face: None,
-            carved_says: None,
+            carved_says: Vec::new(),
             said_face: None,
             said_cut: None,
             span_paint: None,
@@ -8438,21 +8443,21 @@ impl Game for Arcade {
             });
         }
 
-        // and the band under the stone's name, when what the building is
-        // still holding has changed. Spec 0118. Recut in place, which is
-        // what `write_texture` is for, and it is the band rather than the
+        // and the ledger at the stone's foot, when what it says has
+        // changed. Specs 0118 and 0119. Recut in place, which is what
+        // `write_texture` is for, and it is the ledger rather than the
         // dressed panel: the panel is the stone's name and its runes and
         // never moves, so what is rewritten is a wide thin picture rather
         // than the four megabytes of the face.
         {
-            let says = bridge::still_held(&self.trail);
+            let says = bridge::ledger(&self.trail);
 
             if says != self.carved_says {
-                self.carved_says = says;
-
                 if let Some(cut) = self.said_cut {
-                    renderer.write_texture(cut, &bridge::said_cut(says.map(says::still_held)));
+                    renderer.write_texture(cut, &bridge::said_cut(&says));
                 }
+
+                self.carved_says = says;
             }
         }
 
@@ -8942,9 +8947,8 @@ impl Game for Arcade {
         // and the stone does not, which is two colours and so two draws
         // whatever happens, and `SLAB_PROUD` keeps them out of one plane.
         self.said_face = Some(renderer.add_mesh(&bridge::said_mesh(bridge::SLAB_PROUD)));
-        self.said_cut =
-            Some(renderer.add_texture(&bridge::said_cut(bridge::held_line(&self.trail))));
-        self.carved_says = bridge::still_held(&self.trail);
+        self.carved_says = bridge::ledger(&self.trail);
+        self.said_cut = Some(renderer.add_texture(&bridge::said_cut(&self.carved_says)));
         self.span_paint = Some(renderer.add_texture(&bridge::span_colours(&self.trail)));
         self.spans_painted = self.trail.given().len();
         self.night = Some(renderer.add_texture(&valhalla::night_sky()));

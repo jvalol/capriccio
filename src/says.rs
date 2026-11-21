@@ -202,6 +202,37 @@ pub const OPTIONS: Options = Options {
 ///
 /// **A match and not a table**, so a station added to `trail::Asked`
 /// stops this compiling rather than quietly carving nothing.
+/// And the same sentence once somebody has. Spec 0119.
+///
+/// **The same sentence with the negative taken out**, which is the whole
+/// of the design and not a shortcut. You read a row, you do the thing, and
+/// next time you walk out the stone says it happened. Nothing anywhere
+/// tells you that is what the bridge is waiting on; you watch one line
+/// turn over and you have the rule.
+///
+/// **So the register is `still_held`'s and must stay it.** That one was
+/// settled on 2026-11-18 after three lines were thrown out for sounding
+/// predatory, and what it landed on is a fact about the building with the
+/// player nowhere in the sentence: nobody has done the thing yet. Its
+/// mirror is somebody who has, and the player is still not in it. "You
+/// pulled it" would put them there, and would also be a lie the first time
+/// somebody else's run is watched.
+///
+/// **A match and not a table**, for the reason `still_held` gives: a
+/// station added to `trail::Asked` stops this compiling rather than
+/// quietly leaving a row of the ledger blank.
+pub fn given(what: crate::trail::Asked) -> &'static str {
+    use crate::trail::Asked;
+
+    match what {
+        Asked::OpenedTheCase => "A book was a handle, and somebody pulled it.",
+        Asked::WadedInThePool => "Somebody has been in the water.",
+        Asked::SolvedTheCube => "Somebody has played with the cube and solved it.",
+        Asked::GotBehindTheWall => "The room you started in has a secret somebody walked through.",
+        Asked::RodeToTheSun => "Somebody has ridden out as far as the sun.",
+    }
+}
+
 pub fn still_held(what: crate::trail::Asked) -> &'static str {
     use crate::trail::Asked;
 

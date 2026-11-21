@@ -938,13 +938,13 @@ pub const FACE_SQUEEZE: f32 = 2.0;
 /// spec 0118's lines is wider than it is tall: what sets the size is the
 /// number of characters, not this. It is written large so the short lines
 /// get everything the band will give them.
+///
+/// **And since spec 0119 it is a ceiling rather than a height.** The
+/// ledger cuts every row at one size, which is the smallest any of the
+/// lines can have, so what this sets is how large a row may ever be: see
+/// `ledger_tall`. `HELD_FOOT` went with it, a block of rows being placed
+/// by `ledger_foot` off its own count.
 pub const HELD_TALL: f32 = 0.60;
-/// **Near enough the middle of the slab.** It is a share of the picture's
-/// height and the picture is the slab's own shape, so what centres the
-/// line is a foot of about a half less half the block: at 0.22 the words
-/// sat on the near third of the stone with a hand's breadth of plain
-/// granite above them and none below.
-pub const HELD_FOOT: f32 = 0.40;
 
 /// Where the held line's own band of stone runs, and how far round the
 /// stone it takes.
@@ -987,6 +987,18 @@ pub const HELD_FOOT: f32 = 0.40;
 /// height at a pace away is seen at forty degrees and a tilt buys most of
 /// that back.
 pub const SLAB_OUT: f32 = 1.15;
+/// **Widened to 2.1 for spec 0119 and put straight back.** The ledger
+/// cuts every row at the smallest line it could ever say, so the shortest
+/// entry came down from the 3.2 centimetres it had alone to the 2.2 the
+/// longest has always had, and width is what binds a line here. The
+/// arithmetic said the footing would take it: at `SLAB_OUT` out from the
+/// middle a heap of `RUBBLE_OUT` still runs 1.8 either way and 2.1 needs
+/// 1.05. The picture said otherwise at once. A mound falls away from its
+/// middle, so what the rim can hold is not what the slope can carry, and
+/// at 2.1 the slab stood out past the rubble on both sides and read as a
+/// black board laid on the grass: which is the exact thing `slab_at` was
+/// written to avoid, in that constant's own words. What buys the size
+/// back is a shorter longest line, not a wider stone.
 pub const SLAB_WIDE: f32 = 1.5;
 pub const SLAB_LONG: f32 = 0.62;
 /// **Propped rather than laid.** At a quarter turn it was near enough
@@ -1033,8 +1045,20 @@ pub fn slab_box() -> (Vec3, f32, Vec3) {
 }
 
 /// How wide its picture is, and how tall, which is that slab's own shape.
-pub const SAID_ACROSS: u32 = 1024;
-pub const SAID_DOWN: u32 = 424;
+///
+/// **Its own shape and not near it.** `said_mesh` lays this on the slab
+/// corner to corner, so a picture of another aspect stretches every
+/// letter: that is what `cut_in`'s `stretch` undoes for the panel above,
+/// and what this avoids by matching. Held by
+/// `tests::the_ledgers_picture_is_the_slabs_own_shape`.
+///
+/// **Enough across for five rows rather than one.** At 1024 a row's
+/// capitals came out thirteen pixels, which is a letter you can count the
+/// steps on: one line could be cut large and five are cut at the smallest
+/// of them. This is 1024 pixels a metre and a capital of about twenty
+/// two, and it costs 3.9 megabytes rewritten five times in a run.
+pub const SAID_ACROSS: u32 = 1536;
+pub const SAID_DOWN: u32 = 635;
 
 /// The ledger stone, as the face you read.
 ///
@@ -1082,24 +1106,122 @@ pub fn slab_at() -> (Vec3, f32) {
 }
 
 /// And what is cut into it, or nothing once every room has answered.
-pub fn said_cut(held: Option<&str>) -> blitzkit::texture::TextureData {
+pub fn said_cut(lines: &[&str]) -> blitzkit::texture::TextureData {
     let mut pixels = vec![0u8; (SAID_ACROSS * SAID_DOWN * 4) as usize];
+    let tall = ledger_tall();
 
-    if let Some(line) = held {
-        // **No stretch here**, the picture already being cut to the band's
+    for (row, line) in lines.iter().take(rows()).enumerate() {
+        // **No stretch here**, the picture already being cut to the slab's
         // own shape rather than square.
         cut_in(
             &mut pixels,
             SAID_ACROSS,
             SAID_DOWN,
             line,
-            HELD_TALL,
-            HELD_FOOT,
+            tall,
+            ledger_foot(row, tall),
             1.0,
         );
     }
 
     blitzkit::texture::TextureData::from_pixels(SAID_ACROSS, SAID_DOWN, pixels)
+}
+
+/// How many rows the ledger has, which is how many lines it can ever show.
+///
+/// **Five, and it cannot be six.** A row is filled by a question answered
+/// and the last row by the one still held, so a trail with four given has
+/// four done and one held, and a finished trail has five done and nothing
+/// held. The count never passes the number of questions. Held by
+/// `tests::the_ledger_never_wants_more_rows_than_it_has`.
+///
+/// **A function, `Asked::every` not being one you can call in a
+/// constant.** Which is the right way round anyway: a sixth question
+/// gives the stone a sixth row with nothing here touched.
+pub fn rows() -> usize {
+    Asked::every().len()
+}
+
+/// How far apart the rows sit, as a share of a row's own cap height.
+///
+/// Set by eye against a ledger rather than a page: wider than a
+/// paragraph's leading, because these are entries and not prose, and
+/// there is stone to spare.
+pub const LEDGER_PITCH: f32 = 2.6;
+
+/// The cap height every row of the ledger is cut at.
+///
+/// **One size for the lot, set by the longest line there could ever be.**
+/// `cut_in` takes a line down on its own to fit the face, so left to
+/// itself a short entry is cut larger than a long one: "Nobody has been
+/// in the water" would stand half again as tall as the line about the
+/// room you started in, and five entries at five sizes is not a ledger,
+/// it is a ransom note.
+///
+/// **And over every line the stone could ever say, not the ones showing.**
+/// Sized to what is on it today, the type would change size as rows filled
+/// in, which is an entry you already read moving and growing while your
+/// back is turned.
+fn ledger_tall() -> f32 {
+    Asked::every()
+        .iter()
+        .flat_map(|one| [crate::says::given(*one), crate::says::still_held(*one)])
+        .map(|line| fits_in(SAID_ACROSS, SAID_DOWN, line, HELD_TALL, 1.0))
+        .fold(HELD_TALL, f32::min)
+}
+
+/// Where the foot of row `row` sits, counting from the top.
+///
+/// **Laid out for all five however many are on it.** A block that was
+/// centred on what it holds would move every entry down the stone each
+/// time one was added, and an entry already written is the one thing on a
+/// ledger that does not move.
+fn ledger_foot(row: usize, tall: f32) -> f32 {
+    let rows = rows();
+    let block = (rows - 1) as f32 * LEDGER_PITCH * tall + tall;
+    let bottom = (1.0 - block) * 0.5;
+
+    bottom + (rows - 1 - row.min(rows - 1)) as f32 * LEDGER_PITCH * tall
+}
+
+/// What a line would have to come down to, to fit `CUT_WIDE` of the face
+/// at `tall`.
+///
+/// **The same arithmetic `cut_in` does to shrink one**, asked ahead of
+/// time so that a block of lines can all be cut at the smallest of them.
+/// Written here rather than taken out of `cut_in`, because that one has to
+/// shrink whatever it is handed whether or not anybody asked first: the
+/// name on the panel above has nothing to be sized against.
+fn fits_in(wide: u32, high: u32, says: &str, tall: f32, stretch: f32) -> f32 {
+    let said = blitzkit::text::stencilled(says, RUNE_TEXELS);
+    let want = high as f32 * tall * stretch * said.width() as f32 / said.height() as f32;
+    let room = wide as f32 * CUT_WIDE;
+
+    tall * (room / want).min(1.0)
+}
+
+/// Every line the ledger shows: what has been answered, in the order it
+/// was, and then the one still held. Spec 0119.
+///
+/// **Done first and held last, which is a ledger and not a list.** Spec
+/// 0036 forbids a list of what is left and spec 0118 answered that with
+/// one held line at a time; that rule is untouched here, there still being
+/// exactly one. What is added is the other half, which is not a list of
+/// what is left but a record of what happened, and spec 0020's worn lane
+/// in the carpet is the same thing one room along.
+///
+/// Nothing held once every question has been given, per spec 0118, and
+/// then the stone is five entries and no question.
+pub fn ledger(trail: &Trail) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = trail
+        .given()
+        .iter()
+        .map(|one| crate::says::given(*one))
+        .collect();
+
+    out.extend(held_line(trail));
+
+    out
 }
 
 pub fn carving() -> blitzkit::texture::TextureData {
@@ -1621,8 +1743,20 @@ pub fn horn_mesh() -> blitzkit::mesh::MeshData {
 
 /// The stone at the foot of the bridge: where it stands and how big.
 ///
-/// Empty until the bridge is there, like everything else here. A stone
-/// naming a bridge that does not exist is a grave marker.
+/// **Always, and the `Option` is what is left of when it was not.** The
+/// comment here said "empty until the bridge is there" and "a stone
+/// naming a bridge that does not exist is a grave marker", which spec
+/// 0118 overturned in as many words: the stone stands from the first
+/// minute, like the deck's foot, because a stone appearing the moment
+/// somebody finishes the building is worse to watch than one that was
+/// always there. The code has returned `Some` unconditionally since, and
+/// the reason given for the opposite sat above it for two days.
+///
+/// The trail goes unread for the same reason. Kept rather than taken out
+/// because `tests::the_stone_stands_before_the_first_answer` is spec
+/// 0118's own acceptance criterion and asks this with two different
+/// trails: dropping the argument would make that test true by its own
+/// shape and prove nothing.
 pub fn runestone(reaches: f32, _trail: &Trail) -> Option<(Vec3, Vec3)> {
     Some(runestone_at(reaches))
 }
@@ -3440,6 +3574,277 @@ pub mod tests {
             (was - 1.0).abs() < 1e-6,
             "five questions and it ends at {}",
             was
+        );
+    }
+
+    /// Spec 0119: the ledger says what was done and then what is left.
+    ///
+    /// **And every station has both lines**, which is checked here rather
+    /// than in `says` because a line is nothing without the station it
+    /// belongs to. Both matches are exhaustive, so a sixth question stops
+    /// this compiling rather than leaving a row blank.
+    #[test]
+    fn the_stone_says_what_was_done_and_what_is_left() {
+        let mut trail = Trail::new();
+
+        assert_eq!(
+            ledger(&trail),
+            vec![crate::says::still_held(Asked::every()[0])],
+            "a stone with nothing answered says something other than the \
+             first question"
+        );
+
+        for (n, one) in Asked::every().iter().enumerate() {
+            trail.gave(*one);
+
+            let said = ledger(&trail);
+            let done: Vec<&'static str> = Asked::every()[..=n]
+                .iter()
+                .map(|one| crate::says::given(*one))
+                .collect();
+
+            assert_eq!(
+                said[..=n],
+                done[..],
+                "after {} answers the entries are not the {} rooms that \
+                 answered, in the order they did",
+                n + 1,
+                n + 1
+            );
+
+            for (what, line) in Asked::every().iter().zip(&said) {
+                assert!(!line.is_empty(), "{:?} has a blank line", what);
+            }
+        }
+    }
+
+    /// The rows of ink in a cut ledger, each as its top and bottom row of
+    /// the picture.
+    ///
+    /// **Read off the picture and not off the arithmetic.** What the
+    /// layout is supposed to do is one thing and what `cut_in` draws is
+    /// another, and the gap between them is where every fault on this
+    /// stone has lived: a line sized by its own width, a block placed by
+    /// its top when it is measured from its bottom, a picture squeezed by
+    /// the shape of what it is laid on.
+    fn inked(cut: &blitzkit::texture::TextureData) -> Vec<(u32, u32)> {
+        let (w, h) = (SAID_ACROSS, SAID_DOWN);
+        let px = &cut.levels[0].pixels;
+        let mut out = Vec::new();
+        let mut run: Option<(u32, u32)> = None;
+
+        for y in 0..=h {
+            let any = y < h && (0..w).any(|x| px[((y * w + x) * 4 + 3) as usize] > 0);
+
+            match (any, run) {
+                (true, None) => run = Some((y, y)),
+                (true, Some((a, _))) => run = Some((a, y)),
+                (false, Some(was)) => {
+                    out.push(was);
+                    run = None;
+                }
+                (false, None) => {}
+            }
+        }
+
+        out
+    }
+
+    /// Spec 0119: every row of the ledger is cut at one size.
+    ///
+    /// **Because `cut_in` takes a line down on its own to fit the face.**
+    /// Left to itself it cuts a short entry larger than a long one, and
+    /// five entries at five sizes is not a ledger. `ledger_tall` is what
+    /// stops it, by sizing every row to the longest line the stone could
+    /// ever say, and this reads the picture to check that it did.
+    ///
+    /// **And the gaps are even**, which is the other half of the same
+    /// claim: one size with a pitch worked off something else would come
+    /// out regular on one stone and not on the next.
+    #[test]
+    fn every_row_of_the_ledger_is_cut_at_one_size() {
+        let rows = inked(&said_cut(&ledger(&done())));
+
+        assert_eq!(
+            rows.len(),
+            super::rows(),
+            "a finished trail cut {} rows of ink and the stone has {}",
+            rows.len(),
+            super::rows()
+        );
+
+        let tall: Vec<u32> = rows.iter().map(|(a, b)| b - a + 1).collect();
+        let (least, most) = (
+            tall.iter().copied().min().expect("rows"),
+            tall.iter().copied().max().expect("rows"),
+        );
+
+        assert!(
+            most - least <= 1,
+            "the rows are cut from {} pixels tall to {}, which is five \
+             sizes on one stone",
+            least,
+            most
+        );
+
+        let gaps: Vec<u32> = rows.windows(2).map(|two| two[1].0 - two[0].0).collect();
+        let (near, far) = (
+            gaps.iter().copied().min().expect("gaps"),
+            gaps.iter().copied().max().expect("gaps"),
+        );
+
+        assert!(
+            far - near <= 1,
+            "the rows sit {} pixels apart at the closest and {} at the \
+             widest",
+            near,
+            far
+        );
+
+        // and the rows are clear of each other and of the stone's edges,
+        // which is what a pitch is for
+        assert!(
+            near > most,
+            "the rows sit {} pixels apart and stand {} tall, so they touch",
+            near,
+            most
+        );
+        assert!(
+            rows.first().expect("rows").0 > 0 && rows.last().expect("rows").1 < SAID_DOWN - 1,
+            "the block runs off the stone, from {} to {} of {}",
+            rows.first().expect("rows").0,
+            rows.last().expect("rows").1,
+            SAID_DOWN
+        );
+    }
+
+    /// How tall a capital stands on the ledger, in metres.
+    ///
+    /// **Not asserted against a number, because how big is big enough is
+    /// Jake's.** What is written down instead is where it comes from: the
+    /// rows are cut at the smallest line the stone could ever say and
+    /// width is what binds a line here, so the longest line is what sets
+    /// the size of all five. Measured 2026-11-20 at 2.25 centimetres,
+    /// against the 3.2 the one short line of spec 0118 had to itself and
+    /// the same 2.25 its longest has always had. It read 1.9 while the
+    /// copy markers were still in, and "about 2.8 once they are struck"
+    /// was a guess, and wrong by half a centimetre: which is why the
+    /// number here is one this test took rather than one anybody worked
+    /// out.
+    ///
+    /// Widening the slab was tried and put back: see `SLAB_WIDE`.
+    #[test]
+    fn a_capital_on_the_ledger_is_worth_measuring() {
+        let rows = inked(&said_cut(&ledger(&done())));
+        let most = rows
+            .iter()
+            .map(|(a, b)| b - a + 1)
+            .max()
+            .expect("rows of ink");
+        let on_the_stone = most as f32 / SAID_DOWN as f32 * SLAB_LONG;
+
+        assert!(
+            on_the_stone > 0.01,
+            "a capital stands {:.3} metres on the stone, which is not \
+             writing, it is grain",
+            on_the_stone
+        );
+    }
+
+    /// Spec 0119: an entry already written does not move.
+    ///
+    /// **Which is why the rows are laid out for five however many are on
+    /// it.** A block centred on what it holds would walk every entry down
+    /// the stone each time one was added.
+    #[test]
+    fn an_entry_already_written_does_not_move() {
+        let tall = ledger_tall();
+        let first = ledger_foot(0, tall);
+
+        for row in 0..rows() {
+            assert!(
+                ledger_foot(row, tall) <= first,
+                "row {} sits above the first one",
+                row
+            );
+        }
+
+        assert!(
+            ledger_foot(0, tall) > ledger_foot(1, tall),
+            "the rows do not run down the stone"
+        );
+        assert!(
+            ledger_foot(rows() - 1, tall) > 0.0,
+            "the last row's foot is off the bottom of the slab"
+        );
+        assert!(
+            ledger_foot(0, tall) + tall < 1.0,
+            "the first row runs off the top of the slab"
+        );
+    }
+
+    /// Spec 0118 and 0119: nothing is held once every one has been given,
+    /// and the entries stay.
+    #[test]
+    fn a_finished_trail_leaves_nothing_held() {
+        let said = ledger(&done());
+
+        assert_eq!(
+            said.len(),
+            Asked::every().len(),
+            "a finished trail leaves {} lines on the stone",
+            said.len()
+        );
+        assert!(
+            held_line(&done()).is_none(),
+            "a finished trail still holds something"
+        );
+        assert!(
+            !said.contains(&crate::says::still_held(Asked::every()[0])),
+            "a finished trail still says what it is waiting for"
+        );
+    }
+
+    /// Spec 0119: the ledger never wants more rows than the slab has.
+    ///
+    /// A row is filled by a question answered and the last by the one
+    /// still held, so four answered is four and one, and five answered is
+    /// five and none. It cannot be six.
+    #[test]
+    fn the_ledger_never_wants_more_rows_than_it_has() {
+        let mut trail = Trail::new();
+
+        assert!(ledger(&trail).len() <= rows(), "an empty trail overflows");
+
+        for one in Asked::every() {
+            trail.gave(*one);
+
+            assert!(
+                ledger(&trail).len() <= rows(),
+                "{} answered wants {} rows and there are {}",
+                trail.given().len(),
+                ledger(&trail).len(),
+                rows()
+            );
+        }
+    }
+
+    /// Spec 0119: the ledger's picture is the slab's own shape.
+    ///
+    /// **Because `said_mesh` lays it on corner to corner.** A picture of
+    /// another aspect stretches every letter, which is the thing
+    /// `cut_in`'s `stretch` exists to undo on the panel above and which
+    /// this avoids by matching.
+    #[test]
+    fn the_ledgers_picture_is_the_slabs_own_shape() {
+        let picture = SAID_ACROSS as f32 / SAID_DOWN as f32;
+        let slab = SLAB_WIDE / SLAB_LONG;
+
+        assert!(
+            (picture / slab - 1.0).abs() < 0.01,
+            "the picture is {:.3} wide to tall and the slab {:.3}",
+            picture,
+            slab
         );
     }
 
