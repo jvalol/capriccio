@@ -8058,6 +8058,24 @@ impl Arcade {
                 );
             }
 
+            // and the way back, which is the far door's own picture on the
+            // other face of its wall. Nothing of that room is drawn from
+            // out here, so the opening was a hole in a wall that was not
+            // there: stars, floor, and no sign of where you came in.
+            if let (Some(lit), Some(mesh)) = (self.doorway, self.portal_mesh) {
+                let (at_, size) = behind::way_back(self.room.reaches);
+
+                scene.push_textured(
+                    mesh,
+                    lit,
+                    &Transform::at(at_)
+                        .with_rotation(room::laid_on(Vec3::Z))
+                        .with_scale(vec3(size.x, 1.0, size.y)),
+                    aim::BEHIND_DOORWAY,
+                    aim::VOID,
+                );
+            }
+
             // and the verge down either side of it, which is what stops you
             // walking off into the dark
             for (middle, size) in beyond::kerbs(door) {

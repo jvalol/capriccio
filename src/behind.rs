@@ -458,9 +458,10 @@ pub fn swirled_pixels(through: bool) -> (u32, u32, Vec<u8>) {
 /// one room want to look like two openings out of one room rather than one
 /// portal and one empty rectangle.
 ///
-/// Facing back down the room, because that is the only side anybody sees it
-/// from: through it is spec 0018, and from in there you are looking at the
-/// system rather than back at the door.
+/// Facing back down the room. `way_back` is the other side of the same
+/// opening, which this used to say nobody ever looked at: through it is
+/// spec 0018 and out there you are looking at the system. You are until
+/// you want to leave, and then you are looking for this.
 ///
 /// Inside the frame's own depth and clear of the starfield, for the same
 /// reason the way out's is. `orrery::walls` lays a field across this wall
@@ -479,6 +480,23 @@ pub fn door_portal(reaches: f32) -> (Vec3, Vec2) {
         ),
         vec2(to - from, WAY_HIGH),
     )
+}
+
+/// The same opening seen from the other side, out past the door.
+///
+/// **Because from out there the way back is a hole in a wall nobody
+/// draws.** The space beyond the door draws its own floor and its own
+/// bodies and nothing of this room, so a body twelve metres out looking
+/// south has stars, a floor, and no indication at all of where it came in.
+/// Jake stood there on 2026-11-21 and said the way back out is not clear.
+///
+/// Derived from `door_portal` rather than placed, so the two faces of one
+/// opening cannot come apart: the same picture, the same size, the same
+/// place, the far side of the wall and turned to look the other way.
+pub fn way_back(reaches: f32) -> (Vec3, Vec2) {
+    let (at_, size) = door_portal(reaches);
+
+    (vec3(at_.x, at_.y, at_.z + THICK + PORTAL_PROUD * 2.0), size)
 }
 
 /// Whether a point is in the space behind the wall.
@@ -989,6 +1007,53 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Specs 0017 and 0018: the way back is marked from out past the door.
+    ///
+    /// **One opening with a picture on each face.** Out past the door this
+    /// room is not drawn at all, so the way back was a gap in a wall that
+    /// was not there: Jake stood twelve metres out on 2026-11-21 with
+    /// stars, a floor and nothing to walk at. The far face carries the
+    /// same picture the near one does.
+    ///
+    /// What this holds is that the two are one opening and that each
+    /// stands clear of its own face of the wall, since a portal in the
+    /// plane of the wall is behind the starfield `orrery::walls` lays
+    /// across it.
+    #[test]
+    fn the_way_back_is_marked_on_the_far_face() {
+        const REACHES: f32 = 9.5;
+        let middle = at(REACHES);
+        let half = half();
+        let (inside_, size) = door_portal(REACHES);
+        let (outside, other) = way_back(REACHES);
+
+        assert_eq!(size, other, "the two faces are not the same opening");
+        assert!(
+            (inside_.x - outside.x).abs() < 1e-3 && (inside_.y - outside.y).abs() < 1e-3,
+            "the two faces are not in the same place: {:?} and {:?}",
+            inside_,
+            outside
+        );
+
+        let near = middle.z + half.y;
+        let far = near + THICK;
+
+        assert!(
+            inside_.z < near && near - inside_.z >= PORTAL_PROUD - 1e-4,
+            "the near face's picture is at z {:.3}, not clear of the wall at \
+             {:.3}",
+            inside_.z,
+            near
+        );
+        assert!(
+            outside.z > far && outside.z - far >= PORTAL_PROUD - 1e-4,
+            "the far face's picture is at z {:.3}, not clear of the wall at \
+             {:.3}",
+            outside.z,
+            far
+        );
+    }
 
     /// The engine's spec 0086. `inside` is a half space and says yes to
     /// readily as to this room, which is what put a sky behind the solar

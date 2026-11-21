@@ -407,6 +407,14 @@ and a fall out here hands the door back. Falling for ever is the one state
 this game would have that you cannot get out of, and it would be a worse
 fault than the one it fixed.
 
+**And the way back is marked from out there.** This room draws its own floor
+and its own bodies and nothing of the room behind it, so the opening you came
+in by was a gap in a wall that is not there: twelve metres out looking south
+you have stars, a floor and no sign of where you came from. Jake said so on
+2026-11-21. The far face of that wall carries the same picture the near one
+does, worked out from it rather than placed, so one opening cannot come apart
+into two.
+
 **And a verge down either side of it.** Forty metres across with nothing to
 either side, and walking off it was a second's work: Jake went out of the door,
 turned west and was over the edge, and the catch handing him the door back is
@@ -503,6 +511,7 @@ for.
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
 - And nothing in the building is as low as the catch. — `tests::nothing_in_the_building_is_as_low_as_the_catch`
 - And the kerb keeps you on it, run at from the middle, either side. — `tests::the_kerb_keeps_you_on_the_floor_out_there`
+- And the way back is marked on the far face of its wall. — `behind::tests::the_way_back_is_marked_on_the_far_face`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 - And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
 - And the field's sky does not hang over it. — `tests::the_field_s_sky_is_not_over_the_solar_system`
