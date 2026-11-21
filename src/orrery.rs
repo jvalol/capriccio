@@ -176,7 +176,7 @@ pub const SUN_SHRUNK: f32 = 2.0 / 15.0;
 /// round it, and Jake said on 2026-11-21 which of the two is worth
 /// arriving at.
 ///
-/// `beyond::stands_off` is how far off a body you are when you are at it,
+/// `stands_off` is how far off a body you are when you are at it,
 /// and its own note says that is the same question at every scale and so
 /// is answered once. At a sun drawn a metre across it comes to 2.57, well
 /// inside Mercury's orbit.
@@ -184,10 +184,26 @@ pub const SUN_SHRUNK: f32 = 2.0 / 15.0;
 /// Flat, because the system is laid at `PLANE` and you walk under it: the
 /// sun is at eye height and the question is whether you are standing in
 /// it, not how tall you are.
+/// How far short of a body you stand when you are counted as at it.
+///
+/// Its own size, two and a half times over, with a floor: a marble is 60 cm
+/// away and the sun in here is 2.5 metres. Far enough that the body fills
+/// the view and no further, which is the same question at every scale and so
+/// is answered once.
+///
+/// It was `beyond::stands_off` and came here when spec 0018 was parked,
+/// which is the only thing that had ever called it besides the ride.
+pub const STANDOFF: f32 = 2.5;
+pub const NEAREST: f32 = 0.6;
+
+pub fn stands_off(across: f32) -> f32 {
+    (across * STANDOFF).max(NEAREST)
+}
+
 pub fn at_the_sun(sun: Vec3, at: Vec3) -> bool {
     let flat = glam::vec2(at.x - sun.x, at.z - sun.z);
 
-    flat.length() <= crate::beyond::stands_off(sun_drawn())
+    flat.length() <= stands_off(sun_drawn())
 }
 
 /// How big the sun is drawn: two fifteenths of what the body scale says.

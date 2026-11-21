@@ -1,6 +1,6 @@
 # 0017 A door at the far end
 
-**Status:** implemented
+**Status:** parked on 2026-11-21 by spec 0121, which took this out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of something that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-12, the landing handed to spec 0018 the same day
 
 ## Goal

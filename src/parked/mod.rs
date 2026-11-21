@@ -43,6 +43,10 @@ pub mod aleph;
 /// The imaginarium: one room, three mutually perpendicular downs, and the
 /// doors between them. Specs 0037, 0038, 0047 and 0048.
 pub mod aloft;
+/// The solar system at true scale: 33 kilometres of it through the door at
+/// the far end of the room behind the wall, and the ride that crosses it.
+/// Specs 0017 and 0018.
+pub mod beyond;
 /// Cantor's diagonal, written across a wall and walked. Specs 0031 and
 /// 0032.
 pub mod register;

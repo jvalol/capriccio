@@ -1,6 +1,6 @@
 # 0018 The system at true scale
 
-**Status:** implemented
+**Status:** parked on 2026-11-21 by spec 0121, which took this out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of something that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-12, the ride added and given its stops the same day, sped up and given a map, numbered posts, a sky and a list 2026-10-13
 
 ## Goal
@@ -515,7 +515,9 @@ for.
 - The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
 - And nothing in the building is as low as the catch. — `tests::nothing_in_the_building_is_as_low_as_the_catch`
-- And the kerb keeps you on it, run at from the middle, both sides and the far end. — `tests::the_kerb_keeps_you_on_the_floor_out_there`
+- And the kerb keeps you on it, run at from the middle, both sides and the
+  far end, and run into each of the four corners where two of them meet, which
+  running at one head on does not ask. — `tests::the_kerb_keeps_you_on_the_floor_out_there`
 - And the way back is marked on the far face of its wall. — `behind::tests::the_way_back_is_marked_on_the_far_face`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
 - And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
@@ -523,6 +525,30 @@ for.
 
 ### Verified by hand
 
+- **The edges hold, walked rather than read.** Done 2026-11-21: thirteen
+  places out there, from just outside the door to a mile up the line to a
+  metre inside each of the four corners, sixteen headings apiece, running,
+  twelve seconds each. Two hundred and eight runs and not one of them got off
+  the floor, fell, or was handed the door back. The side kerbs span the
+  floor's whole 33,352 metres and the end kerb the whole 40 across, so two
+  kerbs stand at every corner.
+- **And the catch picks up whatever does get off.** Done 2026-11-21: a body
+  let go beside each side, past the far end, four hundred metres past it, and
+  three hundred metres out to the side. Every one of them bottomed at 4.9
+  below the door and was standing in the doorway 0.9 seconds later. A body let
+  go forty metres above the floor landed on the floor, which is the control
+  that says the catch is not simply firing at everything.
+- **A gap at a corner has to be two metres to matter.** Done 2026-11-21, as
+  the control for the four corner runs: the end kerb cut back a metre each
+  side still leaves only half a metre of hole between it and the side kerb,
+  which a body of 0.9 cannot use, and the test rightly passes. Cut back three
+  metres each side it walks straight out past the floor's end and starts
+  falling.
+- **The way back reads, close to.** Done 2026-11-21: a bright spiral standing
+  on the floor where the door is, the only thing of its kind out there, plain
+  at six metres and still the one thing at eye level at twenty. Past that it
+  is too small to see and the map's own bar is what says which way, which is
+  what the ride is for.
 - The sun from the doorway reads as a ten metre ball resting on the floor.
   Confirmed 2026-10-12.
 - The sun from Neptune reads as a speck. Confirmed 2026-10-12: a dot under its

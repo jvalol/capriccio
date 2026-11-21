@@ -962,51 +962,6 @@ pub const TESSERACT_HELP: &str =
 /// back to the plinth, which you cannot do by turning round.
 pub const TESSERACT_DONE: &str =
     "You have stood in kata, which is as far from ana as this room goes. The way back is three rooms, and not the way you came.";
-/// Out past the door of spec 0017, where walking is not how you get about.
-///
-/// Jake's words, and the shape of them is the point: the key first and then
-/// what it does, with the "press" dropped from every clause but the first.
-/// `HELP` and `SYSTEM_HELP` are the older register, "Press L to switch modes",
-/// and this is where he moved to.
-///
-/// The ride stops at the sun and at the way back as well as at the planets, so
-/// "the next planet" is not the whole of what it does. His line, and it stays.
-///
-/// The ride is named first because it is what the space is for. The list is
-/// the way out of a crossing you have had enough of, and a line that names it
-/// first teaches people to skip the thing they came to see.
-///
-/// It said "turn round to go back" as well, which is true of both and is the
-/// one thing you work out without being told: there is one line and two ways
-/// along it. It said "hold shift to ride" for a day, which rode you off down
-/// the line every time Jake reached for his own screenshot shortcut.
-pub const DEEP_HELP: &str = "Use WASD and the mouse / arrow keys to move around, Shift to run.";
-
-/// The rest of it, a line to a thing you can do.
-///
-/// Four lines rather than one wrapped paragraph, because this room has twice
-/// the controls of any other and a paragraph of them is a paragraph you read
-/// twice. The corner wraps whatever it is given, so these are what it breaks
-/// on rather than where the words happen to run out.
-pub const DEEP_MORE: [&str; 3] = [
-    "Return to ride to the next planet.",
-    "Tab to list all the solar bodies and Return to go to one.",
-    "Escape to quit.",
-];
-
-/// What the true-scale system owns up to, under its help line.
-///
-/// Not an instruction, so not verb first. It is honest about every size and
-/// every distance and dishonest about the light, and a model that is
-/// dishonest without saying so is a lie rather than a scale.
-///
-/// It ends on something you can go and look at rather than on a figure, the
-/// way `SYSTEM_NOTE` ends on Mercury being inside the sun. The speck of sun
-/// you can see from Neptune is in the room; a nine hundredth is a number you
-/// have to take on trust.
-pub const DEEP_NOTE: &str =
-    "Everything here is true to scale but the light. Neptune should be as dark as the speck of sun you can see from it.";
-
 /// What the solar system owns up to, under its help line.
 ///
 /// Not an instruction, so not verb first. A model this size cannot be honest
@@ -1874,38 +1829,6 @@ pub const BEHIND_FLOOR: Vec4 = vec4(0.018, 0.018, 0.024, 1.0);
 pub const BEHIND_WALL: Vec4 = vec4(0.022, 0.022, 0.030, 1.0);
 pub const BEHIND_COLUMN: Vec4 = vec4(0.045, 0.045, 0.055, 1.0);
 
-/// The spine down the line of spec 0018 and the marks across it.
-///
-/// Pale against a floor of 0.018, because they are the only thing out there
-/// that moves while you ride and a mark you cannot see is three minutes of an
-/// unchanging black screen.
-pub const BEYOND_MARK: Vec4 = vec4(0.34, 0.35, 0.40, 1.0);
-
-/// And the posts that mark the astronomical unit, which glow.
-///
-/// Past one, so they carry themselves across this space the way the door of
-/// spec 0017 carries itself across the room behind it. A post that only
-/// reflects is a pixel at seven hundred metres, and the gulf between Uranus
-/// and Neptune is twelve thousand.
-pub const BEYOND_UNIT: Vec4 = vec4(1.5, 1.62, 1.95, 1.0);
-
-/// The map at the foot of the screen out past the door, per spec 0018.
-///
-/// How wide it is as a share of the window, with a floor and a ceiling so it
-/// is neither a thread on a wide window nor the whole of a narrow one; how far
-/// up from the bottom; how thick the two bars are and how far apart; and how
-/// big the two names at the ends of the leg are.
-pub const MAP_SHARE: f32 = 0.42;
-pub const MAP_LEAST: f32 = 260.0;
-pub const MAP_MOST: f32 = 620.0;
-pub const MAP_UP: f32 = 78.0;
-pub const MAP_THIN: f32 = 2.0;
-pub const MAP_THICK: f32 = 5.0;
-pub const MAP_GAP: f32 = 13.0;
-pub const MAP_TICK: f32 = 7.0;
-pub const MAP_YOU: f32 = 3.0;
-pub const MAP_NAME: f32 = 13.0;
-
 /// The tesseract's map: eight boxes, four columns and two rows. Spec 0021.
 ///
 /// **The one thing that made the room playable.** It was built without one,
@@ -2001,58 +1924,6 @@ pub fn held_of(colour: Vec4) -> Vec4 {
 /// which at that size is all there is room for anyway.
 pub const HELD_THING: Vec4 = vec4(0.10, 0.10, 0.12, 1.0);
 
-/// Where the map goes and how big it is, from the window.
-///
-/// Its own function because the drawing and the test that says it sits clear
-/// of the corner's text both want it, and two accounts of where a thing is
-/// come apart.
-pub fn map_at(window: (f32, f32)) -> (Vec2, f32) {
-    let wide = (window.0 * MAP_SHARE)
-        .clamp(MAP_LEAST, MAP_MOST)
-        .min(window.0 - 16.0);
-
-    (vec2((window.0 - wide) * 0.5, window.1 - MAP_UP), wide)
-}
-
-/// The whole line, which is context and quiet, and the leg, which is the
-/// thing you are reading.
-pub const MAP_LINE: Vec4 = vec4(1.0, 1.0, 1.0, 0.22);
-pub const MAP_DONE: Vec4 = vec4(1.0, 1.0, 1.0, 0.30);
-pub const MAP_LEG: Vec4 = vec4(0.72, 0.78, 0.92, 0.85);
-pub const MAP_MARK: Vec4 = vec4(1.0, 1.0, 1.0, 0.95);
-
-/// How far the map's plate stands out past it.
-///
-/// It needs one for the reason the corner's text does: what is behind it is
-/// whatever the room is doing, and out past the door that is a lit line
-/// running to a vanishing point directly under the middle of the map.
-pub const MAP_PAD: f32 = 10.0;
-
-/// The list of bodies out past the door, per spec 0018: how tall a line is,
-/// how far apart the lines sit, how wide the panel is and how far it stands
-/// off the glass's left edge.
-pub const LIST_SIZE: f32 = 15.0;
-pub const LIST_STEP: f32 = 21.0;
-pub const LIST_WIDE: f32 = 150.0;
-pub const LIST_FROM: f32 = 26.0;
-pub const LIST_PAD: f32 = 10.0;
-
-/// Where the list goes, from the window: the middle of its first line, and
-/// how many lines it holds.
-///
-/// Down the left, because the map is along the bottom and the help is across
-/// the top, and a list is a column. Standing where the room's own text does
-/// not go is what keeps all three readable at once.
-pub fn list_at(window: (f32, f32), many: usize) -> Vec2 {
-    let tall = many as f32 * LIST_STEP;
-
-    vec2(LIST_FROM, (window.1 - tall) * 0.5)
-}
-
-/// What the list is drawn in: the one the sight is resting on, and the rest.
-pub const LIST_ON: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
-pub const LIST_OFF: Vec4 = vec4(0.62, 0.64, 0.70, 1.0);
-
 /// The frame round the door at the far end, per spec 0017.
 ///
 /// `behind::LAMP_COLOUR` at 2.4. Colour is an unclamped multiplier in this
@@ -2091,18 +1962,6 @@ pub const BEHIND_FRAME: Vec4 = vec4(1.728, 1.872, 2.208, 1.0);
 /// will take, which is why the frame at the far end does the same.
 pub const BEHIND_PORTAL: Vec4 = vec4(1.1, 2.3, 4.6, 1.0);
 
-/// And the door at the far end, lit the same way. Spec 0017.
-///
-/// The frame's own colour and not the way out's blue, which is spec 0017's
-/// reasoning kept rather than a new one: everything in that room is the same
-/// cold blue-white hung on the same regular grid, and the door was put in by
-/// whoever hung the lamps. A warm door would say somewhere else is through
-/// there, and somewhere else through there is darker and colder than this.
-///
-/// It also keeps the two openings apart. One is an exit and is blue. The
-/// other is the way on and is the colour of everything else in the room,
-/// which is what the way on should look like.
-pub const BEHIND_DOORWAY: Vec4 = BEHIND_FRAME;
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// And a broadleaf that has turned, which out here most of them have.
@@ -2475,8 +2334,7 @@ mod tests {
     /// for this only went under the corner.
     #[test]
     fn every_line_of_text_sits_on_its_plate() {
-        let mut help = vec![HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE, DEEP_HELP, DEEP_NOTE];
-        help.extend(DEEP_MORE);
+        let help = [HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE];
         let window = (1600.0f32, 1200.0f32);
 
         for many in 1..=help.len() {
@@ -3125,57 +2983,6 @@ mod tests {
             pointed.screen.x < look_of(true, true).screen.x,
             "its screen is as bright as a lit one"
         );
-    }
-
-    /// Spec 0018: the map fits on the glass, at every window the building is
-    /// opened at.
-    ///
-    /// The corner's text is measured against the window and this is too, and a
-    /// bar that runs off the edge is the same fault in a different place.
-    #[test]
-    fn the_map_fits_on_the_glass() {
-        // the last of these is narrower than `MAP_LEAST`, which is the only
-        // window the `min` in `map_at` bites on. Left out, that guard is
-        // unreachable at every size the building is ever opened at and the
-        // test passes with it taken away.
-        for window in [
-            (640.0, 480.0),
-            (800.0, 600.0),
-            (1600.0, 1200.0),
-            (3840.0, 2160.0),
-            (200.0, 300.0),
-        ] {
-            let (at, wide) = map_at(window);
-
-            assert!(
-                at.x > 0.0 && at.x + wide < window.0,
-                "a map {} wide at {} runs off a window {} across",
-                wide,
-                at.x,
-                window.0
-            );
-            assert!(
-                wide > window.0 * 0.15,
-                "a map {} wide on a window {} across is a thread",
-                wide,
-                window.0
-            );
-            // and the names under it, which hang the furthest down
-            let foot = at.y + MAP_GAP * 2.0 + MAP_NAME + MAP_PAD;
-
-            assert!(
-                foot < window.1,
-                "the map's foot is at {} on a window {} tall",
-                foot,
-                window.1
-            );
-            // and clear of the corner's text, which is measured from the top
-            assert!(
-                at.y - MAP_TICK - MAP_PAD > SAYS_AT.y + SAYS_SIZE * 4.0,
-                "the map at {} meets the corner's text",
-                at.y
-            );
-        }
     }
 }
 

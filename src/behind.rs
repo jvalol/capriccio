@@ -218,48 +218,6 @@ pub fn track(reaches: f32) -> Track {
     }
 }
 
-/// How wide and how high the door at the far end is, per spec 0017.
-///
-/// 1.5 because `WAY_WIDE` is, and that number was paid for once already: at
-/// 1.15 the walk through the way in wedged half way, because a sweep with an
-/// eighth of a unit either side of a body catches on a shoulder. A door that
-/// walks worse than the hole in the wall would be a joke at its own expense.
-pub const DOOR_WIDE: f32 = WAY_WIDE;
-pub const DOOR_HIGH: f32 = WAY_HIGH;
-
-/// How far the frame stands proud of the wall into the room, how thick its
-/// members are, and how far it is sunk into the wall behind.
-///
-/// Sunk, so that its back face is inside the wall rather than in the wall's
-/// own plane. Two faces in one plane fight and this building has lost that
-/// fight five times; a face buried in another solid is hidden and is fine.
-pub const FRAME_PROUD: f32 = 0.12;
-pub const FRAME_THICK: f32 = 0.16;
-pub const FRAME_SUNK: f32 = 0.04;
-
-/// How high the sill across the bottom of it stands.
-///
-/// Three centimetres, laid on the floor and not sunk into it, which is the
-/// way round this building has learnt the hard way: a border sunk into the
-/// floor was two surfaces in one plane and came back as speckle.
-///
-/// Three and not the frame's own 0.16. A member that closes the rectangle is
-/// a member you walk over on your way through, and the one thing a doorway
-/// may not be is something to trip on.
-pub const SILL_HIGH: f32 = 0.03;
-
-/// Where the door at the far end is, as the two x it runs between.
-///
-/// On the room's own axis, which puts it dead opposite the sun and 79.5
-/// metres past it. The one account of it: the wall is built round it, the
-/// frame is hung in it, the columns are kept off the way to it, and the tests
-/// read it back.
-pub fn door(reaches: f32) -> (f32, f32) {
-    let middle = at(reaches);
-
-    (middle.x - DOOR_WIDE * 0.5, middle.x + DOOR_WIDE * 0.5)
-}
-
 /// The hall's near end wall, in three pieces round the way in.
 ///
 /// Only the collider is in pieces. What is drawn is one wall across the whole
@@ -371,24 +329,6 @@ pub fn swirled() -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
 }
 
-/// The same picture with the dark of it left out, for the door at the far
-/// end.
-///
-/// **The way out may hide what is behind it and this one may not.** Behind
-/// the way out is a wall drawn in one piece over the hall, per spec 0011, so
-/// there has never been anything to see through it. Behind this door is spec
-/// 0018, and spec 0017 built the whole approach so that the way on appears
-/// only once you have walked the planets in to reach it. Filling that opening
-/// with something you cannot see through takes the arrival away.
-///
-/// So the swirl is alpha rather than colour here: it hangs in the opening and
-/// the dark between its arms is the doorway.
-pub fn swirled_through() -> blitzkit::texture::TextureData {
-    let (wide, tall, pixels) = swirled_pixels(true);
-
-    blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
-}
-
 /// The same, before it is handed to the engine, so it can be measured.
 ///
 /// Split the way `orrery::sprinkled` is split off `orrery::starred`, and for
@@ -448,55 +388,6 @@ pub fn swirled_pixels(through: bool) -> (u32, u32, Vec<u8>) {
     }
 
     (wide, tall, pixels)
-}
-
-/// The door at the far end, lit the same way the way out is.
-///
-/// Spec 0017 gave this opening a frame that glows and nothing in the opening
-/// itself, and that was right while it was the only lit thing at that end.
-/// It is not any more: the way out is a portal now, and two openings out of
-/// one room want to look like two openings out of one room rather than one
-/// portal and one empty rectangle.
-///
-/// Facing back down the room. `way_back` is the other side of the same
-/// opening, which this used to say nobody ever looked at: through it is
-/// spec 0018 and out there you are looking at the system. You are until
-/// you want to leave, and then you are looking for this.
-///
-/// Inside the frame's own depth and clear of the starfield, for the same
-/// reason the way out's is. `orrery::walls` lays a field across this wall
-/// too, the opening included, so a portal on the wall's own face is behind
-/// the stars.
-pub fn door_portal(reaches: f32) -> (Vec3, Vec2) {
-    let middle = at(reaches);
-    let half = half();
-    let (from, to) = door(reaches);
-
-    (
-        vec3(
-            (from + to) * 0.5,
-            WAY_HIGH * 0.5,
-            middle.z + half.y - PORTAL_PROUD,
-        ),
-        vec2(to - from, WAY_HIGH),
-    )
-}
-
-/// The same opening seen from the other side, out past the door.
-///
-/// **Because from out there the way back is a hole in a wall nobody
-/// draws.** The space beyond the door draws its own floor and its own
-/// bodies and nothing of this room, so a body twelve metres out looking
-/// south has stars, a floor, and no indication at all of where it came in.
-/// Jake stood there on 2026-11-21 and said the way back out is not clear.
-///
-/// Derived from `door_portal` rather than placed, so the two faces of one
-/// opening cannot come apart: the same picture, the same size, the same
-/// place, the far side of the wall and turned to look the other way.
-pub fn way_back(reaches: f32) -> (Vec3, Vec2) {
-    let (at_, size) = door_portal(reaches);
-
-    (vec3(at_.x, at_.y, at_.z + THICK + PORTAL_PROUD * 2.0), size)
 }
 
 /// Whether a point is in the space behind the wall.
@@ -632,7 +523,6 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     let side = WALL + CABINET.x;
     let (west, east) = (middle.x - half.x, middle.x + half.x);
     let (south, north) = (middle.z - half.y, middle.z + half.y);
-    let gap = door(reaches);
 
     let mut out = vec![
         // the floor, drawn only as far as the hall's own floor reaches and
@@ -665,104 +555,16 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
             ),
             Made::Wall,
         ),
-        // the north wall, in three pieces round the door of spec 0017: the
-        // stretch either side of it, and the head over it
+        // the north wall, in one piece. It was three round the door of spec
+        // 0017, with a frame and a sill in the opening, and through it was
+        // spec 0018. Both are parked, so the room ends here the way it did
+        // before either was written.
         (
             Aabb::from_center_size(
-                vec3(
-                    (west + gap.0) * 0.5,
-                    (HIGH + THICK) * 0.5,
-                    north + THICK * 0.5,
-                ),
-                vec3(gap.0 - west, HIGH + THICK, THICK),
+                vec3(middle.x, (HIGH + THICK) * 0.5, north + THICK * 0.5),
+                vec3(SPAN, HIGH + THICK, THICK),
             ),
             Made::Wall,
-        ),
-        (
-            Aabb::from_center_size(
-                vec3(
-                    (gap.1 + east) * 0.5,
-                    (HIGH + THICK) * 0.5,
-                    north + THICK * 0.5,
-                ),
-                vec3(east - gap.1, HIGH + THICK, THICK),
-            ),
-            Made::Wall,
-        ),
-        (
-            Aabb::from_center_size(
-                vec3(
-                    middle.x,
-                    (DOOR_HIGH + HIGH + THICK) * 0.5,
-                    north + THICK * 0.5,
-                ),
-                vec3(DOOR_WIDE, HIGH + THICK - DOOR_HIGH, THICK),
-            ),
-            Made::Wall,
-        ),
-        // the frame round it, standing proud on the room's side and sunk into
-        // the wall behind, so no face of it shares a plane with the wall's
-        (
-            Aabb::from_center_size(
-                vec3(
-                    gap.0 - FRAME_THICK * 0.5,
-                    (DOOR_HIGH + FRAME_THICK) * 0.5,
-                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
-                ),
-                vec3(
-                    FRAME_THICK,
-                    DOOR_HIGH + FRAME_THICK,
-                    FRAME_PROUD + FRAME_SUNK,
-                ),
-            ),
-            Made::Frame,
-        ),
-        (
-            Aabb::from_center_size(
-                vec3(
-                    gap.1 + FRAME_THICK * 0.5,
-                    (DOOR_HIGH + FRAME_THICK) * 0.5,
-                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
-                ),
-                vec3(
-                    FRAME_THICK,
-                    DOOR_HIGH + FRAME_THICK,
-                    FRAME_PROUD + FRAME_SUNK,
-                ),
-            ),
-            Made::Frame,
-        ),
-        (
-            Aabb::from_center_size(
-                vec3(
-                    middle.x,
-                    DOOR_HIGH + FRAME_THICK * 0.5,
-                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
-                ),
-                vec3(
-                    DOOR_WIDE + FRAME_THICK * 2.0,
-                    FRAME_THICK,
-                    FRAME_PROUD + FRAME_SUNK,
-                ),
-            ),
-            Made::Frame,
-        ),
-        // and a sill across the bottom, so the opening is a closed rectangle
-        // rather than three sides of one
-        (
-            Aabb::from_center_size(
-                vec3(
-                    middle.x,
-                    SILL_HIGH * 0.5,
-                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
-                ),
-                vec3(
-                    DOOR_WIDE + FRAME_THICK * 2.0,
-                    SILL_HIGH,
-                    FRAME_PROUD + FRAME_SUNK,
-                ),
-            ),
-            Made::Frame,
         ),
         // the south side, which is the hall's near end wall for the width of
         // the hall and this room's own wall for the rest of it
@@ -1007,53 +809,6 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Specs 0017 and 0018: the way back is marked from out past the door.
-    ///
-    /// **One opening with a picture on each face.** Out past the door this
-    /// room is not drawn at all, so the way back was a gap in a wall that
-    /// was not there: Jake stood twelve metres out on 2026-11-21 with
-    /// stars, a floor and nothing to walk at. The far face carries the
-    /// same picture the near one does.
-    ///
-    /// What this holds is that the two are one opening and that each
-    /// stands clear of its own face of the wall, since a portal in the
-    /// plane of the wall is behind the starfield `orrery::walls` lays
-    /// across it.
-    #[test]
-    fn the_way_back_is_marked_on_the_far_face() {
-        const REACHES: f32 = 9.5;
-        let middle = at(REACHES);
-        let half = half();
-        let (inside_, size) = door_portal(REACHES);
-        let (outside, other) = way_back(REACHES);
-
-        assert_eq!(size, other, "the two faces are not the same opening");
-        assert!(
-            (inside_.x - outside.x).abs() < 1e-3 && (inside_.y - outside.y).abs() < 1e-3,
-            "the two faces are not in the same place: {:?} and {:?}",
-            inside_,
-            outside
-        );
-
-        let near = middle.z + half.y;
-        let far = near + THICK;
-
-        assert!(
-            inside_.z < near && near - inside_.z >= PORTAL_PROUD - 1e-4,
-            "the near face's picture is at z {:.3}, not clear of the wall at \
-             {:.3}",
-            inside_.z,
-            near
-        );
-        assert!(
-            outside.z > far && outside.z - far >= PORTAL_PROUD - 1e-4,
-            "the far face's picture is at z {:.3}, not clear of the wall at \
-             {:.3}",
-            outside.z,
-            far
-        );
-    }
 
     /// The engine's spec 0086. `inside` is a half space and says yes to
     /// readily as to this room, which is what put a sky behind the solar
@@ -1862,73 +1617,29 @@ mod tests {
         assert!(got.z < reaches - THICK, "it could not get out: {:?}", got);
     }
 
-    /// Where the middle of the door is, at the floor, for the walks below.
-    fn doorstep(reaches: f32) -> Vec3 {
-        let middle = at(reaches);
-
-        vec3(middle.x, 0.0, middle.z + half().y + THICK * 0.5)
-    }
-
     /// Spec 0017: the far wall is a wall everywhere except the opening.
     ///
     /// Walked at head height and at knee height both, because a head that
     /// passes where a knee does not is a lintel left in, and a knee that
     /// passes where a head does not is the head of the wall left out.
     #[test]
-    fn the_far_wall_is_solid_either_side_of_the_door() {
+    fn the_far_wall_is_solid_all_the_way_across() {
         let reaches = room().reaches;
         let middle = at(reaches);
         let north = middle.z + half().y;
-        let (from, to) = door(reaches);
 
-        for off in [-40.0, -8.0, -2.0, -1.4, 1.4, 2.0, 8.0, 40.0] {
+        // the middle included, which is where spec 0017's door stood until
+        // it and spec 0018 behind it were parked
+        for off in [-40.0, -8.0, -2.0, -1.4, 0.0, 1.4, 2.0, 8.0, 40.0] {
             let start = vec3(middle.x + off, 0.0, north - 4.0);
             let got = walked(start, start + Vec3::Z * 12.0, 6.0);
 
             assert!(
                 got.z < north,
-                "the wall let a body through at {} off the door, which runs {} to {}",
-                off,
-                from,
-                to
+                "the wall let a body through at {} off the middle",
+                off
             );
         }
-    }
-
-    /// Spec 0017: and you can walk through the opening onto the landing.
-    #[test]
-    fn the_door_can_be_walked_through() {
-        let reaches = room().reaches;
-        let step = doorstep(reaches);
-        let out = step + Vec3::Z * 8.0;
-        let got = walked(step - Vec3::Z * 6.0, out, 8.0);
-
-        assert!(
-            got.distance(out) < 0.6,
-            "a body aimed at the landing got to {} rather than {}",
-            got,
-            out
-        );
-    }
-
-    /// Spec 0017: and back in again, which is a different walk.
-    ///
-    /// Different because the seam between the two floors is crossed the other
-    /// way, and because the frame's jambs stand proud on the room's side and
-    /// so are met on the way in and not on the way out.
-    #[test]
-    fn the_landing_leads_back_into_the_room() {
-        let reaches = room().reaches;
-        let step = doorstep(reaches);
-        let back = step - Vec3::Z * 8.0;
-        let got = walked(step + Vec3::Z * 6.0, back, 8.0);
-
-        assert!(
-            got.distance(back) < 0.6,
-            "a body aimed back into the room got to {} rather than {}",
-            got,
-            back
-        );
     }
 
     /// Spec 0017: the sun is what shows you the door.
@@ -1985,59 +1696,6 @@ mod tests {
                 along
             );
         }
-    }
-
-    /// Spec 0017: the frame gives off light and casts none.
-    ///
-    /// Which in this engine is one fact: a colour past one is a surface
-    /// giving off more than it is given, and `Instance::glows` is what keeps
-    /// such a thing out of the shadow pass.
-    #[test]
-    fn the_frame_gives_off_light_and_casts_none() {
-        let colour = crate::aim::BEHIND_FRAME;
-
-        assert!(
-            colour.x > 1.0 && colour.y > 1.0 && colour.z > 1.0,
-            "the frame's colour is {}, which does not glow",
-            colour
-        );
-        // and it is the lamps' colour and not another one, per spec 0017
-        let lit = LAMP_COLOUR * (colour.x / LAMP_COLOUR.x);
-
-        assert!(
-            (lit - vec3(colour.x, colour.y, colour.z)).length() < 1e-3,
-            "the frame is {} where the lamps are {}",
-            colour,
-            LAMP_COLOUR
-        );
-        assert!(
-            built(room().reaches)
-                .iter()
-                .any(|(_, made)| *made == Made::Frame),
-            "the frame is not built"
-        );
-    }
-
-    /// Spec 0017: the sill is nothing to trip on.
-    ///
-    /// Measured rather than asserted about its height. The same walk, for the
-    /// same time, over open floor and through the door: a sill that cost
-    /// anything would show as the door walk falling behind.
-    #[test]
-    fn the_sill_costs_nothing_to_cross() {
-        let reaches = room().reaches;
-        let step = doorstep(reaches);
-        let open = step - Vec3::X * 30.0;
-        let through = walked(step - Vec3::Z * 4.0, step + Vec3::Z * 4.0, 2.0);
-        let across = walked(open - Vec3::Z * 4.0, open + Vec3::Z * 4.0, 2.0);
-        let (one, other) = (through.z - (step.z - 4.0), across.z - (open.z - 4.0));
-
-        assert!(
-            one > other - 0.02,
-            "two seconds over open floor covers {} and through the door {}",
-            other,
-            one
-        );
     }
 
     /// Where a point of the track's quad falls in the room, which is the trip
@@ -2352,103 +2010,6 @@ mod tests {
             corner < 0.05,
             "the corner of the portal is at {:.2}, so it is a lit rectangle",
             corner
-        );
-    }
-
-    /// Spec 0017: the door at the far end is lit the way the way out is.
-    ///
-    /// **Two openings out of one room should look like two openings out of
-    /// one room.** Spec 0017 gave this one a frame that glows and nothing in
-    /// the opening, which was right while it was the only lit thing at that
-    /// end of the room. The way out is a portal now, so this is one too.
-    ///
-    /// The same three claims the way out answers, and a fourth that is this
-    /// one's alone: you can see through it. Spec 0017 built the whole
-    /// approach so the way on appears only once you have walked the planets
-    /// in to reach it, and an opening you cannot see through takes the
-    /// arrival away.
-    #[test]
-    fn the_door_at_the_far_end_is_lit_the_same_way() {
-        let reaches = room().reaches;
-        let middle = at(reaches);
-        let (stood, size) = door_portal(reaches);
-        let (from, to) = door(reaches);
-
-        assert!(
-            (stood.x - size.x * 0.5 - from).abs() < 1e-3
-                && (stood.x + size.x * 0.5 - to).abs() < 1e-3,
-            "the portal spans {:.3} to {:.3} and the door is {:.3} to {:.3}",
-            stood.x - size.x * 0.5,
-            stood.x + size.x * 0.5,
-            from,
-            to
-        );
-        assert!(
-            (stood.y - size.y * 0.5).abs() < 1e-3
-                && (stood.y + size.y * 0.5 - DOOR_HIGH).abs() < 1e-3,
-            "the portal runs {:.3} to {:.3} and the door is 0 to {:.3}",
-            stood.y - size.y * 0.5,
-            stood.y + size.y * 0.5,
-            DOOR_HIGH
-        );
-
-        // in front of the stars on this wall, which is the thing that hid the
-        // way out's for a whole build
-        let stars = crate::orrery::walls(reaches)
-            .into_iter()
-            .filter(|(_, _, looks)| looks.z < -0.5)
-            .map(|(at_, _, _)| at_.z)
-            .fold(f32::MAX, f32::min);
-
-        assert!(
-            stars < middle.z + half().y + 1.0,
-            "no starfield faces into the room off the far wall, so this checked nothing"
-        );
-        assert!(
-            stood.z < stars,
-            "the portal is at z {:.3} and the stars over the door are at {:.3}",
-            stood.z,
-            stars
-        );
-
-        // and you can see through it where it is dark and not where it is
-        // bright, which is what makes the swirl hang in a doorway rather than
-        // cover one. The way out's is asked the opposite question.
-        let wide = PORTAL_TEXELS as usize;
-        let tall = ((PORTAL_TEXELS as f32) * WAY_HIGH / WAY_WIDE) as usize;
-        let through = swirled_pixels(true).2;
-        let veil = |u: f32, v: f32| {
-            let x = ((u * (wide - 1) as f32) as usize).min(wide - 1);
-            let y = ((v * (tall - 1) as f32) as usize).min(tall - 1);
-
-            through[(y * wide + x) * 4 + 3]
-        };
-
-        let corner = veil(0.02, 0.02);
-        let eye = veil(0.5, 0.5);
-        let rim = veil(0.5, 0.5 - PORTAL_RIM * 0.5);
-
-        assert!(
-            corner < 8,
-            "the corner of the door is {} and is a corner",
-            corner
-        );
-        assert!(
-            eye < 48,
-            "the eye of the door is {} and is a way through",
-            eye
-        );
-        assert!(
-            rim > 180,
-            "the rim of the door is {} and is the bright part",
-            rim
-        );
-
-        let solid = swirled_pixels(false).2;
-
-        assert!(
-            solid.chunks(4).all(|texel| texel[3] == 255),
-            "the way out is see-through, and what is behind it is a wall"
         );
     }
 

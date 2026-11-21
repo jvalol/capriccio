@@ -1763,16 +1763,16 @@ impl Room {
     /// The plinths were the one thing in the room that let you through. You
     /// could walk into the far wall's row and stand inside a Klein bottle,
     /// which is a thing the room says you may pick up and turn.
+    ///
+    /// It was `building` plus spec 0018's floor and the kerbs down either
+    /// side of it. That spec is parked, so the two are the same list now and
+    /// this stands because every caller in the building asks for it by name.
     pub fn solid(&self) -> Vec<Aabb> {
-        let mut out = self.building();
-        out.push(crate::beyond::solid(self.reaches));
-        // and the verge down either side of it, per spec 0018
-        out.extend(crate::beyond::kerb_solid(self.reaches));
-
-        out
+        self.building()
     }
 
-    /// The same, without the floor of spec 0018.
+    /// The same, and kept apart from it while spec 0018 had a floor of its
+    /// own.
     ///
     /// The building, in other words, which is what `outline` is the outline
     /// of and what every measurement of the building's own size wants.
@@ -1856,7 +1856,6 @@ impl Room {
             ("the space behind the wall", crate::behind::floor(reaches)),
             ("the back room", crate::back::floor(reaches)),
             ("the hall of mirrors", crate::mirrors::floor()),
-            ("the space beyond the door", crate::beyond::solid(reaches)),
         ];
 
         // and spec 0114's wing, in two slabs round the gallery's corner
@@ -3905,10 +3904,6 @@ mod tests {
                 + crate::mirrors::solid().len()
                 // and the room over the nook, per spec 0064
                 + crate::glass::solid(room.reaches).len()
-                // and the slab beyond the door with its two verges, per
-                // spec 0018
-                + 1
-                + crate::beyond::kerb_solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
@@ -4786,10 +4781,6 @@ mod tests {
                 + crate::mirrors::solid().len()
                 // and the room over the nook, per spec 0064
                 + crate::glass::solid(room.reaches).len()
-                // and the slab beyond the door with its two verges, per
-                // spec 0018
-                + 1
-                + crate::beyond::kerb_solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
