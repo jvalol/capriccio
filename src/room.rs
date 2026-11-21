@@ -1031,6 +1031,112 @@ pub fn panel_lamp(panel: Vec3) -> Vec3 {
     panel - Vec3::Y * CEIL_TILE_THICK
 }
 
+/// How much of its own light a panel is giving just now.
+///
+/// **Jake, 2026-11-21: if the lights flickered gently, at random rates,
+/// some not flickering at all, the atmosphere would feel warmer or more
+/// realistic.** A tube behind a diffuser is the one light in this building
+/// with a character of its own, and twenty of them doing exactly the same
+/// thing read as a ceiling switched on this morning rather than one that
+/// has been there twenty years.
+///
+/// **A stutter and not a swell.** The first build of this was a slow wander
+/// on two waves, and he said at once that it read as pulsing rather than as
+/// an arcade. He is right about what the real thing does: a tube is fine
+/// for seconds at a time, then goes for a fraction of one, a handful of
+/// blinks too quick to count, and then it is fine again. What makes a
+/// ceiling read as old is not being sure you saw it.
+///
+/// So a bad panel holds at its full light, and every `PANEL_HOLD` or so it
+/// goes for `PANEL_GOES`. There is no state in between: between stutters it
+/// is exactly 1.0.
+///
+/// **Worked out from where the panel hangs and what the clock says**, so a
+/// panel keeps its own character for ever, nothing is stored, and the drawn
+/// tile and the lamp under it can each ask without the two coming apart.
+/// That pair is the fault this ceiling has already made: see `panel_lamp`.
+///
+/// Three panels in four never go at all. That share is what makes the rest
+/// read as fittings with something wrong with them rather than as an effect
+/// laid over the room, and it is the half of this Jake asked for by name.
+/// It was three in five while this was a swell, which with that many of
+/// them breathing was most of the ceiling moving at once.
+///
+/// A share of the hash and not a remainder of it. Twenty panels is a small
+/// enough draw that `% 5` landed on one bad tube in the whole hall, which
+/// is a ceiling with a fault in it rather than an old ceiling.
+pub const PANEL_BAD: f32 = 0.25;
+
+/// How long a bad panel holds between stutters, at the shortest and the
+/// longest, and how long one lasts. Seconds.
+///
+/// A handful of panels going every few seconds apiece is one somewhere in
+/// the room every second or so, which is an arcade. Every panel going every
+/// second is a fault in the building rather than in a tube.
+pub const PANEL_HOLD: f32 = 4.0;
+pub const PANEL_HOLD_UP_TO: f32 = 14.0;
+pub const PANEL_GOES: f32 = 0.08;
+pub const PANEL_GOES_UP_TO: f32 = 0.34;
+
+/// How fast it blinks while it is going, in blinks a second, and how much
+/// of its light it loses at the bottom of one.
+///
+/// **Dark and not dim.** A tube that is going is off for a sixtieth of a
+/// second at a time, so the tile goes under white, where the swell was held
+/// over it. That was right there and is wrong here: this is the light being
+/// absent rather than lower.
+pub const PANEL_BLINK: f32 = 24.0;
+pub const PANEL_DIP: f32 = 0.8;
+
+/// A number from a number and a number, so the same panel stutters the same
+/// way every visit and no two of them stutter together.
+fn panel_mix(seed: u32, with: u32) -> u32 {
+    let mut n = seed.wrapping_mul(0x9E37_79B9) ^ with.wrapping_mul(0x85EB_CA6B);
+    n ^= n >> 15;
+    n = n.wrapping_mul(0xC2B2_AE35);
+
+    n ^ (n >> 13)
+}
+
+/// A share of one, off sixteen bits of it.
+fn panel_share(n: u32, bits: u32) -> f32 {
+    ((n >> bits) & 0xFFFF) as f32 / 65_535.0
+}
+
+pub fn panel_flicker(panel: Vec3, since: f32) -> f32 {
+    let who = panel_mix(
+        (panel.x * 100.0) as i32 as u32,
+        (panel.z * 100.0) as i32 as u32,
+    );
+
+    if panel_share(who, 7) >= PANEL_BAD {
+        return 1.0;
+    }
+
+    let hold = PANEL_HOLD + panel_share(who, 3) * (PANEL_HOLD_UP_TO - PANEL_HOLD);
+    let slot = (since / hold).floor();
+    let this = panel_mix(who, slot as i32 as u32);
+    let goes = PANEL_GOES + panel_share(this, 3) * (PANEL_GOES_UP_TO - PANEL_GOES);
+    let into = since - slot * hold - panel_share(this, 11) * (hold - goes);
+
+    if into < 0.0 || into >= goes {
+        return 1.0;
+    }
+
+    // and blinks of its own inside the stutter, some dark, some half, some
+    // not at all, which is what makes it a flutter rather than a square wave
+    let blink = PANEL_BLINK * (0.6 + panel_share(this, 19) * 0.8);
+    let deep = panel_share(panel_mix(this, (into * blink) as u32), 5);
+
+    if deep < 0.4 {
+        1.0 - PANEL_DIP
+    } else if deep < 0.65 {
+        1.0 - PANEL_DIP * 0.45
+    } else {
+        1.0
+    }
+}
+
 /// Where the nook's hanging lamps are: the middle of each shade.
 ///
 /// Down the middle of the open floor and along it, so the row and the rug are
@@ -2704,6 +2810,94 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+
+    /// Spec 0005: the panels stutter rather than pulse.
+    ///
+    /// **Jake, 2026-11-21, on the build before this one: the lights read
+    /// more as pulsing, not flickering like in an actual arcade.** The
+    /// difference is not the depth or the rate, it is that a tube is at its
+    /// full light nearly all of the time and goes for a fraction of a
+    /// second. A swell is never at full and never off.
+    ///
+    /// So the assertion with teeth is the share: a bad panel is at exactly
+    /// its own light for at least nineteen seconds of twenty. The other two
+    /// are that it goes dark rather than dim when it does go, and that some
+    /// panels never go at all, which is what Jake asked for by name.
+    #[test]
+    fn the_panels_stutter_rather_than_pulse() {
+        let room = Room::of(crate::games());
+        let (_, _, panels) = room.lattice();
+        let (mut sound, mut gone) = (0, 0);
+        let mut darkest_anywhere = 1.0f32;
+        let steps = 20_000;
+
+        for (at, _) in panels.iter() {
+            let (mut down, mut darkest, mut longest, mut run) = (0, 1.0f32, 0, 0);
+
+            for step in 0..steps {
+                let now = panel_flicker(*at, step as f32 / 1_000.0);
+
+                if now < 0.999 {
+                    down += 1;
+                    run += 1;
+                    longest = longest.max(run);
+                    darkest = darkest.min(now);
+                } else {
+                    run = 0;
+                }
+            }
+
+            if down == 0 {
+                sound += 1;
+                continue;
+            }
+
+            gone += 1;
+
+            assert!(
+                (down as f32) < steps as f32 * 0.05,
+                "the panel at ({:.2}, {:.2}) is off its own light for {:.1}% \
+                 of the time, which is a pulse and not a stutter",
+                at.x,
+                at.z,
+                down as f32 * 100.0 / steps as f32
+            );
+            darkest_anywhere = darkest_anywhere.min(darkest);
+
+            // **The half state and not the dark one**, since a panel's
+            // blinks are drawn one at a time and twenty seconds of a few
+            // short stutters need not hold every face of the die. That one
+            // of them goes right out is asked of the ceiling below.
+            assert!(
+                darkest <= 1.0 - PANEL_DIP * 0.45 + 1e-4,
+                "the panel at ({:.2}, {:.2}) only ever drops to {:.2}, which \
+                 is a shimmer and not a blink",
+                at.x,
+                at.z,
+                darkest
+            );
+            assert!(
+                (longest as f32) < (PANEL_GOES_UP_TO + 0.05) * 1_000.0,
+                "a stutter at ({:.2}, {:.2}) lasts {:.2} seconds",
+                at.x,
+                at.z,
+                longest as f32 / 1_000.0
+            );
+        }
+
+        assert!(
+            sound > 0 && gone > 0,
+            "{} panels are sound and {} go, so they are all one thing",
+            sound,
+            gone
+        );
+        assert!(
+            darkest_anywhere <= 1.0 - PANEL_DIP + 1e-4,
+            "nothing on this ceiling ever goes right out: the darkest any \
+             panel gets is {:.2}",
+            darkest_anywhere
+        );
+    }
 
     /// Spec 0005: every lit panel in the hall is a whole tile.
     ///

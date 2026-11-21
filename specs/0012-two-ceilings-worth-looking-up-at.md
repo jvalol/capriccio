@@ -126,6 +126,9 @@ because it was the first answer and the measurement is what settled it.
   under one. — `room::tests::no_lit_panel_is_over_the_gallery`
 - And every one of them is a whole tile, the border offcuts being tile and not
   fitting. — `room::tests::every_lit_panel_is_a_whole_tile`
+- A bad panel is at its own light for nineteen seconds of twenty, goes dark
+  rather than dim, and some never go at all. —
+  `room::tests::the_panels_stutter_rather_than_pulse`
 - And every square of the grid is a tile or a panel, and not both. — `room::tests::every_square_of_the_grid_is_a_tile_or_a_panel`
 - Nothing hung from the baths' ceiling runs into anything. — `spa::tests::nothing_hung_from_the_ceiling_runs_into_anything`
 - Both borders are mitred, the ceiling's and the floor's, so no two runs of
@@ -214,6 +217,40 @@ sliced luminaire.
 What it costs is a seventh of the hall's light, 59 to 55 on the mean of the
 staged shot, and the picture is near enough the same one. That is the right
 way for this room to be wrong, per the dimness this spec started from.
+
+**And some of them are going.** Jake, 2026-11-21: if the lights flickered
+gently, at random rates, some not flickering at all, the atmosphere would feel
+warmer or more realistic. A tube behind a diffuser is the one light in this
+building with a character of its own, and twenty of them doing exactly the same
+thing read as a ceiling switched on this morning rather than one that has been
+there twenty years.
+
+**A stutter and not a swell.** The first build was a slow wander on two waves
+and he said at once that it read as pulsing rather than as an arcade. He is
+right about what the real thing does: a tube is fine for seconds at a time,
+then goes for a fraction of one, a handful of blinks too quick to count, and
+then it is fine again. What makes a ceiling read as old is not being sure you
+saw it. So a bad panel holds at exactly its own light, and every four to
+fourteen seconds it goes for between a twelfth and a third of one. There is no
+state in between.
+
+Measured over twenty seconds of it: four of the twenty panels go, the busiest
+is off its own light 2.3 per cent of the time, and something blinks somewhere
+on the ceiling about every two seconds. A blink is dark and not dim, since what
+this is is the light being absent rather than lower, which means the tile goes
+under white where the swell was held over it.
+
+A panel's character comes off where it hangs and what the clock says, so it
+keeps it for ever, nothing is stored, and the tile and the lamp under it ask
+the same question rather than drifting apart, which is the fault this ceiling
+has already made once. Three in four never go at all, picked by a share of the
+hash rather than a remainder of it: twenty panels is a small enough draw that
+`% 5` left one bad tube in the whole hall, which is a ceiling with a fault in
+it rather than an old ceiling.
+
+The staged shot of the hall is unchanged by any of this, nothing being mid-blink
+at the instant it is taken. That is luck rather than design, and it is stable
+luck, since the flicker is worked out and not rolled.
 
 **Cool, where everything else in the building is warm.** A panel in a ceiling
 grid is a tube behind a diffuser, which is the one cold light an arcade has,

@@ -10731,11 +10731,17 @@ impl Game for Arcade {
             // and the lit ones, which are the only lamp the hall has of its
             // own. `aim::CEIL_PANEL` is past white, so a panel reads as a thing
             // giving light rather than a pale tile. Spec 0005.
+            // and each of them at whatever share of its own light it is
+            // giving just now, per `room::panel_flicker`. The tile and the
+            // lamp under it ask the same question, so the room dims with
+            // what you are looking at rather than beside it.
             for (at, size) in panels.iter() {
+                let lit = room::panel_flicker(*at, self.since);
+
                 scene.push_material(
                     cube,
                     &Transform::at(*at).with_scale(*size),
-                    aim::CEIL_PANEL,
+                    (aim::CEIL_PANEL.truncate() * lit).extend(aim::CEIL_PANEL.w),
                     aim::NO_SHINE,
                 );
             }
@@ -14143,7 +14149,7 @@ impl Game for Arcade {
                 eye.distance_squared(lamp),
                 lamp,
                 room::PANEL_COLOUR,
-                room::PANEL_LIT,
+                room::PANEL_LIT * room::panel_flicker(*at, self.since),
                 room::PANEL_RANGE,
             ));
         }
