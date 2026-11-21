@@ -66,6 +66,14 @@ shortened so it does not wash the lining grey. Every lamp in this building
 sits in a fitting, per the rule the cellar and the baths both broke first,
 and this one is no exception.
 
+**And both bulbs are drawn as fittings.** `BACK_BULB` is past white three
+times over, which says what it is meant to be, and both of them were pushed as
+ordinary surfaces: a surface shows only what the room gives it, and in a room
+lit by this bulb that is nothing. They read as pale cubes under tin shades.
+Jake, 2026-11-21, standing in here: this ceiling light seems incomplete. Spec
+0012's ceiling panels had the same fault on the same day and `push_fitting` is
+the answer to both.
+
 **The gauge board hangs on the black.** Same board, same words, same bars,
 above the block. On a black wall under no light of its own, what you see is
 the words and the three bars, which is what it is for.

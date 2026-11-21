@@ -6454,7 +6454,13 @@ impl Arcade {
             &Transform::at(bay + Vec3::Y * back::BAY_SHADE.y * 0.5).with_scale(back::BAY_SHADE),
             aim::BACK_SHADE,
         );
-        scene.push_plain(
+        // the bulb as a fitting and not a surface, the way spec 0012's
+        // ceiling panels are: `BACK_BULB` is past white three times over
+        // and a surface still only shows what the room gives it, which in
+        // a room lit by this bulb is nothing. It read as a pale cube under
+        // a tin shade. Jake, 2026-11-21: this ceiling light seems
+        // incomplete.
+        scene.push_fitting(
             cube,
             &Transform::at(bay).with_scale(Vec3::splat(back::BAY_SHADE.y * 0.55)),
             aim::BACK_BULB,
@@ -6478,7 +6484,8 @@ impl Arcade {
             &Transform::at(lamp + Vec3::Y * back::SHADE.y * 0.5).with_scale(back::SHADE),
             aim::BACK_SHADE,
         );
-        scene.push_plain(
+        // and this one the same, for the same reason
+        scene.push_fitting(
             cube,
             &Transform::at(lamp).with_scale(Vec3::splat(back::SHADE.y * 0.55)),
             aim::BACK_BULB,
