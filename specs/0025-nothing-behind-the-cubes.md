@@ -108,10 +108,10 @@ measure already, and nothing in this room starts a process.
   bay. — `back::tests::the_bay_lamp_is_in_its_fitting`
 - The bench, the clutter and the door's swing are all out of the
   bay. — `back::tests::the_bay_holds_nothing_but_the_rig`
-- Both sides of the bay can be walked into from the door and walked out of
-  again. — `back::tests::you_can_get_out_of_either_side_of_the_bay`
 - The corner between the rig and the bench's end leaves a body room to turn
   it. — `back::tests::the_rig_and_the_bench_leave_a_body_room_to_turn`
+- The room is wide enough for the rig and whatever stands either side of
+  it. — `back::tests::the_room_is_wide_enough_for_what_is_in_it`
 - You can walk in from the gallery to the working spot and back out
   again. — `back::tests::you_can_walk_in_and_out_again`
 - There is room to stand at the rig, clear of it and out of the
@@ -172,9 +172,29 @@ bay and it never was.
 
 So the gap is derived rather than written: the corners have to stand this
 building's 1.05 apart, which is a diagonal, because the straight part of it is
-0.78 and no length of bench can widen that. What gives is the bench's run,
-from 2.2 to 1.74, its north end being fixed by the bucket in that corner. And
-the test walks both ways, because in this building those are two questions.
+0.78 and no length of bench can widen that. What gives is the bench's run, its
+north end being fixed by the bucket in that corner. And the test walks both
+ways, because in this building those are two questions.
+
+**And then the west side, which was the same fault one centimetre the other
+way.** Two crates stand on the strip of west wall between the bay and the
+door, which is the only piece of wall in that room that is neither lined nor
+benched. They reach to within 0.91 of the rig, so a body of 0.9 passes them,
+and a walk I chose myself went through without noticing: arriving within half
+a metre of a spot I picked says nothing about what it squeezed past on the
+way. Spec 0049's lattice found it, because the lattice does not choose.
+
+Nowhere on that strip clears the rig by 1.05 without standing in the doorway,
+so the crates cannot move and the room is what gives. The sum nobody did:
+the rig is 1.5 of collider down the centre line, two walks past it want 1.05
+each, the bench takes 0.77 of the east wall and a crate 0.64 of the west, and
+that is 5.01 against a room of 4.6. The width was measured before spec 0025
+stood the block on the floor, and nothing added it up again afterwards.
+
+It is 5.1 now. Space is free in this building and the room is what should
+give: shrinking a crate to fit a walk is the other thing, and
+`the_room_is_wide_enough_for_what_is_in_it` holds the sum so a wider crate is
+caught here rather than by Jake.
 
 ## Out of scope
 

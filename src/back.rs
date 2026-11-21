@@ -19,12 +19,25 @@ use crate::room::{gallery_wall, GALLERY_WIDE, THICK};
 
 /// How big the room is inside: west to east, and the depth along `z`.
 ///
-/// Four and a half by four and a half, which is small for a room in this
-/// building and is the point: a maintenance room is the space that was left
-/// over. It still has to hold a bench, somebody standing at it, and a walk
-/// from the door that nothing is in the way of, which is what stops it being
-/// smaller.
-pub const WIDE: f32 = 4.6;
+/// Small for a room in this building and that is the point: a maintenance
+/// room is the space that was left over. It still has to hold a bench,
+/// somebody standing at it, and a walk from the door that nothing is in the
+/// way of, which is what stops it being smaller.
+///
+/// **It was 4.6, and that was measured before the rig came off the bench.**
+/// Spec 0025 stood the block on the floor in the middle of the bay, which
+/// put 1.5 metres of collider down the room's centre line, and nobody added
+/// up what was left. A body wants 1.05 clear, the bench stands 0.77 off the
+/// east wall and a crate 0.64 off the west, so the two walks past the rig
+/// need 5.01 between the walls and had 4.6. Both came out too narrow: the
+/// east side of the bay was a one-way trap a body could not leave and the
+/// west side passed by a centimetre.
+///
+/// 5.1, because space is free in here and the room is what should give. The
+/// rule this building furnishes by is to grow the room rather than squeeze
+/// what is already in it, and shrinking a crate to fit a walk is the other
+/// thing. `the_room_is_wide_enough_for_what_is_in_it` holds the sum.
+pub const WIDE: f32 = 5.1;
 pub const DEEP: f32 = 4.4;
 
 /// And how high, which is lower than anywhere else in here.
@@ -310,8 +323,20 @@ pub fn bench_off_the_bay() -> f32 {
     let (_, east) = span();
     let across = (east - BENCH_OFF_THE_WALL - BENCH_ACROSS) - block_east();
 
-    (CLEAR * CLEAR - across * across).max(0.0).sqrt()
+    // **And out of the bay at all, whatever the corner says.** Widen the
+    // room enough and the straight gap alone clears a body, this comes back
+    // nought, and the bench runs flush to the lip: out of the bay by nothing
+    // at all, which spec 0025 does not allow and which
+    // `the_bay_holds_nothing_but_the_rig` catches from the other side. Two
+    // questions, so two numbers, and the bench answers the longer one.
+    (CLEAR * CLEAR - across * across)
+        .max(0.0)
+        .sqrt()
+        .max(OUT_OF_THE_BAY)
 }
+
+/// How far out of the bay the bench stands when nothing else asks for more.
+pub const OUT_OF_THE_BAY: f32 = 0.25;
 
 /// The east face of what the rig stops you walking through, which is the box
 /// the building knows it as rather than the cubes.
@@ -1157,87 +1182,6 @@ mod tests {
         );
     }
 
-    /// Spec 0025: both sides of the bay are floor you can leave again.
-    ///
-    /// **The rig divides the bay in two and neither half has a back way
-    /// out.** It stands to the lip at the north and a hand's breadth off the
-    /// lining at the south, so the only way in or out of either side is round
-    /// its north corner, and on the east side that corner is shared with the
-    /// bench.
-    ///
-    /// It was a trap, and a one-way one, which is the part a measurement
-    /// would have missed: 0.82 between the two corners against a body of 0.9,
-    /// and `walk` slid a body in through it and would not slide it back out.
-    /// Jake walked in on 2026-11-21 and was stuck there. So this walks rather
-    /// than measures, and it walks out as well as in, because in this
-    /// building those are not the same question.
-    #[test]
-    fn you_can_get_out_of_either_side_of_the_bay() {
-        let reaches = reaches();
-        let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
-        let bay = bay(reaches);
-        let (west, east) = span();
-        let middle = (bay.min.z + bay.max.z) * 0.5;
-        let door = vec3(GALLERY_WIDE * 0.5 + THICK * 0.8, 0.0, {
-            let (from, to) = way(reaches);
-
-            (from + to) * 0.5
-        });
-
-        let walked = |start: Vec3, target: Vec3| {
-            let (mut at, mut falling, mut owed) = (start, 0.0f32, 0.0f32);
-            let step = 1.0 / 60.0;
-
-            for _ in 0..900 {
-                let flat = vec3(target.x - at.x, 0.0, target.z - at.z);
-                let wish = if flat.length() > 0.05 {
-                    flat.normalize() * crate::SPEED
-                } else {
-                    Vec3::ZERO
-                };
-                let (moved, fell) =
-                    crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, owed <= 0.0);
-
-                owed = (owed - crate::walk::CLIMBS * step).max(0.0) + (moved.y - at.y).max(0.0);
-                at = moved;
-                falling = fell;
-            }
-
-            at
-        };
-
-        for (side, corner) in [("west", west + 0.8), ("east", east - 0.45)] {
-            let standing = vec3(corner, 0.0, middle);
-            let there = walked(door, standing);
-
-            assert!(
-                (there - standing).length() < 0.5,
-                "the {} side of the bay cannot be walked into: from the door \
-                 a body got to {:.2} {:.2} and wanted {:.2} {:.2}",
-                side,
-                there.x,
-                there.z,
-                standing.x,
-                standing.z
-            );
-
-            let out = walked(there, door);
-
-            assert!(
-                out.z > bay.max.z,
-                "the {} side of the bay is a trap: a body standing at {:.2} \
-                 {:.2} walked at the door and got to {:.2} {:.2}, which is \
-                 still inside the bay",
-                side,
-                there.x,
-                there.z,
-                out.x,
-                out.z
-            );
-        }
-    }
-
     /// Spec 0025: the corner between the rig and the bench is a way past.
     ///
     /// The arithmetic under the walk above, which is what says *why* when it
@@ -1267,6 +1211,53 @@ mod tests {
             "the bench's end stands {:.3} off the lip and wants {:.3}",
             along,
             bench_off_the_bay()
+        );
+    }
+
+    /// Spec 0024: the room is wide enough for the rig and what stands either
+    /// side of it.
+    ///
+    /// The sum the width was never given. The rig takes 1.5 of the middle, a
+    /// body wants 1.05 to get past it on each side, and whatever stands
+    /// against a wall takes the rest. It came to 5.01 against a room of 4.6,
+    /// which is both sides of the bay shut in at once.
+    ///
+    /// Asked of the clutter and the bench rather than of two numbers written
+    /// here, so a wider crate is caught by this rather than by Jake.
+    #[test]
+    fn the_room_is_wide_enough_for_what_is_in_it() {
+        let reaches = reaches();
+        let (west, east) = span();
+        let lip = bay(reaches).max.z;
+        let rig = block_east() - (BLOCK + 0.3);
+        let mut takes = [0.0f32; 2];
+
+        // whatever stands within a body's reach of the bay's mouth, which is
+        // what a walk past the rig has to get by
+        for box_ in clutter_solid(reaches)
+            .into_iter()
+            .chain(std::iter::once(bench_box(reaches)))
+            .filter(|box_| box_.min.z < lip + CLEAR && box_.max.y > crate::walk::STEP)
+        {
+            if box_.max.x < rig {
+                takes[0] = takes[0].max(box_.max.x - west);
+            } else if box_.min.x > block_east() {
+                takes[1] = takes[1].max(east - box_.min.x);
+            }
+        }
+
+        let wants = takes[0] + CLEAR + (BLOCK + 0.3) + CLEAR + takes[1];
+
+        assert!(
+            WIDE >= wants,
+            "the room is {} wide and wants {:.2}: {:.2} of furniture on the \
+             west, {:.2} on the east, {:.2} of rig and two walks of {:.2}",
+            WIDE,
+            wants,
+            takes[0],
+            takes[1],
+            BLOCK + 0.3,
+            CLEAR
         );
     }
 
