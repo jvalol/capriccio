@@ -47,8 +47,8 @@ this one's.
 
 Every room here is one idea with one thing to do in it. Walk the register's
 diagonal and you come out holding something. Check somebody in and watch a
-corridor empty. Walk the long hall until the counts come apart. Ride to the
-sun at true scale.
+corridor empty. Walk the long hall until the counts come apart. Walk in to the
+sun with the planets going round it.
 
 The clue is what that already gives you. Nothing is hidden in a corner,
 nothing glints, nothing exists only to be found. If a room needs an object

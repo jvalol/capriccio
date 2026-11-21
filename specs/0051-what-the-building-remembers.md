@@ -84,8 +84,8 @@ different questions, so each says its own.
   below and the two rooms that answer by being reached.
 - A press fills it, and working the same thing twice does not fill it
   twice. — `tests::a_press_gives_its_room_up`
-- Being at the sun fills it, however you got there, and no other stop out
-  there does. — `tests::standing_at_the_sun_gives_the_system_up`
+- Walking in to the sun at the middle of spec 0015's room fills it, and
+  being ten metres short does not. — `tests::walking_in_to_the_sun_gives_the_system_up`
 - A room reached fills it, and standing in a room that asks nothing does
   not. — `tests::a_room_reached_gives_itself_up`
 
@@ -105,15 +105,19 @@ different questions, so each says its own.
   could not fail. Both it and the hatch's copy of it are gone. And
   `arriving_at_the_sun` set the stop to `SUN_STOP` and then asked whether
   `SUN_STOP` was the sun, which is one question twice: pointing the
-  constant at the way back left it passing. Its replacement finds the sun
-  by name in the list `stops` builds, and fails when the two disagree.
-- **And the station itself was asking the wrong question.** It was given by
-  the ride arriving, so a sun you had walked the thirty metres out to did
-  not count: Jake did exactly that on 2026-11-21 and the stone still said
-  nobody had been. It is where you are now, inside the circle the ride sets
-  you down on, so the room asks for the sun rather than for the key you
-  pressed. `SUN_STOP` and `is_the_sun` went with it, having nothing left to
-  answer.
+  constant at the way back left it passing. Both it and its replacement are
+  gone with the station they tested.
+- **And the station itself was asking the wrong question, twice.** It was
+  given by the ride arriving at spec 0018's sun, so a sun you had walked
+  the thirty metres out to did not count: Jake did exactly that on
+  2026-11-21 and the stone still said nobody had been. Made a place
+  instead, it came true four metres past that door, which is a thin way to
+  earn the last station of the whole trail. It is spec 0015's sun now, the
+  one at the middle of the room with the planets going round it, eighty
+  metres in through the model: Jake, the same day, the first sun is the far
+  more impressive place to register having arrived at the sun. `SUN_STOP`,
+  `is_the_sun` and `beyond::at_the_sun` all went with it, having nothing
+  left to answer.
 
 ## Out of scope
 

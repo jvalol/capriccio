@@ -2142,7 +2142,7 @@ fn room_colour_own(what: crate::trail::Asked) -> glam::Vec4 {
         }
         Asked::SolvedTheCube => crate::aim::BENCH,
         Asked::GotBehindTheWall => crate::aim::EDGE_STONE,
-        Asked::RodeToTheSun => {
+        Asked::ReachedTheSun => {
             let sun = crate::aim::SUN;
 
             glam::vec4(sun.x, sun.y, sun.z, 1.0)

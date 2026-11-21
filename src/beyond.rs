@@ -261,33 +261,6 @@ pub fn arriving(from: Vec3, stop: &Stop) -> (Vec3, Vec3) {
     (vec3(at.x, 0.0, at.z), along)
 }
 
-/// Whether you are at the sun, which is what spec 0036 asks for out here.
-///
-/// **A place you are at and not a ride you took.** It was given by the
-/// ride's own arrival, so the sun you had walked thirty metres to did not
-/// count: Jake did that on 2026-11-21 and the stone still said nobody had
-/// ridden out as far as the sun. The room asks for the sun, so this asks
-/// where you are.
-///
-/// **As near as the ride sets you down and no nearer.** `arriving` stops
-/// at `stands_off`, so a tighter circle is one the ride could not pass and
-/// the station would go back to depending on how you came. It leaves you
-/// 25.33 metres out, against a circle of 25.70, and
-/// `tests::the_ride_s_own_arrival_is_at_the_sun` is what holds that.
-///
-/// Measured flat, because the sun's middle is 5.14 up and a body stands on
-/// the floor: the ride's landing is 25.85 from that middle, which is
-/// outside its own standoff.
-///
-/// The sun is 30 out from the door, so the last four metres of the way out
-/// are already at it. Nothing else is out here to be at.
-pub fn at_the_sun(door: Vec3, at: Vec3) -> bool {
-    let sun = sun(door);
-    let flat = glam::vec2(at.x - sun.x, at.z - sun.z);
-
-    flat.length() <= stands_off(drawn(SUN.across))
-}
-
 /// How fast the ride carries you down the line, per spec 0018.
 ///
 /// Eight hundred metres a second, which is the whole system in 42 seconds of

@@ -117,15 +117,23 @@ pub enum Asked {
     /// Nothing shuts this way; it is only hidden, and the worn track is
     /// the clue it already had.
     GotBehindTheWall,
-    /// Riding out to the sun, which is what the space behind the wall is
-    /// for: the system at true scale, where the reading is the distance.
-    /// Specs 0015 and 0018, and one of the four spec 0036 names itself.
+    /// Walking in to the sun at the middle of spec 0015's room, the one
+    /// with the planets and the moons going round it.
     ///
-    /// **After getting behind the wall, and it has to be.** The ride runs
-    /// past `beyond::at`, which is inside `behind::inside`. Written first,
-    /// as it was until 2026-11-18, the first thing spec 0118's stone could
-    /// ever name was a thing in a room nobody has found.
-    RodeToTheSun,
+    /// **The first sun and not the far one.** It was the ride arriving at
+    /// spec 0018's sun, which is thirty metres past a door, and then where
+    /// you stand out there, which is four metres past the same door. Jake,
+    /// 2026-11-21: the first sun in the other room is the far more
+    /// impressive place to register having arrived at the sun. It is
+    /// eighty metres in from the way in, through the whole model, and what
+    /// you arrive at is a sun with the planets turning round it rather
+    /// than a ball on a slab.
+    ///
+    /// **After getting behind the wall, and it has to be.** This sun is at
+    /// the middle of that room. Written first, as it was until 2026-11-18,
+    /// the first thing spec 0118's stone could ever name was a thing in a
+    /// room nobody has found.
+    ReachedTheSun,
 }
 
 impl Asked {
@@ -157,7 +165,7 @@ impl Asked {
             Asked::WadedInThePool => "waded-in-the-pool",
             Asked::SolvedTheCube => "solved-the-cube",
             Asked::GotBehindTheWall => "got-behind-the-wall",
-            Asked::RodeToTheSun => "rode-to-the-sun",
+            Asked::ReachedTheSun => "reached-the-sun",
         }
     }
 
@@ -185,7 +193,7 @@ impl Asked {
             Asked::WadedInThePool,
             Asked::SolvedTheCube,
             Asked::GotBehindTheWall,
-            Asked::RodeToTheSun,
+            Asked::ReachedTheSun,
         ]
     }
 }
@@ -289,7 +297,7 @@ mod tests {
             Asked::WadedInThePool => 1,
             Asked::SolvedTheCube => 2,
             Asked::GotBehindTheWall => 3,
-            Asked::RodeToTheSun => 4,
+            Asked::ReachedTheSun => 4,
         }
     }
 
@@ -301,7 +309,7 @@ mod tests {
     /// one has been answered, and both are doors rather than opinions.
     const NEEDS: [(Asked, Asked); 2] = [
         (Asked::OpenedTheCase, Asked::WadedInThePool),
-        (Asked::GotBehindTheWall, Asked::RodeToTheSun),
+        (Asked::GotBehindTheWall, Asked::ReachedTheSun),
     ];
 
     /// Spec 0118: the stone never names a room there is no way into.
@@ -387,7 +395,7 @@ mod tests {
     fn what_is_written_comes_back_in_the_order_it_went() {
         let mut trail = Trail::new();
 
-        trail.gave(Asked::RodeToTheSun);
+        trail.gave(Asked::ReachedTheSun);
         trail.gave(Asked::OpenedTheCase);
         trail.gave(Asked::SolvedTheCube);
 
@@ -403,7 +411,7 @@ mod tests {
             &[
                 Asked::OpenedTheCase,
                 Asked::SolvedTheCube,
-                Asked::RodeToTheSun
+                Asked::ReachedTheSun
             ],
             "it came back in `every` order, so the order was not kept and \
              the one thing in the record that means anything is gone"
@@ -418,12 +426,12 @@ mod tests {
     /// of those names a station this arcade no longer has.
     #[test]
     fn a_file_from_an_older_arcade_still_opens() {
-        let older = "rode-to-the-sun\nturned-the-sixth-display\nopened-the-case\n";
+        let older = "reached-the-sun\nturned-the-sixth-display\nopened-the-case\n";
         let back = Trail::read_back(older);
 
         assert_eq!(
             back.given(),
-            &[Asked::RodeToTheSun, Asked::OpenedTheCase],
+            &[Asked::ReachedTheSun, Asked::OpenedTheCase],
             "a name this arcade does not know took the rest of the file \
              with it"
         );
@@ -488,10 +496,10 @@ mod tests {
     fn it_keeps_the_order_they_came_in() {
         let mut one = Trail::new();
         one.gave(Asked::OpenedTheCase);
-        one.gave(Asked::RodeToTheSun);
+        one.gave(Asked::ReachedTheSun);
 
         let mut other = Trail::new();
-        other.gave(Asked::RodeToTheSun);
+        other.gave(Asked::ReachedTheSun);
         other.gave(Asked::OpenedTheCase);
 
         assert_ne!(

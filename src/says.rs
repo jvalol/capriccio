@@ -235,7 +235,7 @@ pub fn given(what: crate::trail::Asked) -> &'static str {
         Asked::WadedInThePool => "Somebody has been in the water.",
         Asked::SolvedTheCube => "Somebody has played with the cube and solved it.",
         Asked::GotBehindTheWall => "The room you started in has a secret somebody walked through.",
-        Asked::RodeToTheSun => "Somebody has ridden out as far as the sun.",
+        Asked::ReachedTheSun => "Somebody has walked all the way in to the sun.",
     }
 }
 
@@ -249,6 +249,6 @@ pub fn still_held(what: crate::trail::Asked) -> &'static str {
         Asked::GotBehindTheWall => {
             "The room you started in has a secret nobody has walked through."
         }
-        Asked::RodeToTheSun => "Nobody has ridden out as far as the sun.",
+        Asked::ReachedTheSun => "Nobody has walked all the way in to the sun.",
     }
 }

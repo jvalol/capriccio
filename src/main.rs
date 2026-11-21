@@ -2952,14 +2952,15 @@ impl Arcade {
             self.trail.gave(trail::Asked::SolvedTheCube);
         }
 
-        // and the sun out past the door, which is the third of the same
-        // kind. It hung off the ride's arrival instead, so the sun you had
-        // walked out to did not count, and the ride is eight seconds of
-        // walking away: Jake went to it on foot on 2026-11-21 and the stone
-        // said nobody had. Spec 0018's room is the distance, and a station
-        // that asks how you covered it is asking the wrong thing.
-        if beyond::at_the_sun(self.the_door(), self.at) {
-            self.trail.gave(trail::Asked::RodeToTheSun);
+        // and the sun at the middle of spec 0015's room, which is the
+        // third of the same kind. It was the ride arriving at spec 0018's
+        // sun, so the sun you had walked to did not count at all; then it
+        // was where you stand out there, which is four metres past a door.
+        // Jake, 2026-11-21: the first sun is the far more impressive place
+        // to register having arrived at the sun, and it is eighty metres in
+        // through the model rather than four past a threshold.
+        if orrery::at_the_sun(self.the_sun().0, self.at) {
+            self.trail.gave(trail::Asked::ReachedTheSun);
         }
     }
 
@@ -16719,67 +16720,46 @@ mod tests {
         );
     }
 
-    /// Specs 0051 and 0036: the sun out past the door, which is the one
-    /// stop out there that is the reading rather than a place.
+    /// Specs 0051, 0015 and 0036: the sun at the middle of the room with
+    /// the planets going round it.
     ///
-    /// **Where you are and not how you came.** It hung off the ride's own
-    /// arrival, so the sun Jake walked the thirty metres out to on
-    /// 2026-11-21 did not count and the stone still said nobody had been.
-    /// A room whose reading is the distance should not care which way you
-    /// covered it.
+    /// **The first sun and not the far one.** It was the ride arriving at
+    /// spec 0018's sun, so the sun you had walked to did not count; then
+    /// it was where you stand out there, which is four metres past a door.
+    /// Jake, 2026-11-21: the first sun in the other room is the far more
+    /// impressive place to register having arrived at the sun.
     ///
-    /// Two halves. Every stop's own arrival point reads as the sun or does
-    /// not, which is what keeps the circle wide enough for the ride to
-    /// pass through its own landing; and a body that walks out of the door
-    /// gets there, which is the half that was missing.
+    /// Walked rather than placed, because arriving is the whole of what
+    /// the station is.
     #[test]
-    fn standing_at_the_sun_gives_the_system_up() {
+    fn walking_in_to_the_sun_gives_the_system_up() {
         let mut arcade = Arcade::new();
-        let door = arcade.the_door();
-        let stops = beyond::stops(door);
+        let sun = arcade.the_sun().0;
 
-        // **Which stop that is comes from the list.** The first version of
-        // this set the stop to a constant and then asked whether that
-        // constant was the sun, which is one question twice.
-        let sun = stops
-            .iter()
-            .position(|stop| stop.name == orrery::SUN.name)
-            .expect("the sun is a stop you can ride to");
-
-        for (n, stop) in stops.iter().enumerate() {
-            let at = beyond::arriving(door, stop).0;
-
-            assert_eq!(
-                beyond::at_the_sun(door, at),
-                n == sun,
-                "the ride sets you down at {} and the building reads that \
-                 as {}being at the sun",
-                stop.name,
-                if n == sun { "not " } else { "" }
-            );
-        }
-
-        // and on foot out of the doorway, which is what Jake did
-        arcade.at = door;
+        arcade.at = vec3(sun.x, 0.0, sun.z - 10.0);
         arcade.eye = arcade.at.y;
+        arcade.what_the_rooms_give();
+
+        assert_eq!(
+            arcade.trail.given(),
+            [],
+            "ten metres short of the sun already reads as being at it"
+        );
+
         arcade.yaw = std::f32::consts::PI;
         arcade.walking = [true, false, false, false];
 
-        for _ in 0..120 {
+        for _ in 0..(60 * 5) {
             arcade.aimed_and_moved(1.0 / 60.0);
             arcade.what_the_rooms_give();
         }
 
-        assert!(
-            arcade.at.z > door.z + 4.0,
-            "two seconds north of the door only reached z {:.2}, so the \
-             walk is not the thing under test",
-            arcade.at.z
-        );
         assert_eq!(
             arcade.trail.given(),
-            [trail::Asked::RodeToTheSun],
-            "walking out to the sun answered the room {} times, not once",
+            [trail::Asked::ReachedTheSun],
+            "five seconds walked at the sun from ten metres out ended at {} \
+             and answered {} rooms",
+            arcade.at,
             arcade.trail.given().len()
         );
     }

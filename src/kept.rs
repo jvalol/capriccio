@@ -91,7 +91,7 @@ mod tests {
             .join("trail");
         let mut trail = Trail::new();
 
-        trail.gave(Asked::RodeToTheSun);
+        trail.gave(Asked::ReachedTheSun);
         trail.gave(Asked::OpenedTheCase);
 
         write(&at, &trail);
