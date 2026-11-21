@@ -417,8 +417,15 @@ read from both sides, because the two meet along it and a wall that moved and
 left them disagreeing would be a gap to fall through.
 
 Behind the building, east of that line and north of the door, there is no wall
-to draw a line on. It still reads as this room with no floor in it, which is
-where it was before and where nothing is.
+to draw a line on, and it still reads as this room with no floor in it. What
+makes that safe is that you cannot get there. `field::wall` follows you the way
+the ground does, so the field's edge runs north further than you can walk at
+it; the only other way in on foot is west off the floor, which the catch
+answers; and the one wall left between somewhere you can stand and that ground
+is the garden's north face, which is solid across its whole width. The first
+two are walked rather than reasoned about, because this is true by walls nobody
+is thinking about, which is the kind of thing spec 0040 already keeps a test
+for.
 
 ## Acceptance criteria
 
@@ -460,6 +467,7 @@ where it was before and where nothing is.
 - The floor is the whole of what holds you up out there. — `tests::nothing_but_the_floor_holds_you_up_out_past_the_door`
 - And a fall off it ends at the door. — `tests::a_fall_out_past_the_door_gives_the_door_back`
 - And the far corner of the field is the field, not this room. — `tests::the_far_corner_of_the_field_is_still_the_field`
+- And you cannot get behind the building by any way in. — `tests::you_cannot_walk_behind_the_building`
 
 ### Verified by hand
 

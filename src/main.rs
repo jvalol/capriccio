@@ -20602,6 +20602,115 @@ mod tests {
         );
     }
 
+    /// Specs 0040 and 0018: you cannot get behind the building.
+    ///
+    /// East of the field's wall and north of the door is neither the field
+    /// nor the floor out past the door. Nothing is drawn there, and since
+    /// `in_the_deep` reaches it nothing holds you up there either, so the
+    /// question is whether you can be there at all. There are two ways in
+    /// and this walks both: east out of the field, and west off the floor.
+    ///
+    /// What shuts the first is `field::wall`, which follows you the way the
+    /// ground does, so its north end stays further off the faster you walk
+    /// at it. What shuts the second is the catch of spec 0018.
+    ///
+    /// Held by a test for the reason
+    /// `field::tests::the_field_has_one_edge_and_you_cannot_reach_it` is
+    /// held by one: it is true by a wall nobody is thinking about, and
+    /// whoever shortens that wall should hear it from here rather than by
+    /// walking off the world.
+    #[test]
+    fn you_cannot_walk_behind_the_building() {
+        let mut one = Arcade::new();
+        let reaches = one.room.reaches;
+        let door = beyond::at(reaches);
+        let face = field::starts(reaches);
+
+        // east out of the field, from thirty metres back, at three
+        // distances north of the door
+        for out in [20.0f32, 200.0, 1000.0] {
+            let z = door.z + out;
+
+            one.at = vec3(face - 30.0, 0.0, z);
+            one.falling = 0.0;
+            one.yaw = std::f32::consts::FRAC_PI_2;
+            one.walking = [true, false, false, false];
+
+            for _ in 0..(60 * 30) {
+                one.aimed_and_moved(1.0 / 60.0);
+            }
+
+            // it reached the wall, which is what keeps the other half of
+            // this from passing on a body that never set off
+            assert!(
+                one.at.x > face - 2.0,
+                "half a minute east from z {:.1} only got to x {:.2}, short \
+                 of the wall at {:.2}",
+                z,
+                one.at.x,
+                face
+            );
+            assert!(
+                one.at.x < face,
+                "half a minute east from z {:.1} ended at x {:.2}, past the \
+                 field's wall at {:.2}",
+                z,
+                one.at.x,
+                face
+            );
+        }
+
+        // and west off the floor, which gives the door back rather than
+        // setting you down out there
+        let (middle, size) = beyond::floor(door);
+        let west = middle.x - size.x * 0.5;
+
+        one.at = vec3(west + 1.0, 0.0, door.z + 200.0);
+        one.eye = one.at.y;
+        one.falling = 0.0;
+        one.yaw = -std::f32::consts::FRAC_PI_2;
+        one.walking = [true, false, false, false];
+
+        for _ in 0..(60 * 2) {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            one.at.x > west && one.at.y > -0.1,
+            "two seconds west off the floor left you at {}, which is behind \
+             the building",
+            one.at
+        );
+
+        // and the third gate, which is not walked because the garden is
+        // full of things to walk into: its north face, which is the only
+        // wall left between somewhere you can stand and that ground. The
+        // strip north of the garden and east of the field's wall is open
+        // air with the field under it, and from there it is a straight
+        // walk north to where the ground stops.
+        let garden = garden::at(reaches);
+        let half = garden::half();
+        let face = garden.z + half.y;
+        let solid = one.room.solid();
+
+        for step in 0..=200 {
+            let x = garden.x - half.x + (step as f32 / 200.0) * half.x * 2.0;
+
+            assert!(
+                solid.iter().any(|box_| {
+                    box_.min.x <= x
+                        && box_.max.x >= x
+                        && box_.min.z <= face
+                        && box_.max.z >= face
+                        && box_.max.y > 1.8
+                }),
+                "the garden's north face is open at x {:.2}, which lets you \
+                 out behind the building",
+                x
+            );
+        }
+    }
+
     /// Spec 0018: the space beyond the door is east of the field's wall.
     ///
     /// `in_the_deep` was the z past the door and nothing else, and the
