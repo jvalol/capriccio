@@ -122,6 +122,8 @@ because it was the first answer and the measurement is what settled it.
 - The hall's grid is laid to the world and not to each piece of the lid. — `room::tests::the_lid_is_one_grid_laid_to_the_world`
 - No tile is level with a bar, or over one. — `room::tests::no_ceiling_tile_is_level_with_a_bar`
 - The lit panels are the hall's and the nook has none. — `room::tests::no_lit_panel_is_over_the_nook`
+- Nor over the gallery, which has no panel of its own and no gallery lamp
+  under one. — `room::tests::no_lit_panel_is_over_the_gallery`
 - And every one of them is a whole tile, the border offcuts being tile and not
   fitting. — `room::tests::every_lit_panel_is_a_whole_tile`
 - And every square of the grid is a tile or a panel, and not both. — `room::tests::every_square_of_the_grid_is_a_tile_or_a_panel`
@@ -216,6 +218,21 @@ way for this room to be wrong, per the dimness this spec started from.
 **Cool, where everything else in the building is warm.** A panel in a ceiling
 grid is a tube behind a diffuser, which is the one cold light an arcade has,
 and it keeps the warm end of the room to the neon and the sign.
+
+**Nor over the gallery.** The same fault as the nook's, one room further on.
+Which squares are the hall's was the hall's x range and nothing else, which
+tells the nook apart because the nook is beside the hall, and does not tell the
+gallery apart because the gallery is at the end of it and shares that x
+exactly. So the grid ran straight on over the gallery, and one panel came down
+0.92 metres from a gallery lamp and 0.37 above it, reading white where every
+other panel in this building reads blue.
+
+Jake saw that one panel from three rooms on 2026-11-21, said my first two
+accounts of it were wrong, which they were, and then said the wall lights
+suffice. They do: a gallery lights its own exhibits, per spec 0094, and a strip
+lit ceiling over them is the same mistake as one over the books. It takes the
+panels from twenty to sixteen and the gallery's own light from 74 to 66 on the
+mean of its staged shot.
 
 **None of them is over the nook.** The two rooms share this ceiling and one
 function builds it, and the nook is a study with pendants in it now. Strip

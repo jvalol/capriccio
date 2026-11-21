@@ -2300,7 +2300,7 @@ impl Room {
 
                 slab.min.x <= door.x && door.x <= slab.max.x && slab.max.z >= door.z - INSIDE
             })
-            .map(|slab| (slab.min.x, slab.max.x));
+            .map(|slab| (slab.min.x, slab.max.x, slab.min.z, slab.max.z));
 
         // the world's own lines that fall inside a run, with the run's two
         // ends for the trim. A line too near an end is dropped rather than
@@ -2354,8 +2354,27 @@ impl Room {
                             far_z - near_z - CEIL_BAR,
                         ),
                     );
+                    // **In the hall's slab and not merely in its x.** The
+                    // nook shares this ceiling and is told apart by the x,
+                    // which is why that was the test; the gallery is a slab
+                    // of its own at the hall's far end and shares the x
+                    // exactly, so the panels ran on over it. One of them
+                    // came down right over a gallery lamp, 0.92 m from it
+                    // flat and 0.37 above, and read white where every other
+                    // panel in the building reads blue. Jake saw that one
+                    // from three rooms on 2026-11-21 and did not believe a
+                    // word of my first two theories, correctly.
+                    //
+                    // A gallery lights its own exhibits, per spec 0094, and
+                    // a strip lit ceiling over them is the same mistake as
+                    // one over the nook.
                     let in_the_hall = hall
-                        .map(|(from, to)| square.0.x > from && square.0.x < to)
+                        .map(|(from, to, near, far)| {
+                            square.0.x > from
+                                && square.0.x < to
+                                && square.0.z > near
+                                && square.0.z < far
+                        })
                         .unwrap_or(false);
                     // **And a fitting is a whole tile.** A grid cuts its
                     // border tiles, which `lines` does and which is what a
@@ -2759,6 +2778,55 @@ mod tests {
             );
         }
     }
+    /// Spec 0012: the lit panels are the hall's and the gallery has none.
+    ///
+    /// **The same fault as the nook's, one room further on.** `in_the_hall`
+    /// was the hall's x range and nothing else, which tells the nook apart
+    /// because the nook is beside the hall, and does not tell the gallery
+    /// apart because the gallery is at the end of it and shares that x
+    /// exactly. So the grid ran on over the gallery, and one panel came
+    /// down 0.92 metres from a gallery lamp and 0.37 above it, reading
+    /// white where every other panel in the building reads blue. Jake saw
+    /// that one from three rooms on 2026-11-21 and said the wall lights
+    /// suffice, which they do: the gallery lights its own exhibits.
+    ///
+    /// Asked of the gallery's own lamps as well as of the hall's end,
+    /// because a lamp under a panel is the thing that actually went wrong
+    /// and `gallery_lamps` is where the gallery says where they are.
+    #[test]
+    fn no_lit_panel_is_over_the_gallery() {
+        let room = super::Room::of(crate::games());
+        let (_, _, panels) = room.lattice();
+        let lamps = gallery_lamps(room.reaches);
+
+        assert!(
+            !lamps.is_empty(),
+            "the gallery has no lamps for a panel to sit over"
+        );
+
+        for (at, _) in panels.iter() {
+            assert!(
+                at.z > -room.reaches,
+                "a lit panel at {:?} is past the hall's end, which is the \
+                 gallery",
+                at
+            );
+
+            for lamp in lamps.iter() {
+                let flat = ((lamp.x - at.x).powi(2) + (lamp.z - at.z).powi(2)).sqrt();
+
+                assert!(
+                    flat > CEIL_TILE,
+                    "a lit panel at {:?} has a gallery lamp {:.2} m from it \
+                     flat, which is what made one panel in this building \
+                     white",
+                    at,
+                    flat
+                );
+            }
+        }
+    }
+
     /// Spec 0012: the lit panels are the hall's and the nook has none.
     ///
     /// The two rooms share one ceiling, built by one function, and the nook is
