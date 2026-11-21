@@ -268,7 +268,58 @@ pub fn lining(reaches: f32) -> Vec<Aabb> {
 /// is on it. The pool table in the cellar is a bench by the same argument and
 /// is not in the nook either.
 pub const RIG: &str = "test rig";
-pub const BENCH: Vec3 = vec3(0.72, 0.86, 2.2);
+
+/// How deep the bench is and how high it stands.
+///
+/// How long it is is not here. It was, at 2.2, and reaching south to within a
+/// quarter metre of the bay's lip is what shut the east side of the bay in.
+/// Its run is [`bench_size`] now, derived from the two things that actually
+/// fix it: the bucket in the north corner, and the room a body needs to turn
+/// the rig's corner. Written down as well it would be a second account of the
+/// same number, and two lists of one thing drift.
+pub const BENCH_ACROSS: f32 = 0.72;
+pub const BENCH_TALL: f32 = 0.86;
+
+/// How far the bench stands off the wall behind it, and off the near wall at
+/// its north end.
+///
+/// The north end is the fixed one. A bucket stands in that corner, so the
+/// bench is placed from there and runs south, and the length is what answers
+/// to the bay.
+pub const BENCH_OFF_THE_WALL: f32 = 0.05;
+pub const BENCH_OFF_THE_END: f32 = 0.35;
+
+/// How far clear of everything a body wants, which is this building's rule.
+pub const CLEAR: f32 = 1.05;
+
+/// How far north of the bay's lip the bench's south end has to stop.
+///
+/// **It is a diagonal, not a gap down the wall.** The rig fills the bay to
+/// the lip and the bench stands against the east wall past it, so the way in
+/// and out of the east side of the bay is the corner between the rig's
+/// north-east post and the bench's south-west leg. A body gets between two
+/// corners when they stand further apart than it is wide, and the straight
+/// part of that gap is 0.78, which is narrower than a body whatever the
+/// bench does. Only the `z` between them can open it.
+///
+/// It was a flat 0.25, which put the corners 0.82 apart against a body of
+/// 0.9, and `walk` slides one way and not the other: Jake walked into the
+/// east side of the bay on 2026-11-21 and could not walk out of it. Derived
+/// now, so moving the rig or changing the bench moves it too.
+pub fn bench_off_the_bay() -> f32 {
+    let (_, east) = span();
+    let across = (east - BENCH_OFF_THE_WALL - BENCH_ACROSS) - block_east();
+
+    (CLEAR * CLEAR - across * across).max(0.0).sqrt()
+}
+
+/// The east face of what the rig stops you walking through, which is the box
+/// the building knows it as rather than the cubes.
+pub fn block_east() -> f32 {
+    let (west, east) = span();
+
+    (west + east) * 0.5 + (BLOCK + 0.3) * 0.5
+}
 
 /// Where the bench stands: along the east wall, out of the bay.
 ///
@@ -277,19 +328,32 @@ pub const BENCH: Vec3 = vec3(0.72, 0.86, 2.2);
 /// 0025: the bench is furniture after that. You do not work the dial by
 /// standing at it, you work it by looking at the cubes, which is what the
 /// sight already does.
+///
+/// Placed from its north end, where the near wall and the bucket in that
+/// corner fix it. Its south end is then [`BENCH`]'s run, and what that run
+/// has to be is [`bench_off_the_bay`].
 pub fn bench(reaches: f32) -> Vec3 {
     let (_, east) = span();
-    let (far, _) = deep(reaches);
+    let (_, near) = deep(reaches);
 
     vec3(
-        east - BENCH.x * 0.5 - 0.05,
-        BENCH.y * 0.5,
-        far + BAY + 0.25 + BENCH.z * 0.5,
+        east - BENCH_ACROSS * 0.5 - BENCH_OFF_THE_WALL,
+        BENCH_TALL * 0.5,
+        near - BENCH_OFF_THE_END - bench_size(reaches).z * 0.5,
     )
 }
 
+/// How big it is, which is the derived part: it runs from the bucket's corner
+/// to wherever the rig's corner lets a body turn.
+pub fn bench_size(reaches: f32) -> Vec3 {
+    let (far, near) = deep(reaches);
+    let south = far + BAY + bench_off_the_bay();
+
+    vec3(BENCH_ACROSS, BENCH_TALL, (near - BENCH_OFF_THE_END) - south)
+}
+
 pub fn bench_box(reaches: f32) -> Aabb {
-    Aabb::from_center_size(bench(reaches), BENCH)
+    Aabb::from_center_size(bench(reaches), bench_size(reaches))
 }
 
 /// The rig, as one of the building's benches.
@@ -721,8 +785,8 @@ pub fn clutter(reaches: f32) -> Vec<Stood> {
             thing: Thing::Jar,
             at: vec3(
                 bench(reaches).x - 0.1,
-                BENCH.y,
-                bench(reaches).z - BENCH.z * 0.5 + 0.2,
+                BENCH_TALL,
+                bench_box(reaches).min.z + 0.2,
             ),
             turn: 0.0,
         },
@@ -730,8 +794,8 @@ pub fn clutter(reaches: f32) -> Vec<Stood> {
             thing: Thing::Jar,
             at: vec3(
                 bench(reaches).x + 0.08,
-                BENCH.y,
-                bench(reaches).z - BENCH.z * 0.5 + 0.34,
+                BENCH_TALL,
+                bench_box(reaches).min.z + 0.34,
             ),
             turn: 0.4,
         },
@@ -739,18 +803,14 @@ pub fn clutter(reaches: f32) -> Vec<Stood> {
             thing: Thing::Jar,
             at: vec3(
                 bench(reaches).x - 0.16,
-                BENCH.y,
-                bench(reaches).z - BENCH.z * 0.5 + 0.44,
+                BENCH_TALL,
+                bench_box(reaches).min.z + 0.44,
             ),
             turn: 0.8,
         },
         Stood {
             thing: Thing::Tin,
-            at: vec3(
-                bench(reaches).x,
-                BENCH.y,
-                bench(reaches).z + BENCH.z * 0.5 - 0.3,
-            ),
+            at: vec3(bench(reaches).x, BENCH_TALL, bench_box(reaches).max.z - 0.3),
             turn: 0.2,
         },
         Stood {
@@ -1094,6 +1154,119 @@ mod tests {
             "walking out ended at {:?} rather than {:?}",
             back,
             gallery_side
+        );
+    }
+
+    /// Spec 0025: both sides of the bay are floor you can leave again.
+    ///
+    /// **The rig divides the bay in two and neither half has a back way
+    /// out.** It stands to the lip at the north and a hand's breadth off the
+    /// lining at the south, so the only way in or out of either side is round
+    /// its north corner, and on the east side that corner is shared with the
+    /// bench.
+    ///
+    /// It was a trap, and a one-way one, which is the part a measurement
+    /// would have missed: 0.82 between the two corners against a body of 0.9,
+    /// and `walk` slid a body in through it and would not slide it back out.
+    /// Jake walked in on 2026-11-21 and was stuck there. So this walks rather
+    /// than measures, and it walks out as well as in, because in this
+    /// building those are not the same question.
+    #[test]
+    fn you_can_get_out_of_either_side_of_the_bay() {
+        let reaches = reaches();
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+        let bay = bay(reaches);
+        let (west, east) = span();
+        let middle = (bay.min.z + bay.max.z) * 0.5;
+        let door = vec3(GALLERY_WIDE * 0.5 + THICK * 0.8, 0.0, {
+            let (from, to) = way(reaches);
+
+            (from + to) * 0.5
+        });
+
+        let walked = |start: Vec3, target: Vec3| {
+            let (mut at, mut falling, mut owed) = (start, 0.0f32, 0.0f32);
+            let step = 1.0 / 60.0;
+
+            for _ in 0..900 {
+                let flat = vec3(target.x - at.x, 0.0, target.z - at.z);
+                let wish = if flat.length() > 0.05 {
+                    flat.normalize() * crate::SPEED
+                } else {
+                    Vec3::ZERO
+                };
+                let (moved, fell) =
+                    crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, owed <= 0.0);
+
+                owed = (owed - crate::walk::CLIMBS * step).max(0.0) + (moved.y - at.y).max(0.0);
+                at = moved;
+                falling = fell;
+            }
+
+            at
+        };
+
+        for (side, corner) in [("west", west + 0.8), ("east", east - 0.45)] {
+            let standing = vec3(corner, 0.0, middle);
+            let there = walked(door, standing);
+
+            assert!(
+                (there - standing).length() < 0.5,
+                "the {} side of the bay cannot be walked into: from the door \
+                 a body got to {:.2} {:.2} and wanted {:.2} {:.2}",
+                side,
+                there.x,
+                there.z,
+                standing.x,
+                standing.z
+            );
+
+            let out = walked(there, door);
+
+            assert!(
+                out.z > bay.max.z,
+                "the {} side of the bay is a trap: a body standing at {:.2} \
+                 {:.2} walked at the door and got to {:.2} {:.2}, which is \
+                 still inside the bay",
+                side,
+                there.x,
+                there.z,
+                out.x,
+                out.z
+            );
+        }
+    }
+
+    /// Spec 0025: the corner between the rig and the bench is a way past.
+    ///
+    /// The arithmetic under the walk above, which is what says *why* when it
+    /// fails. Two corners let a body between them when they stand further
+    /// apart than it is wide, and this building's rule is 1.05 rather than
+    /// the bare 0.9.
+    #[test]
+    fn the_rig_and_the_bench_leave_a_body_room_to_turn() {
+        let reaches = reaches();
+        let bench = bench_box(reaches);
+        let lip = bay(reaches).max.z;
+        let across = bench.min.x - block_east();
+        let along = bench.min.z - lip;
+        let corners = (across * across + along * along).sqrt();
+
+        assert!(
+            corners >= CLEAR,
+            "the rig's corner and the bench's stand {:.3} apart, which is \
+             {:.3} across and {:.3} along, and a body wants {:.2}",
+            corners,
+            across,
+            along,
+            CLEAR
+        );
+        assert!(
+            along >= bench_off_the_bay(),
+            "the bench's end stands {:.3} off the lip and wants {:.3}",
+            along,
+            bench_off_the_bay()
         );
     }
 
@@ -1522,7 +1695,7 @@ mod tests {
         // workbench
         let bench = bench(reaches);
         let beside = vec3(bench.x - 1.0, 1.55, bench.z);
-        let at_it = (bench + Vec3::Y * BENCH.y - beside).normalize();
+        let at_it = (bench + Vec3::Y * BENCH_TALL - beside).normalize();
 
         assert_ne!(
             room.looking_at(beside, at_it),

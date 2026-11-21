@@ -108,6 +108,10 @@ measure already, and nothing in this room starts a process.
   bay. — `back::tests::the_bay_lamp_is_in_its_fitting`
 - The bench, the clutter and the door's swing are all out of the
   bay. — `back::tests::the_bay_holds_nothing_but_the_rig`
+- Both sides of the bay can be walked into from the door and walked out of
+  again. — `back::tests::you_can_get_out_of_either_side_of_the_bay`
+- The corner between the rig and the bench's end leaves a body room to turn
+  it. — `back::tests::the_rig_and_the_bench_leave_a_body_room_to_turn`
 - You can walk in from the gallery to the working spot and back out
   again. — `back::tests::you_can_walk_in_and_out_again`
 - There is room to stand at the rig, clear of it and out of the
@@ -152,6 +156,25 @@ than reasoning about distances.
 or the east wall, which are the bay and the bench now. The broom then stood
 in the walking line, which the clutter test caught, and the ladder stood
 inside the broom, which it caught next.
+
+**Out of the bay was not the same as clear of it.** The rig fills the bay from
+the lining to the lip, so it divides the bay in two and neither half has a
+back way out: the only way into either is round the rig's north corner. On the
+east side that corner is shared with the bench's end, which stood a flat 0.25
+north of the lip. The two corners were 0.82 apart and a body is 0.9.
+
+The part worth writing down is that it was **one-way**. `walk` slides a body
+along what it meets, and the sliding is not symmetric: it let a body in
+through a gap it would not let it back out of. Jake walked into the east side
+of the bay on 2026-11-21 and was stuck in it, and nothing in here failed,
+because `the_bay_holds_nothing_but_the_rig` asks whether the bench is in the
+bay and it never was.
+
+So the gap is derived rather than written: the corners have to stand this
+building's 1.05 apart, which is a diagonal, because the straight part of it is
+0.78 and no length of bench can widen that. What gives is the bench's run,
+from 2.2 to 1.74, its north end being fixed by the bucket in that corner. And
+the test walks both ways, because in this building those are two questions.
 
 ## Out of scope
 

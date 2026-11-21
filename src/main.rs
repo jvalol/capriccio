@@ -6278,14 +6278,15 @@ impl Arcade {
 
         // the bench: a top on four legs, the way the nook's are built
         let at = back::bench(reaches);
-        let top = back::BENCH.y;
+        let size = back::bench_size(reaches);
+        let top = back::BENCH_TALL;
 
         scene.push_plain(
             cube,
             &Transform::at(vec3(at.x, top - aim::BENCH_TOP * 0.5, at.z)).with_scale(vec3(
-                back::BENCH.x,
+                size.x,
                 aim::BENCH_TOP,
-                back::BENCH.z,
+                size.z,
             )),
             aim::BENCH_ON,
         );
@@ -6293,9 +6294,9 @@ impl Arcade {
         for along in [-1.0f32, 1.0] {
             for across in [-1.0f32, 1.0] {
                 let leg = vec3(
-                    at.x + along * (back::BENCH.x * 0.5 - aim::BENCH_LEG),
+                    at.x + along * (size.x * 0.5 - aim::BENCH_LEG),
                     (top - aim::BENCH_TOP) * 0.5,
-                    at.z + across * (back::BENCH.z * 0.5 - aim::BENCH_LEG),
+                    at.z + across * (size.z * 0.5 - aim::BENCH_LEG),
                 );
 
                 scene.push_plain(
