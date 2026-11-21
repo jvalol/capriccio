@@ -234,23 +234,41 @@ saw it. So a bad panel holds at exactly its own light, and every four to
 fourteen seconds it goes for between a twelfth and a third of one. There is no
 state in between.
 
-Measured over twenty seconds of it: four of the twenty panels go, the busiest
-is off its own light 2.3 per cent of the time, and something blinks somewhere
-on the ceiling about every two seconds. A blink is dark and not dim, since what
-this is is the light being absent rather than lower, which means the tile goes
-under white where the swell was held over it.
+Measured over a minute of it: seven of the sixteen panels go, the busiest is
+off its own light 3.8 per cent of the time, and something blinks somewhere on
+the ceiling about every two thirds of a second. A blink is dark and not dim,
+since what this is is the light being absent rather than lower, which means the
+tile goes under white where the swell was held over it.
+
+The first build of the stutter had a quarter of them bad holding four to
+fourteen seconds, which came to one blink every two seconds and Jake said there
+was not a lot of flickering. More tubes and shorter holds is the dial: the
+character of one panel has not changed.
 
 A panel's character comes off where it hangs and what the clock says, so it
 keeps it for ever, nothing is stored, and the tile and the lamp under it ask
 the same question rather than drifting apart, which is the fault this ceiling
-has already made once. Three in four never go at all, picked by a share of the
-hash rather than a remainder of it: twenty panels is a small enough draw that
-`% 5` left one bad tube in the whole hall, which is a ceiling with a fault in
-it rather than an old ceiling.
+has already made once. Which ones are bad is picked by a share of the hash
+rather than a remainder of it: sixteen panels is a small enough draw that a
+remainder left one bad tube in the whole hall, which is a ceiling with a fault
+in it rather than an old ceiling.
 
 The staged shot of the hall is unchanged by any of this, nothing being mid-blink
 at the instant it is taken. That is luck rather than design, and it is stable
 luck, since the flicker is worked out and not rolled.
+
+**And drawn as fittings, not as surfaces.** Past white is not enough on its
+own: a surface still takes what the room gives it and what the angle leaves, so
+the panel almost overhead clipped to white while the one seen nearly edge on
+read blue, and the one that sat over a gallery lamp read whiter than either.
+Twenty identical diffusers that do not match is the one thing a ceiling of them
+cannot be.
+
+`push_fitting` is the building's own word for this and the engine's spec 0105
+is underneath it: a glow of one means the surface gives off its colour before
+anything shines on it. So every panel reads the same from anywhere, which is
+what they are. The hall's staged shot moves 6.5 per cent and its mean light 55
+to 57, the far panels having come up to meet the near ones.
 
 **Cool, where everything else in the building is warm.** A panel in a ceiling
 grid is a tube behind a diffuser, which is the one cold light an arcade has,

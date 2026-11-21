@@ -473,6 +473,15 @@ pub const GLOWS_BY: f32 = 1.05;
 /// A lit ceiling panel in the hall's grid, which is the same idea at the cold
 /// end: past white, so it reads as a thing giving light rather than a pale
 /// tile with a lamp pointed at it.
+///
+/// **Pushed as a fitting and not as a surface**, per `push_fitting` and the
+/// engine's spec 0105. Past white alone is not enough: a surface still takes
+/// what the room gives it and what the angle leaves, so the panel almost
+/// overhead clipped to white while the one you saw nearly edge on read blue,
+/// and one that happened to sit over a gallery lamp read whiter than either.
+/// Twenty identical diffusers that do not match is the one thing a ceiling
+/// of them cannot be. Jake found it on 2026-11-21 and did not let go of it
+/// through two wrong theories of mine.
 pub const CEIL_PANEL: Vec4 = vec4(1.7, 1.9, 2.3, 1.0);
 
 /// What the room says about something nobody has compiled.

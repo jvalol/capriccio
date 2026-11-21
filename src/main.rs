@@ -10738,11 +10738,10 @@ impl Game for Arcade {
             for (at, size) in panels.iter() {
                 let lit = room::panel_flicker(*at, self.since);
 
-                scene.push_material(
+                scene.push_fitting(
                     cube,
                     &Transform::at(*at).with_scale(*size),
                     (aim::CEIL_PANEL.truncate() * lit).extend(aim::CEIL_PANEL.w),
-                    aim::NO_SHINE,
                 );
             }
             for (at, size) in bars.iter() {

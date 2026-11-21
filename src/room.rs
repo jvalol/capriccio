@@ -1056,25 +1056,32 @@ pub fn panel_lamp(panel: Vec3) -> Vec3 {
 /// tile and the lamp under it can each ask without the two coming apart.
 /// That pair is the fault this ceiling has already made: see `panel_lamp`.
 ///
-/// Three panels in four never go at all. That share is what makes the rest
-/// read as fittings with something wrong with them rather than as an effect
-/// laid over the room, and it is the half of this Jake asked for by name.
-/// It was three in five while this was a swell, which with that many of
-/// them breathing was most of the ceiling moving at once.
+/// A share of them never go at all. That share is what makes the rest read
+/// as fittings with something wrong with them rather than as an effect laid
+/// over the room, and it is the half of this Jake asked for by name.
+///
+/// It was a quarter of them bad, holding four to fourteen seconds, and he
+/// said there was not a lot of flickering. It is 0.45 and two and a half to
+/// eight now, which lands on seven of the sixteen panels and about one
+/// blink somewhere on the ceiling every two thirds of a second, against one
+/// every two seconds before.
 ///
 /// A share of the hash and not a remainder of it. Twenty panels is a small
 /// enough draw that `% 5` landed on one bad tube in the whole hall, which
 /// is a ceiling with a fault in it rather than an old ceiling.
-pub const PANEL_BAD: f32 = 0.25;
+pub const PANEL_BAD: f32 = 0.45;
 
 /// How long a bad panel holds between stutters, at the shortest and the
 /// longest, and how long one lasts. Seconds.
 ///
 /// A handful of panels going every few seconds apiece is one somewhere in
 /// the room every second or so, which is an arcade. Every panel going every
-/// second is a fault in the building rather than in a tube.
-pub const PANEL_HOLD: f32 = 4.0;
-pub const PANEL_HOLD_UP_TO: f32 = 14.0;
+/// second is a fault in the building rather than in a tube. What keeps this
+/// the first of those and not the second is that a bad panel is still at its
+/// own light 96 per cent of the time, which is what
+/// `tests::the_panels_stutter_rather_than_pulse` holds.
+pub const PANEL_HOLD: f32 = 2.5;
+pub const PANEL_HOLD_UP_TO: f32 = 8.0;
 pub const PANEL_GOES: f32 = 0.08;
 pub const PANEL_GOES_UP_TO: f32 = 0.34;
 
