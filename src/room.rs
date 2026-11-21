@@ -5181,6 +5181,101 @@ mod tests {
         }
     }
 
+    /// Spec 0043: nowhere in this building can you walk into a place you
+    /// cannot walk out of.
+    ///
+    /// **The fault a measurement cannot see.** `walk` slides a body along
+    /// what it meets and the sliding is not symmetric, so a gap too narrow
+    /// for a body can still let one in and then refuse to let it back out.
+    /// The east side of the back room's bay did exactly that for twelve
+    /// days: 0.82 between two corners against a body of 0.9, every test in
+    /// the building green, and Jake stuck in it on 2026-11-21. The west side
+    /// of the same bay passed by a centimetre, which a walk I chose myself
+    /// went through without noticing.
+    ///
+    /// So the walking is not chosen. Spec 0049's lattice lays a place every
+    /// half metre over the grounds, joins them by asking `walk` whether a
+    /// body gets from one to the next, and joins them *in one direction at a
+    /// time*. A one-way pair is then a thing the graph already knows and
+    /// nobody had asked it for. At 4.6 the back room had a hundred and
+    /// eleven of them.
+    ///
+    /// **Pairs, not islands.** Floor you cannot reach at all is ordinary
+    /// here: the lattice runs under the koi pond and under the plunge
+    /// basin, and the sauna's places are behind a shut door. Floor you can
+    /// reach and not leave is never ordinary.
+    #[test]
+    fn no_room_lets_you_in_and_not_out() {
+        let room = Room::of(crate::games());
+        let solid = room.solid();
+        let grounds = room.grounds();
+        // **The two big outdoor grounds are not asked.** The field behind
+        // the wall is a hundred and sixty metres square and the space
+        // beyond the door runs to thirty three thousand, which is a
+        // hundred thousand places and a lattice nobody can afford. Spec
+        // 0018 holds those two from the other end: a kerb down each side
+        // and a catch under the floor, so the fault they can have is
+        // falling off rather than being shut in.
+        let big = 400.0;
+        let mut done: Vec<Aabb> = Vec::new();
+
+        for (name, ground) in grounds.iter() {
+            let across = (ground.max.x - ground.min.x) * (ground.max.z - ground.min.z);
+
+            if across > big || done.iter().any(|box_| box_.contains_point(ground.center())) {
+                continue;
+            }
+
+            let within = Aabb::new(
+                ground.min - Vec3::splat(crate::tour::APART),
+                ground.max + Vec3::splat(crate::tour::APART),
+            );
+            let ways = crate::tour::ways(&grounds, &solid, within);
+            // every place in the region, not the ones this ground is
+            // named on: a gallery full of plinths keeps most of its
+            // standing room on the tops of solids, which the lattice
+            // calls a step
+            let here: Vec<usize> = (0..ways.places())
+                .filter(|n| within.contains_point(ways.spot(*n).at))
+                .collect();
+            let reach: Vec<std::collections::HashSet<usize>> = (0..ways.places())
+                .map(|n| ways.reached_from(n).into_iter().collect())
+                .collect();
+
+            for shut in here.iter() {
+                for open in here.iter() {
+                    if shut == open || !reach[*open].contains(shut) || reach[*shut].contains(open) {
+                        continue;
+                    }
+
+                    let (from, to) = (ways.spot(*open), ways.spot(*shut));
+
+                    panic!(
+                        "by {}, a body walks from {:.2} {:.2} {:.2} on {} to \
+                         {:.2} {:.2} {:.2} on {} and cannot walk back",
+                        name,
+                        from.at.x,
+                        from.at.y,
+                        from.at.z,
+                        from.ground,
+                        to.at.x,
+                        to.at.y,
+                        to.at.z,
+                        to.ground
+                    );
+                }
+            }
+
+            assert!(
+                here.len() > 20,
+                "only {} places laid round {}, so this asked nothing",
+                here.len(),
+                name
+            );
+            done.push(within);
+        }
+    }
+
     /// Every ground in the set is a box this building actually serves.
     ///
     /// The set is gathered by calling each room for its floor, and a room can

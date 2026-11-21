@@ -29,7 +29,7 @@ The field is not in the set. `field::ground` re-centres on a tile grid around
 wherever you stand, so asked from two places it gives two boxes, and a set that
 changes under you is not a set.
 
-Three rules read it.
+Four rules read it.
 
 **No hole between two rooms.** Where two floors at one storey face each other
 across a strip narrower than a body, something has to floor that strip. Not the
@@ -62,11 +62,36 @@ bridge it, so nobody was ever going to fall in; it is the same fault the
 garden's door had in spec 0010 and it is fixed the same way, by running the
 baths' floor south under the wall to meet the cellar's slab.
 
+**And nowhere you can walk into and not out of.** `walk` slides a body along
+what it meets, and the sliding is not symmetric: a gap too narrow for a body
+can let one in and then refuse to let it back out. That is not something a
+measurement sees. The east side of the back room's bay was exactly this for
+twelve days, with 0.82 between two corners against a body of 0.9, every test
+in the building green, and Jake stuck in it on 2026-11-21.
+
+So it is walked rather than measured, and the walking is not chosen: spec
+0049's lattice lays a place every half metre over each ground, joins them by
+asking `walk`, and joins them one direction at a time. A one-way pair is a
+thing that graph already knows and that nobody had asked it for. Choosing the
+walk myself is what let the west side of the same bay through, where a walk to
+a spot I picked arrived and said nothing about the 0.91 it had squeezed past.
+
+Pairs, not islands. Floor nothing can reach is ordinary in here: the lattice
+runs under the koi pond and under the plunge basin, and the sauna's places are
+behind a shut door. Floor you can reach and not leave is never ordinary.
+
+The two big outdoor grounds are left out, because a lattice over them is a
+hundred thousand places. Spec 0018 holds those from the other end, with a
+kerb down each side and a catch under the floor: the fault they can have is
+falling off, not being shut in.
+
 ## Acceptance criteria
 
 - No two rooms leave a hole between their floors. — `room::tests::no_two_rooms_leave_a_hole_between_their_floors`
 - No two rooms meet at a ledge. — `room::tests::no_two_rooms_meet_at_a_ledge`
 - Every ground in the set is a box the building serves. — `room::tests::every_ground_is_a_box_the_building_serves`
+- Nowhere in the building can a body walk into a place it cannot walk out
+  of. — `room::tests::no_room_lets_you_in_and_not_out`
 - A floor and the hall's leave no hole and no ledge, in the room that used to own this question. — `behind::tests::the_floors_leave_no_hole_and_no_ledge`
 - And in the back room. — `back::tests::the_floors_leave_no_hole_and_no_ledge`
 

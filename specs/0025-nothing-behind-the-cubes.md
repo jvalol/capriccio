@@ -112,6 +112,9 @@ measure already, and nothing in this room starts a process.
   it. — `back::tests::the_rig_and_the_bench_leave_a_body_room_to_turn`
 - The room is wide enough for the rig and whatever stands either side of
   it. — `back::tests::the_room_is_wide_enough_for_what_is_in_it`
+- And neither side of the bay can be walked into and not out of, which spec
+  0043 now asks of every room at
+  once. — `room::tests::no_room_lets_you_in_and_not_out`
 - You can walk in from the gallery to the working spot and back out
   again. — `back::tests::you_can_walk_in_and_out_again`
 - There is room to stand at the rig, clear of it and out of the
