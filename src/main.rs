@@ -18,6 +18,7 @@ mod gesture;
 mod glass;
 mod globe;
 mod gyro;
+mod kept;
 mod keys;
 // **Allowed to be unused until the bench exists.** Spec 0050's cube is being
 // built state first: what a turn does to twenty pieces is provable without a
@@ -338,6 +339,20 @@ fn staged() -> bool {
 /// that has been done.
 fn done_already() -> bool {
     blitzkit::asked_for("--done")
+}
+
+/// Whether this run opens with nothing answered, whatever the building
+/// remembers. `--forget`.
+///
+/// **Ignored rather than deleted.** A flag that deletes is a flag that
+/// deletes when you fat-finger it, and the run then saves over what was
+/// there as it goes, which is what starting again means.
+///
+/// It is also the way back to a building that has something to tell you:
+/// spec 0119's note sounds five times in a life once the trail is kept,
+/// rather than five times a run.
+fn forgetting() -> bool {
+    blitzkit::asked_for("--forget")
 }
 
 /// Whether this run flies rather than walks. `--fly`.
@@ -1358,6 +1373,17 @@ struct Arcade {
     deck_built: f32,
     /// How many spans had sounded when this was last looked at. Spec 0119.
     spans_sounded: usize,
+    /// Where the building keeps what it remembers, or nowhere. Spec 0120.
+    ///
+    /// **Nowhere until something hands it a path, and `new` never does.**
+    /// A thousand tests build one of these and two of them compare
+    /// pictures of the field, so an arcade that went looking for a save
+    /// would make the gate pass or fail by whatever was last played.
+    /// `main` is what sets this and no test reaches `main`.
+    remembers: Option<std::path::PathBuf>,
+    /// How many stations the file held when it was last written. Spec
+    /// 0120.
+    saved: usize,
     /// Whether the list of every key is up, per spec 0116. Off until asked:
     /// the corner already says how to walk, and the rest is for somebody who
     /// has wondered whether there is more.
@@ -1788,6 +1814,8 @@ impl Arcade {
             deck_reaches,
             deck_built: deck_reaches,
             spans_sounded,
+            remembers: None,
+            saved: spans_sounded,
             rig_step: 2,
             rig_many: false,
             rig_meshes: Vec::new(),
@@ -2917,6 +2945,28 @@ impl Arcade {
 
     /// How fast you are getting about: walking, running, or wading.
     ///
+    /// Hand the building a trail somebody has already walked, and
+    /// everything that is worked out from one. Spec 0120.
+    ///
+    /// **Four fields and not one, which is why this is a method.**
+    /// `Arcade::new` works the other three out from the trail it builds,
+    /// and anything that replaces the trail afterwards has to do the same
+    /// or the building disagrees with itself: a full trail with the deck
+    /// left at nought is a finished bridge you cannot stand on, which is
+    /// what seven walking tests and two pictures got when the deck became
+    /// its own field. Written once here so the next caller cannot repeat
+    /// it.
+    ///
+    /// `saved` goes with them, because what was just read off the file
+    /// matches the file and does not want writing back.
+    fn has_walked(&mut self, trail: trail::Trail) {
+        self.trail = trail;
+        self.deck_reaches = bridge::reach(&self.trail);
+        self.deck_built = self.deck_reaches;
+        self.spans_sounded = self.trail.given().len();
+        self.saved = self.spans_sounded;
+    }
+
     /// Which spans have gone up since this was last asked, as the steps
     /// to sound for them. Spec 0119.
     ///
@@ -9668,6 +9718,25 @@ impl Game for Arcade {
             }
         }
 
+        // and the file, when a room has answered since it was last
+        // written. Spec 0120.
+        //
+        // **When the trail changes and not on the way out.** The way out
+        // of this building is Escape or a window closed, and a save that
+        // needs a clean exit is the save that is not there the one time
+        // it mattered.
+        //
+        // **Its own mark rather than `notes_due`'s.** That one is emptied
+        // by the frame that sounds, and a write that read it would be a
+        // write that never happened on a run where the sound failed.
+        if self.trail.given().len() != self.saved {
+            self.saved = self.trail.given().len();
+
+            if let Some(at) = &self.remembers {
+                kept::write(at, &self.trail);
+            }
+        }
+
         // and the deck walking out to meet it. Spec 0119, which is spec
         // 0117's winding built: what is drawn moves every frame for six
         // seconds and `before_frame` rebuilds the meshes behind it.
@@ -14808,7 +14877,25 @@ fn main() {
 
     garden::runs_for(how_long_a_day_is());
 
-    start("capriccio", Box::new(Arcade::new()));
+    let mut arcade = Arcade::new();
+
+    // what the building remembers between visits. Spec 0120, and here
+    // rather than in `Arcade::new` for the reason `remembers` gives.
+    //
+    // **A run given `--done` keeps nothing and writes nothing.** It is a
+    // diagnostic, like `--pose` and `--fly`, and a diagnostic that
+    // overwrites a real save is a trap.
+    if !done_already() {
+        if let Some(at) = kept::where_it_remembers() {
+            if !forgetting() {
+                arcade.has_walked(kept::read(&at));
+            }
+
+            arcade.remembers = Some(at);
+        }
+    }
+
+    start("capriccio", Box::new(arcade));
 }
 
 #[cfg(test)]
@@ -15040,16 +15127,18 @@ mod tests {
         let mut arcade = Arcade::new();
 
         if done {
+            let mut walked = trail::Trail::new();
+
             for one in trail::Asked::every() {
-                arcade.trail.gave(*one);
+                walked.gave(*one);
             }
 
-            // **And the deck with it.** Spec 0119: how far the deck has
-            // come is its own field and `new` works it out from the trail,
-            // so a trail filled afterwards leaves a finished building with
-            // a stub in the field. `the_horizon_is_drawn` is what says so.
-            arcade.deck_reaches = bridge::reach(&arcade.trail);
-            arcade.deck_built = arcade.deck_reaches;
+            // **Through `has_walked` and not by filling the trail.** Spec
+            // 0119: how far the deck has come is its own field and `new`
+            // works it out from the trail, so a trail filled afterwards
+            // leaves a finished building with a stub in the field.
+            // `the_horizon_is_drawn` is what said so.
+            arcade.has_walked(walked);
         }
 
         arcade.art_from = stand_in_art;
@@ -17412,6 +17501,118 @@ mod tests {
         );
     }
 
+    /// Spec 0120: a building made in a test remembers nowhere.
+    ///
+    /// **The one that matters more than the feature.** A thousand tests
+    /// build an `Arcade` and two of them compare pictures of the field, so
+    /// a `new` that went looking for a save would make the gate pass or
+    /// fail by whatever Jake last played. `main` is what hands it a path
+    /// and no test reaches `main`.
+    #[test]
+    fn a_building_made_in_a_test_remembers_nowhere() {
+        assert!(
+            Arcade::new().remembers.is_none(),
+            "a building made in a test has somewhere to write"
+        );
+        assert!(
+            on_a_finished_bridge().remembers.is_none(),
+            "a building handed a walked trail has somewhere to write"
+        );
+    }
+
+    /// Spec 0120: a room answering writes the file, and nothing else does.
+    ///
+    /// **Both halves, and the second is the one with teeth.** A write on
+    /// every frame would pass a test that only asked whether the file was
+    /// there, and would also be sixty writes a second for the whole of a
+    /// run.
+    ///
+    /// **And a building that remembers nowhere writes nothing**, which is
+    /// what a run given `--done` is: that flag leaves `remembers` unset
+    /// rather than being asked about down here. Whether the flag does
+    /// leave it unset is `main`'s, and is checked by hand.
+    #[test]
+    fn the_file_is_written_when_a_room_answers() {
+        let at = std::env::temp_dir()
+            .join("capriccio-writes-test")
+            .join("trail");
+        let mut one = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+        let dt = 1.0 / 60.0;
+
+        let _ = std::fs::remove_file(&at);
+        one.remembers = Some(at.clone());
+
+        one.update(dt, &mut geometry, &mut text, &sound);
+        assert!(!at.exists(), "a run that has answered nothing wrote a file");
+
+        one.trail.gave(trail::Asked::OpenedTheCase);
+        one.update(dt, &mut geometry, &mut text, &sound);
+        assert_eq!(
+            kept::read(&at).given(),
+            &[trail::Asked::OpenedTheCase],
+            "the cellar answered and the file does not say so"
+        );
+
+        // and a frame in which nothing was answered leaves it alone, which
+        // is asked by taking the file away and seeing it stay away
+        let _ = std::fs::remove_file(&at);
+        one.update(dt, &mut geometry, &mut text, &sound);
+        assert!(
+            !at.exists(),
+            "a frame in which nothing was answered wrote the file again"
+        );
+
+        // and the control: a building that remembers nowhere writes
+        // nothing, however much it answers
+        let mut quiet = Arcade::new();
+
+        quiet.trail.gave(trail::Asked::OpenedTheCase);
+        quiet.update(dt, &mut geometry, &mut text, &sound);
+
+        assert!(
+            !at.exists(),
+            "a building that remembers nowhere wrote to somebody else's \
+             file"
+        );
+    }
+
+    /// Spec 0120: a trail handed to the building takes the rest with it.
+    ///
+    /// **Which is the fault spec 0119 found twice**, once in seven walking
+    /// tests and once in two pictures: how far the deck has come is its
+    /// own field, so a trail set without it is a finished bridge with a
+    /// stub to stand on. `has_walked` is the one place that does all four,
+    /// and this is what says it still does.
+    #[test]
+    fn a_walked_trail_brings_the_deck_with_it() {
+        let mut one = Arcade::new();
+        let mut walked = trail::Trail::new();
+
+        assert_eq!(one.deck_reaches, bridge::reach(&trail::Trail::new()));
+
+        for asked in trail::Asked::every() {
+            walked.gave(*asked);
+        }
+
+        one.has_walked(walked);
+
+        assert_eq!(
+            one.deck_reaches, 1.0,
+            "a finished trail left the deck at {}",
+            one.deck_reaches
+        );
+        assert_eq!(one.deck_built, one.deck_reaches, "the meshes are behind");
+        assert_eq!(
+            one.notes_due().len(),
+            0,
+            "a trail that was read off a file owes five notes, so opening \
+             the building sounds the whole run"
+        );
+    }
+
     /// Spec 0119: a room answering sounds once, and only a room answering.
     ///
     /// **The note is counted and not heard.** `SoundSystem` hands what it
@@ -17490,13 +17691,13 @@ mod tests {
     /// in it.
     fn on_a_finished_bridge() -> Arcade {
         let mut one = Arcade::new();
+        let mut walked = trail::Trail::new();
 
         for asked in trail::Asked::every() {
-            one.trail.gave(*asked);
+            walked.gave(*asked);
         }
 
-        one.deck_reaches = bridge::reach(&one.trail);
-        one.deck_built = one.deck_reaches;
+        one.has_walked(walked);
 
         one
     }

@@ -67,6 +67,12 @@ pub const OPTIONS: Options = Options {
             says: "every question on the trail already answered, so the bridge and the hall at the top of it are there",
         },
         Asked {
+            name: "--forget",
+            also: "",
+            takes: "",
+            says: "open with nothing answered, whatever the building remembers, and keep this run instead",
+        },
+        Asked {
             name: "--pose",
             also: "",
             takes: "<seven numbers>",

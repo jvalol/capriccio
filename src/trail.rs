@@ -141,6 +141,44 @@ impl Asked {
     /// honest is `tests::every_one_of_them_is_in_every`, whose match is
     /// exhaustive: a new variant stops that test compiling, and the test
     /// then says this list is short.
+    /// What this station is called when it is written down. Spec 0120.
+    ///
+    /// **A name and not a number.** The file is a list of what somebody
+    /// did and is meant to be readable, which is the only register this
+    /// building has; and a number would be an index into `every`, which
+    /// has been reordered twice in a fortnight and would silently turn an
+    /// old file into a different trail.
+    ///
+    /// **A match and not a table**, so a station added to this enum stops
+    /// it compiling rather than being quietly unwritable.
+    pub fn named(self) -> &'static str {
+        match self {
+            Asked::OpenedTheCase => "opened-the-case",
+            Asked::WadedInThePool => "waded-in-the-pool",
+            Asked::SolvedTheCube => "solved-the-cube",
+            Asked::GotBehindTheWall => "got-behind-the-wall",
+            Asked::RodeToTheSun => "rode-to-the-sun",
+        }
+    }
+
+    /// The station of that name, or nothing.
+    ///
+    /// **Nothing rather than an error, and that is the whole of what this
+    /// is for.** `Asked` has changed three times in a fortnight: the
+    /// tesseract came out of it, the field came out of it, and the order
+    /// became a curve. A file written by an arcade of a fortnight ago has
+    /// to open, and a name this one no longer knows is a room that no
+    /// longer asks rather than a broken save.
+    ///
+    /// Read off `every` rather than matched, so there is one list of the
+    /// names and it is `named`.
+    pub fn of_name(name: &str) -> Option<Asked> {
+        Asked::every()
+            .iter()
+            .find(|one| one.named() == name)
+            .copied()
+    }
+
     pub fn every() -> &'static [Asked] {
         &[
             Asked::OpenedTheCase,
@@ -186,6 +224,37 @@ impl Trail {
     /// In the order they were given.
     pub fn given(&self) -> &[Asked] {
         &self.given
+    }
+
+    /// What this trail looks like written down. Spec 0120.
+    ///
+    /// One station per line, by name, in the order they were given, which
+    /// is the only thing in here that means anything. A trailing newline,
+    /// so the file is a file rather than a line.
+    pub fn written(&self) -> String {
+        self.given
+            .iter()
+            .map(|one| format!("{}\n", one.named()))
+            .collect()
+    }
+
+    /// And a trail read back out of that. Spec 0120.
+    ///
+    /// **Nothing in here can fail.** A name nothing answers to is
+    /// skipped, a blank line is skipped, surrounding space is ignored,
+    /// and a station written twice is given once, which `gave` already
+    /// does. What a file cannot do is stop the building opening, so there
+    /// is no error to return and nothing to decide at the call.
+    pub fn read_back(text: &str) -> Self {
+        let mut out = Self::new();
+
+        for line in text.lines() {
+            if let Some(one) = Asked::of_name(line.trim()) {
+                out.gave(one);
+            }
+        }
+
+        out
     }
 
     /// Whether the building has given up anything at all.
@@ -306,6 +375,113 @@ mod tests {
             1,
             "opening the bookcase again scored again"
         );
+    }
+
+    /// Spec 0120: what is written comes back in the order it went.
+    ///
+    /// **Not in `every` order**, which is what a set of flags would give
+    /// back and is the one thing the record is not: the kerbs and the
+    /// ledger both read the order, so a round trip that sorted would
+    /// repaint somebody's bridge.
+    #[test]
+    fn what_is_written_comes_back_in_the_order_it_went() {
+        let mut trail = Trail::new();
+
+        trail.gave(Asked::RodeToTheSun);
+        trail.gave(Asked::OpenedTheCase);
+        trail.gave(Asked::SolvedTheCube);
+
+        let back = Trail::read_back(&trail.written());
+
+        assert_eq!(
+            back.given(),
+            trail.given(),
+            "a trail written out and read back is a different trail"
+        );
+        assert_ne!(
+            back.given(),
+            &[
+                Asked::OpenedTheCase,
+                Asked::SolvedTheCube,
+                Asked::RodeToTheSun
+            ],
+            "it came back in `every` order, so the order was not kept and \
+             the one thing in the record that means anything is gone"
+        );
+    }
+
+    /// Spec 0120: a file from an older arcade still opens.
+    ///
+    /// **Which is a thing that has already happened three times.** The
+    /// tesseract came out of `Asked` on 2026-11-18, the field came out the
+    /// same day, and the order became a curve. A save written before any
+    /// of those names a station this arcade no longer has.
+    #[test]
+    fn a_file_from_an_older_arcade_still_opens() {
+        let older = "rode-to-the-sun\nturned-the-sixth-display\nopened-the-case\n";
+        let back = Trail::read_back(older);
+
+        assert_eq!(
+            back.given(),
+            &[Asked::RodeToTheSun, Asked::OpenedTheCase],
+            "a name this arcade does not know took the rest of the file \
+             with it"
+        );
+    }
+
+    /// Spec 0120: nothing in a file can stop the building opening.
+    ///
+    /// Blank lines, space round a name, a name twice, and a file that is
+    /// not a trail at all.
+    #[test]
+    fn nothing_written_in_it_can_break_it() {
+        for (text, wants) in [
+            ("", 0),
+            ("\n\n\n", 0),
+            ("  opened-the-case  \n", 1),
+            ("opened-the-case\nopened-the-case\n", 1),
+            ("{\"given\": [1, 2, 3]}", 0),
+            ("\u{0}\u{1}\u{2}", 0),
+        ] {
+            assert_eq!(
+                Trail::read_back(text).given().len(),
+                wants,
+                "{:?} read back as {} stations",
+                text,
+                Trail::read_back(text).given().len()
+            );
+        }
+    }
+
+    /// Spec 0120: every station can be written down and read back.
+    ///
+    /// **The names are their own list and this is what holds it.**
+    /// `named` is an exhaustive match, so a station added to the enum
+    /// stops that compiling; what nothing else catches is two stations
+    /// given the same name, which would make one of them unreadable.
+    #[test]
+    fn every_station_has_a_name_of_its_own() {
+        let mut names: Vec<&'static str> = Asked::every().iter().map(|one| one.named()).collect();
+        let many = names.len();
+
+        names.sort_unstable();
+        names.dedup();
+
+        assert_eq!(many, names.len(), "two stations share a name");
+
+        for one in Asked::every() {
+            assert_eq!(
+                Asked::of_name(one.named()),
+                Some(*one),
+                "{:?} does not come back from its own name",
+                one
+            );
+            assert!(
+                !one.named().trim().is_empty(),
+                "{:?} has no name to write down",
+                one
+            );
+        }
     }
 
     #[test]

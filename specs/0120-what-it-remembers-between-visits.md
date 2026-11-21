@@ -1,6 +1,6 @@
 # 0120 What it remembers between visits
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-20
 
 ## Goal
@@ -114,23 +114,49 @@ rather than a flag is a real question. It is not this spec's.
 
 ## Acceptance criteria
 
-- A trail written out and read back is the same trail, in the same order. —
+- A trail written out and read back is the same trail, in the same order, and
+  not in `every` order. —
   `trail::tests::what_is_written_comes_back_in_the_order_it_went`
 - A name nothing answers to is skipped and the rest of the file is kept. —
   `trail::tests::a_file_from_an_older_arcade_still_opens`
+- Nothing written in the file can break it: blank lines, space, a name twice,
+  JSON, and bytes that are not text. —
+  `trail::tests::nothing_written_in_it_can_break_it`
+- Every station can be written down and read back, and no two share a name. —
+  `trail::tests::every_station_has_a_name_of_its_own`
+- What goes to the file comes back off it. —
+  `kept::tests::what_goes_to_the_file_comes_back_off_it`
 - A missing file and an unreadable one are both somebody who has not been
-  here. — `trail::tests::nothing_to_read_is_a_first_visit`
+  here. — `kept::tests::nothing_to_read_is_a_first_visit`
+- It is kept in a folder of the arcade's own and not in somebody's home. —
+  `kept::tests::it_remembers_somewhere_of_its_own`
 - `Arcade::new` remembers nowhere, so nothing a test builds can read or write
   a save. — `tests::a_building_made_in_a_test_remembers_nowhere`
-- A room answering writes the file, and a frame where nothing was answered does
-  not. — `tests::the_file_is_written_when_a_room_answers`
-- A run given `--done` writes nothing. —
-  `tests::a_run_that_was_told_it_was_done_does_not_save`
+- A room answering writes the file, a frame where nothing was answered does
+  not, and a building that remembers nowhere writes nothing at all. —
+  `tests::the_file_is_written_when_a_room_answers`
+- A trail read off the file brings the deck and the notes with it, so opening
+  the building does not sound the whole run at you. —
+  `tests::a_walked_trail_brings_the_deck_with_it`
+
+  **`--done` has no test of its own.** What it does is leave `remembers`
+  unset, and that it writes nothing once unset is the control in the test
+  above. Whether the flag leaves it unset is `main`'s, which no test reaches
+  without an argv to hand it, and inventing one for this is more machinery
+  than the thing. It is checked by hand instead.
 
 ### Verified by hand
 
+- A trail put in the file by hand opens a building that is that far along. —
+  **done 2026-11-20**: `opened-the-case` and `waded-in-the-pool` written to
+  the file, and the arcade opened with three sixths of a deck and a ledger
+  reading both entries and then "Nobody has played with the cube and then
+  solved it". `--forget` on the same file opened a stub and one line, and
+  neither run touched what was in it, nothing having been answered in either.
 - Answer something, quit, open it again, and the bridge is where you left it
   and the stone still says it. — play it twice.
+- A run given `--done` leaves the file as it was. — play it, then look at the
+  file's time.
 - The file reads as a list of what you did. — open it.
 
 ## Out of scope
