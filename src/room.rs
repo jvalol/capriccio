@@ -2357,8 +2357,25 @@ impl Room {
                     let in_the_hall = hall
                         .map(|(from, to)| square.0.x > from && square.0.x < to)
                         .unwrap_or(false);
+                    // **And a fitting is a whole tile.** A grid cuts its
+                    // border tiles, which `lines` does and which is what a
+                    // grid is; nobody installs a sliced luminaire. The
+                    // checker picks by index, so the leftovers along two
+                    // walls were taking lights with them: thirteen of
+                    // thirty three, the worst 0.23 deep and 0.32 wide
+                    // against a whole tile of 1.10. Jake, 2026-11-21,
+                    // looking at this ceiling through the garden's
+                    // doorway: that would never be something in the real
+                    // world.
+                    //
+                    // Equal to a tile and not at least one. A run whose
+                    // end swallowed a line leaves a square wider than a
+                    // tile, and that is not a fitting either.
+                    let whole = CEIL_TILE - CEIL_BAR;
+                    let a_whole_tile =
+                        (square.1.x - whole).abs() < 1e-3 && (square.1.z - whole).abs() < 1e-3;
 
-                    if in_the_hall && lit_square(column, row) {
+                    if in_the_hall && a_whole_tile && lit_square(column, row) {
                         panels.push(square);
                     } else {
                         tiles.push(square);
@@ -2668,6 +2685,44 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+
+    /// Spec 0005: every lit panel in the hall is a whole tile.
+    ///
+    /// **A grid cuts its border tiles and nobody cuts the fittings.**
+    /// `lit_square` picks by index and `lines` leaves whatever is over at
+    /// each end of a run, so thirteen of the hall's thirty three panels
+    /// were offcuts: 0.23 deep along one wall and 0.32 wide along another,
+    /// against a whole tile of 1.10. Jake saw one of them through the
+    /// garden's doorway on 2026-11-21 and said it would never be something
+    /// in the real world.
+    ///
+    /// The count is the other half. Lighting nothing would pass the first
+    /// assertion and is not what the ceiling is for.
+    #[test]
+    fn every_lit_panel_is_a_whole_tile() {
+        let room = Room::of(crate::games());
+        let (_, _, panels) = room.lattice();
+        let whole = CEIL_TILE - CEIL_BAR;
+
+        assert!(
+            panels.len() > 10,
+            "the hall has {} lit panels, which is not a lit ceiling",
+            panels.len()
+        );
+
+        for (at, size) in panels.iter() {
+            assert!(
+                (size.x - whole).abs() < 1e-3 && (size.z - whole).abs() < 1e-3,
+                "the panel at ({:.2}, {:.2}) is {:.2} by {:.2}, against a \
+                 whole tile of {:.2}",
+                at.x,
+                at.z,
+                size.x,
+                size.z,
+                whole
+            );
+        }
+    }
 
     /// Spec 0094: one lamp over each exhibit, at the exhibit's own place.
     ///

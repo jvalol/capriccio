@@ -122,6 +122,8 @@ because it was the first answer and the measurement is what settled it.
 - The hall's grid is laid to the world and not to each piece of the lid. — `room::tests::the_lid_is_one_grid_laid_to_the_world`
 - No tile is level with a bar, or over one. — `room::tests::no_ceiling_tile_is_level_with_a_bar`
 - The lit panels are the hall's and the nook has none. — `room::tests::no_lit_panel_is_over_the_nook`
+- And every one of them is a whole tile, the border offcuts being tile and not
+  fitting. — `room::tests::every_lit_panel_is_a_whole_tile`
 - And every square of the grid is a tile or a panel, and not both. — `room::tests::every_square_of_the_grid_is_a_tile_or_a_panel`
 - Nothing hung from the baths' ceiling runs into anything. — `spa::tests::nothing_hung_from_the_ceiling_runs_into_anything`
 - Both borders are mitred, the ceiling's and the floor's, so no two runs of
@@ -197,6 +199,19 @@ position, so there is no light in the hall that is not in a fitting.
 spot. The other two were two runs down the length of the hall, which read as a
 corridor and left the ceiling between them dark, and nothing at all. A checker
 lights the ceiling evenly and reads as a room somebody fitted out.
+
+**And every one of them is a whole tile.** The checker picks by index, and the
+grid's lines are the world's own spacing with whatever is left over at each end
+of a run, so the border squares were taking lights with them: thirteen of
+thirty three, the worst 0.23 deep down one wall and 0.32 wide down another,
+against a whole tile of 1.10. Jake saw one of them through the garden's
+doorway on 2026-11-21 and said it would never be something in the real world.
+A grid cuts its border tiles, which is what a grid is; nobody installs a
+sliced luminaire.
+
+What it costs is a seventh of the hall's light, 59 to 55 on the mean of the
+staged shot, and the picture is near enough the same one. That is the right
+way for this room to be wrong, per the dimness this spec started from.
 
 **Cool, where everything else in the building is warm.** A panel in a ceiling
 grid is a tube behind a diffuser, which is the one cold light an arcade has,
