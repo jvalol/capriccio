@@ -3,9 +3,10 @@
 **Status:** implemented
 **Date:** 2026-11-21
 **Built:** 2026-11-21, the same day, in three rounds off three screenshots,
-a fourth for the fault they left behind, and eight more on Jake's own
+a fourth for the fault they left behind, and nine more on Jake's own
 pictures of it running, on a photograph and a video of the real thing, on the
-room wanting to be symmetrical, and on walking round the pair.
+room wanting to be symmetrical, on walking round the pair, and on one of them
+being jitterier than the other.
 
 ## Goal
 
@@ -137,6 +138,8 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   the slowest. — `plasma::tests::the_arms_crawl_at_their_own_rates_and_jump_apart`
 - Arms come and go, and the globe is never wholly
   dark. — `plasma::tests::the_arms_come_and_go_and_the_globe_is_never_dark`
+- And neither globe writhes faster than the
+  other. — `plasma::tests::neither_globe_writhes_faster_than_the_other`
 - And the room still cannot be walked into and not out of, which spec 0043
   asks of every room at once. — `room::tests::no_room_lets_you_in_and_not_out`
 
@@ -257,7 +260,22 @@ up all dark sooner than it feels like they should: inside ten minutes of
 running, at nearly a third each. So an arm cannot go out if it is the last
 one, and the globe is never dark by construction rather than by luck.
 
-**And the reaching was true and could not be seen.** Jake, having walked
+**And the east one was six times jitterier than the west one.** Jake,
+watching the pair: the right one is a lot more jittery than the left one. It
+was, by 6.7 times measured, and the cause is one line's worth of carelessness
+repeated five times. An arm's seed carries which globe it stands on, as a
+number in the hundreds, and five places were multiplying time by that seed.
+The east globe's threads ran at fifty-four radians a second against the
+west's three, and its sparks breathed at forty a second.
+
+A seed is for seeding. Anything that multiplies time has to be bounded, and
+the five places take a scatter of their own now rather than the seed itself.
+`neither_globe_writhes_faster_than_the_other` holds it from the outside, by
+the only thing that matters, which is how far the middle of a thread moves in
+a frame. With the seed put back as a rate it reports 6.70 times, at 0.0237
+against 0.0035.
+
+**And before that, the reaching was true and could not be seen.** Jake, having walked
 round the pair: the arms should also reach toward wherever I am standing.
 They already did, by construction and under test since the first build, which
 is the whole of the problem. The fan is eighty-six degrees, most of a

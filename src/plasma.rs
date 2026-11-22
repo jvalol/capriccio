@@ -143,6 +143,19 @@ pub const FAN: f32 = 1.5;
 /// coming to your hand, few enough to leave the globe a globe.
 pub const KEENEST: f32 = 0.82;
 
+/// How quick one arm's own writhing is, between nought and one.
+///
+/// **Off a scatter, and never off the arm's seed.** That seed carries which
+/// globe the arm stands on, which is a number in the hundreds, and five
+/// places were multiplying time by it: the east globe's threads writhed six
+/// times faster than the west's and its sparks flickered at forty a second.
+/// Jake, watching the pair: the right one is a lot more jittery than the
+/// left one. A seed is for seeding. Anything that multiplies time has to be
+/// bounded, and this is.
+pub fn quickness(which: usize, side: usize) -> f32 {
+    scatter(of_the_arm(which, side) + 41.9)
+}
+
 /// How keenly one arm favours the eye, which is a thing about the arm and
 /// not about the moment: a keen one is keen for as long as it is lit.
 pub fn keenness(which: usize, side: usize) -> f32 {
@@ -478,8 +491,9 @@ pub fn filament(
         // fresh arm is a new discharge rather than the old one moved
         let struck = scatter(n * 5.1 + struck_at(which, side, clock(which, side, since).0))
             * std::f32::consts::TAU;
-        let slow = since * (3.2 + n * 0.5) + k as f32 * WANDERS_BY + struck;
-        let fast = since * (7.9 + n * 0.9) + k as f32 * CRINKLES_BY + struck * 2.0;
+        let quick = quickness(which, side);
+        let slow = since * (3.2 + 7.5 * quick) + k as f32 * WANDERS_BY + struck;
+        let fast = since * (7.9 + 13.5 * quick) + k as f32 * CRINKLES_BY + struck * 2.0;
         let off = (across * slow.cos() + other * slow.sin()) * (held * WANDER)
             + (across * fast.cos() + other * fast.sin()) * (held * CRINKLE);
 
@@ -586,9 +600,9 @@ pub fn branch(
     for (k, link) in links.iter_mut().enumerate() {
         let t = k as f32 / BRANCH_LINKS as f32;
         let held = (t * std::f32::consts::PI).sin() * shell;
-        let slow = since * (2.9 + of_the_arm(which, side) * 0.4) + k as f32 * WANDERS_BY + seed;
-        let fast =
-            since * (6.1 + of_the_arm(which, side) * 0.6) + k as f32 * CRINKLES_BY + seed * 2.0;
+        let quick = quickness(which, side);
+        let slow = since * (2.9 + 6.0 * quick) + k as f32 * WANDERS_BY + seed;
+        let fast = since * (6.1 + 9.0 * quick) + k as f32 * CRINKLES_BY + seed * 2.0;
 
         *link = from.lerp(lands, t)
             + (across * slow.cos() + other * slow.sin()) * (held * WANDER)
@@ -769,7 +783,7 @@ fn draw_one(
             continue;
         };
         let n = of_the_arm(which, side);
-        let breath = 0.85 + 0.15 * (since * (2.1 + n * 0.37) + n * 2.9).sin();
+        let breath = 0.85 + 0.15 * (since * (2.1 + 5.5 * quickness(which, side)) + n * 2.9).sin();
 
         for (at, size) in [
             (spark_at(reaches, which, side, eye, since), 1.0),
@@ -1324,6 +1338,58 @@ mod tests {
             keenness(mine, 1) > 0.5,
             "the arm that sits nearest you has a keenness of {:.2}, so it got there by chance",
             keenness(mine, 1)
+        );
+    }
+
+    /// Spec 0122: neither globe writhes faster than the other.
+    ///
+    /// **Jake, watching the pair: the right one is a lot more jittery than
+    /// the left one.** It was, by a factor of six, and the cause is one
+    /// line's worth of carelessness repeated five times. An arm's seed
+    /// carries which globe it stands on, as a number in the hundreds, and
+    /// five places were multiplying time by that seed: the east globe's
+    /// threads ran at fifty-four radians a second against the west's three,
+    /// and its sparks breathed at forty a second.
+    ///
+    /// A seed is for seeding. Anything that multiplies time has to be
+    /// bounded, and this holds that from the outside: the middle of a thread
+    /// moves at the same sort of rate whichever globe it is on.
+    #[test]
+    fn neither_globe_writhes_faster_than_the_other() {
+        let reaches = reaches();
+        let frames = 1200;
+        let step = 1.0 / 60.0;
+        let mut each = Vec::new();
+
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
+            let eye = middle + vec3(1.3, 0.2, 0.4);
+            let mut moves: Vec<f32> = Vec::new();
+
+            for frame in 0..frames {
+                let since = frame as f32 * step;
+
+                for which in 0..FILAMENTS {
+                    let was = filament(reaches, which, side, eye, since)[LINKS / 2];
+                    let now = filament(reaches, which, side, eye, since + step)[LINKS / 2];
+
+                    moves.push(was.distance(now) / shell);
+                }
+            }
+
+            moves.sort_by(|one, two| one.total_cmp(two));
+            each.push(moves[moves.len() / 2]);
+        }
+
+        let quick = each.iter().copied().fold(f32::MIN, f32::max);
+        let slow = each.iter().copied().fold(f32::MAX, f32::min);
+
+        assert!(
+            quick / slow < 1.4,
+            "one globe's threads move {:.2} times the other's, at {:.5} against {:.5}",
+            quick / slow,
+            quick,
+            slow
         );
     }
 
