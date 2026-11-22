@@ -4077,15 +4077,28 @@ impl Arcade {
         // mown gap between two rows of cabins
         // the street is paved and the common is not, per spec 0123: a
         // village square is where the fire and the cooking are and that is
-        // beaten earth in any town.
+        // beaten earth in any town. The slab under the paving takes the
+        // joint's own colour, so what shows at the edges of the quad laid
+        // on it is the dark between two stones rather than a lighter line.
         for (ground, under) in [
-            (village::track(reaches), aim::VILLAGE_SETT),
+            (village::track(reaches), aim::VILLAGE_JOINT),
             (village::common(reaches), aim::VILLAGE_EARTH),
         ] {
             scene.push_material(
                 cube,
                 &Transform::at(ground.center()).with_scale(ground.size()),
                 under,
+                aim::MATTE,
+            );
+        }
+
+        // and the kerb either side of it, which is what gives the course of
+        // stone a thickness you can see. Spec 0124.
+        for kerb in village::kerbs(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(kerb.center()).with_scale(kerb.size()),
+                aim::VILLAGE_STONE,
                 aim::MATTE,
             );
         }

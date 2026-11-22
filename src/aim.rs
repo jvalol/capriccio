@@ -1441,12 +1441,12 @@ pub const VILLAGE_EARTH: Vec4 = vec4(0.235, 0.195, 0.145, 1.0);
 /// 0.028 along, so a cobble the size of a fist would be three texels and
 /// read as noise. A market street is laid in squared setts anyway, and those
 /// are ten texels across and read as stone.
-pub const VILLAGE_SETT: Vec4 = vec4(0.44, 0.415, 0.385, 1.0);
-pub const VILLAGE_JOINT: Vec4 = vec4(0.235, 0.22, 0.205, 1.0);
+pub const VILLAGE_SETT: Vec4 = vec4(0.40, 0.385, 0.365, 1.0);
+pub const VILLAGE_JOINT: Vec4 = vec4(0.085, 0.080, 0.075, 1.0);
 
 /// The ruts, which on a paved street are not worn into it but polished
 /// along it: the same stone, darker and smoother, where the wheels run.
-pub const VILLAGE_RUT: Vec4 = vec4(0.30, 0.285, 0.27, 1.0);
+pub const VILLAGE_RUT: Vec4 = vec4(0.25, 0.24, 0.23, 1.0);
 
 /// And a cabin's door, a shade darker than the boards round it so it reads
 /// as an opening rather than as a panel.

@@ -730,19 +730,105 @@ pub fn rut_runs(side: f32, along: f32) -> f32 {
 /// along it and every 39 across, which puts nine of them across a rut. A
 /// power of two each way because the mips halve to a pixel and a run of
 /// odd sizes rounds differently every level.
-pub const FACE_WIDE: u32 = 2048;
+pub const FACE_WIDE: u32 = 4096;
 
-/// **Five hundred and twelve across, where it was two fifty six.** The face
-/// is one texture over a street 58 by 10, so at 256 a texel is 3.9
-/// centimetres across and spec 0123's joint between two setts is 3.5: the
-/// joints fell under a texel, aliased away, and what the street read as was
-/// a chequer of bare stones. At 512 a joint is two and a half texels and a
-/// sett is fourteen.
-pub const FACE_TALL: u32 = 512;
+/// **Seven hundred and sixty eight across, and four thousand along.** The
+/// face is one texture over a street 58 by 10. At 256 across, a texel was
+/// 3.9 centimetres and spec 0123's joint was 3.5: the joints fell under a
+/// texel, aliased away, and the street read as a chequer of bare stones. 512
+/// bought a joint two and a half texels wide. Spec 0124 wants the stones of
+/// Jake's second photograph, which are a hand across and rounded, so the
+/// setts came down to 0.20 and the face went up again: a texel is now 1.4
+/// centimetres along and 1.3 across, which is fifteen to a stone, enough to
+/// carry a dome and a joint. Twelve megabytes, built once.
+pub const FACE_TALL: u32 = 768;
 
 /// How big one sett is and how wide the joint between two of them.
-pub const SETT: f32 = 0.28;
-pub const JOINT: f32 = 0.05;
+pub const SETT: f32 = 0.20;
+pub const JOINT: f32 = 0.035;
+
+/// How far apart the fans are laid down the street.
+///
+/// **Segmentbogenpflaster, which is what Jake's first photograph is.** A
+/// German street is not laid in courses across it. It is laid in fans: the
+/// stones run on concentric arcs about a point on the centre line, and the
+/// next fan starts where the last one ran out. A running bond is a pavement
+/// and this is a street.
+///
+/// A little over half the street's width, which is what sets how far round
+/// an arc bends before the next fan takes over.
+pub const ARC: f32 = STREET_WIDE * 0.55;
+
+/// Which stone a spot on the street belongs to, and how far it is from that
+/// stone's own edge.
+///
+/// **Cutting these as geometry was tried and taken out.** Spec 0124 laid the
+/// street as a `MeshData::surface` with every joint sunk into it, so the sun
+/// would shade the grooves itself the way it shades the garden's water. It
+/// came back as bright streaks down the street, and a groove of four
+/// millimetres drew the same streaks as one of thirty five, which rules out
+/// the angle the walls are lit at and points at the mesh's own normals or at
+/// how its texture registers on it. The street is a flat quad and the depth
+/// is the dome baked into the colour.
+///
+/// **The fan, which is the whole of the pattern.** The nearest fan centre is
+/// on the centre line, `ARC` apart down the street. From there a stone is a
+/// ring out and a step round, so the courses are arcs and not rows, and
+/// where one fan runs out the next begins, which is the seam every street
+/// like this has.
+///
+/// The distance is in metres and is to the nearer of the two edges, the ring
+/// boundary and the one round the arc, so one number answers both what the
+/// joint is and how domed the stone is at that spot.
+pub fn sett_at(along: f32, across: f32, middle: f32) -> ((f32, f32, f32), f32) {
+    let fan = ((along / ARC) - 0.5).round();
+    let (dx, dz) = (along - (fan + 0.5) * ARC, across - middle);
+    // a ring of nothing at the middle of a fan would be a stone of no size,
+    // so the first ring is a whole stone rather than a point
+    let out = (dx * dx + dz * dz).sqrt().max(SETT * 0.5);
+    let ring = (out / SETT).floor();
+
+    // how far round the arc one stone takes, which is a stone's width in
+    // arc length rather than in angle: the outer rings hold more of them
+    let step = SETT / out;
+    let round = dz.atan2(dx);
+    let nth = (round / step).floor();
+
+    let to_ring = (out - ring * SETT).min((ring + 1.0) * SETT - out);
+    let to_side = ((round - nth * step).min((nth + 1.0) * step - round)) * out;
+
+    // **The joint round the arc counts for more than the joint along it.**
+    // The street is looked down, so a ring joint crosses the view and a
+    // radial one runs away along it: read straight, the arcs are all you
+    // see and the stones in them are not there. Three quarters is what puts
+    // a stone back inside its own arc.
+    ((fan, ring, nth), to_ring.min(to_side * 0.75))
+}
+
+/// How wide the kerb either side of the street is and how far it stands over
+/// the paving.
+///
+/// **What gives the stone a thickness you can see.** A groove shows a sett
+/// has a top; a kerb shows the whole street is a course of stone laid on the
+/// ground rather than a pattern printed on it.
+pub const KERB_WIDE: f32 = 0.3;
+pub const KERB_UP: f32 = 0.11;
+
+pub fn kerbs(reaches: f32) -> Vec<Aabb> {
+    let ground = track(reaches);
+
+    [-1.0f32, 1.0]
+        .iter()
+        .map(|side| {
+            let at = ground.center().z + side * (ground.size().z * 0.5 + KERB_WIDE * 0.5);
+
+            Aabb::new(
+                vec3(ground.min.x, ground.max.y - KERB_UP, at - KERB_WIDE * 0.5),
+                vec3(ground.max.x, ground.max.y + KERB_UP, at + KERB_WIDE * 0.5),
+            )
+        })
+        .collect()
+}
 
 /// A number between nought and one from two, which is what gives one sett a
 /// different grey from the one beside it.
@@ -789,35 +875,41 @@ pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
             let along = from.x + (x as f32 + 0.5) / FACE_WIDE as f32 * size.x;
             let across = from.z + (y as f32 + 0.5) / FACE_TALL as f32 * size.z;
 
-            // which course it is in, and half a sett along on every other
-            // one, which is what stops a pavement reading as graph paper
-            let course = (across / SETT).floor();
-            let shift = if course as i32 % 2 == 0 {
-                0.0
-            } else {
-                SETT * 0.5
-            };
-            let stone = ((along + shift) / SETT).floor();
+            // which stone this is, and how far from its own edge
+            let ((fan, ring, nth), near) = sett_at(along, across, ground.center().z);
+            // **Its own joint, wider or narrower than its neighbour's.** A
+            // fan laid off one arithmetic is a perfect fan, and a perfect
+            // fan reads as a moulding rather than as stones somebody set by
+            // hand. A fifth of the joint either way is enough to break it.
+            let wonky = speckle(ring * 2.7 + nth, fan * 5.9);
+            let near = near - JOINT * 0.35 * wonky;
+            // over the joint's whole width and not half of it: at half,
+            // the dark band saturates a centimetre and a half from the edge
+            // and the street washes out to one grey
+            let laid = (near / JOINT).clamp(0.0, 1.0);
+            let laid = laid * laid * (3.0 - 2.0 * laid);
 
-            // how near this texel is to the joint round its own sett
-            let into = |v: f32| (v - v.floor() - 0.5).abs();
-            let edge = into((along + shift) / SETT)
-                .min(into(across / SETT))
-                .mul_add(-2.0, 1.0)
-                * SETT;
-            let laid = (edge / JOINT).clamp(0.0, 1.0);
+            // **Its own grey, warm or cool.** Jake's second photograph is a
+            // street of stones that are each a different stone: one pale,
+            // one blue, one brown, none of them the same. One grey varied
+            // in brightness alone reads as one stone cut up.
+            let own = speckle(fan * 7.3 + ring, nth);
+            let own = own * own * (3.0 - 2.0 * own);
+            let warm = speckle(nth * 3.1 + ring, fan);
+            let mine = sett
+                * (0.78 + 0.46 * own)
+                * vec3(0.95 + 0.1 * warm, 1.0, 1.06 - 0.12 * warm).extend(1.0);
 
-            // this sett's own grey, and then the joint cut round it
-            // **A tenth either way and not a fifth.** Setts differ from
-            // their neighbours and a street of one grey is concrete, but at
-            // 0.82 to 1.18 what the eye reads first is the chequer rather
-            // than the stone.
-            let own = speckle(stone, course);
-            let mine = sett * (0.9 + 0.2 * own);
-            let stoned = joint.lerp(mine, laid);
+            // and the dome on it, which is what stands in for depth here:
+            // the engine has no normal maps and no occlusion, so a stone
+            // falls away toward its own joint in the colour instead. It
+            // does not move when the sun does, and at a hand's width the
+            // eye does not ask it to.
+            let dome = 0.78 + 0.26 * (near / (SETT * 0.5)).clamp(0.0, 1.0).sqrt();
+            let stoned = joint.lerp(mine * dome, laid);
 
-            // how far off the nearer rut it is, soft over the last fifth of
-            // the width so the edge is worn rather than cut
+            // how far off the nearer polished line it is, soft over the last
+            // fifth of its width so the edge is worn rather than cut
             let off = [-1.0f32, 1.0]
                 .iter()
                 .map(|side| (across - (ground.center().z + rut_runs(*side, along))).abs())
@@ -825,7 +917,14 @@ pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
             let wear = RUT_WIDE * 0.1;
             let worn = ((RUT_WIDE * 0.5 + wear - off) / (wear * 2.0)).clamp(0.0, 1.0);
 
-            let colour = stoned.lerp(rut * (0.92 + 0.16 * own), worn);
+            // **The joints run through the polished line too.** Lerped to
+            // the rut's own colour alone, the wheel lines came out as two
+            // bands with no stones in them, which reads as a strip laid over
+            // the paving rather than as the paving worn, and averaged
+            // lighter than the street beside them because the street's
+            // average has its joints in it.
+            let wet = joint.lerp(rut * (0.92 + 0.16 * own) * dome, laid);
+            let colour = stoned.lerp(wet, worn);
             pixels.extend_from_slice(&[
                 encoded(colour.x),
                 encoded(colour.y),
@@ -1462,18 +1561,51 @@ mod tests {
 
             level.pixels[n]
         };
+        let texel_blue = |along: f32, across: f32| {
+            let x = (((along - from.x) / size.x) * FACE_WIDE as f32) as u32;
+            let y = (((across - from.z) / size.z) * FACE_TALL as f32) as u32;
+            let n = ((y.min(FACE_TALL - 1) * FACE_WIDE + x.min(FACE_WIDE - 1)) * 4 + 2) as usize;
+            let level = face.levels.first().expect("a base level");
+
+            level.pixels[n]
+        };
 
         // a quarter, a half and three quarters of the way down it
         for share in [0.25f32, 0.5, 0.75] {
             let along = from.x + size.x * share;
 
+            // **Averaged over a stride and not read off one texel.** The
+            // street was one flat colour when this was written, so one
+            // texel answered for it. Spec 0124 gave every stone its own
+            // grey and a dark joint round it, so a single texel on the rut
+            // can land on a stone while the one beside it lands in a joint,
+            // and the rut reads lighter than the street it is worn into.
+            // and the line is followed as it wanders, rather than held at
+            // one z while the walk goes on without it
+            let steps = 24;
+            let mean = |off: &dyn Fn(f32) -> f32| {
+                let total: u32 = (0..steps)
+                    .map(|n| {
+                        let a = along + n as f32 * SETT * 0.5;
+
+                        texel(a, off(a)) as u32
+                    })
+                    .sum();
+
+                total as f32 / steps as f32
+            };
+
             for side in [-1.0f32, 1.0] {
-                let on = texel(along, ground.center().z + rut_runs(side, along));
-                let off = texel(along, ground.center().z);
+                // beside the line rather than at the street's middle: the
+                // claim is that the stone the wheels run on is darker than
+                // the stone next to it, and the middle of the street is a
+                // different question
+                let on = mean(&|a| ground.center().z + rut_runs(side, a));
+                let off = mean(&|a| ground.center().z + rut_runs(side, a) + RUT_WIDE * 2.0);
 
                 assert!(
                     on < off,
-                    "at {:.1} along, the {} rut reads {} against earth at {}",
+                    "at {:.1} along, the {} rut reads {:.0} against the street at {:.0}",
                     along,
                     if side < 0.0 { "near" } else { "far" },
                     on,
@@ -1485,13 +1617,15 @@ mod tests {
         // and what is between them is paving, read back through the sRGB
         // the sampler will undo.
         //
-        // **A sett or the joint round it, and never the earth.** This asked
-        // for `VILLAGE_EARTH` exactly, which was right while the street was
-        // beaten earth and one flat colour. Spec 0123 paved it, so there is
-        // no one colour to ask for any more: each sett is its own tenth
-        // either side of `VILLAGE_SETT` and the joints between them are
-        // darker still. What survives the paving is the claim underneath,
-        // which is that the street is the street and not the field.
+        // **By its hue and not by its brightness.** This asked for
+        // `VILLAGE_EARTH` exactly, which was right while the street was one
+        // flat colour, and spec 0123 paved it: a sett is its own tenth
+        // either side of `VILLAGE_SETT`, the joints are darker and the band
+        // between the two is every value in between, so no brightness is
+        // the right answer any more. The earth and the joint are within a
+        // thousandth of each other in red, which is what made the first
+        // try of this fail: what tells them apart is that earth is warm and
+        // stone is not.
         let linear = |texel: u8| {
             let one = texel as f32 / 255.0;
 
@@ -1501,23 +1635,28 @@ mod tests {
                 ((one + 0.055) / 1.055).powf(2.4)
             }
         };
+        let warmth = |colour: glam::Vec4| colour.z / colour.x;
 
         for share in [0.2f32, 0.4, 0.6, 0.8] {
-            let back = linear(texel(from.x + size.x * share, ground.center().z));
-            let sett = crate::aim::VILLAGE_SETT.x;
-            let joint = crate::aim::VILLAGE_JOINT.x;
+            let along = from.x + size.x * share;
+            let red = linear(texel(along, ground.center().z));
+            let blue = linear(texel_blue(along, ground.center().z));
+            let mine = blue / red;
 
             assert!(
-                (back - sett).abs() < sett * 0.15 || (back - joint).abs() < joint * 0.2,
-                "the street reads {:.3} at {:.1} along, where a sett is {:.3} and its joint {:.3}",
-                back,
-                from.x + size.x * share,
-                sett,
-                joint
+                mine > warmth(crate::aim::VILLAGE_EARTH) + 0.1,
+                "the street reads {:.2} blue to red at {:.1} along, and the earth it was paved \
+                 over reads {:.2}",
+                mine,
+                along,
+                warmth(crate::aim::VILLAGE_EARTH)
             );
             assert!(
-                (back - crate::aim::VILLAGE_EARTH.x).abs() > 0.05,
-                "the street still reads as the earth it was paved over"
+                (mine - warmth(crate::aim::VILLAGE_SETT)).abs() < 0.12,
+                "the street reads {:.2} blue to red at {:.1} along, where a sett reads {:.2}",
+                mine,
+                along,
+                warmth(crate::aim::VILLAGE_SETT)
             );
         }
     }
