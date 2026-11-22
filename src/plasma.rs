@@ -128,6 +128,29 @@ pub const COOLS_BY: f32 = 2.4;
 /// face.
 pub const FAN: f32 = 1.5;
 
+/// How much of that fan a keen arm gives up to point nearly at the eye.
+///
+/// **Because the reach was true and could not be seen.** Every arm leans
+/// toward whoever is there, by construction and under test, and Jake walked
+/// round it and asked for the arms to reach toward where he was standing.
+/// The fan is eighty-six degrees, which is most of a hemisphere, so the
+/// bunch does swing as you move and what you see is a starfish either way.
+///
+/// So the arms are not all alike in this. Each keeps a keenness of its own,
+/// squared off its own dice so that most of them are dull and a few are not,
+/// and a keen one gives up four fifths of the fan and comes nearly to you
+/// while the rest spread as before. Enough of sixteen to read as a handful
+/// coming to your hand, few enough to leave the globe a globe.
+pub const KEENEST: f32 = 0.82;
+
+/// How keenly one arm favours the eye, which is a thing about the arm and
+/// not about the moment: a keen one is keen for as long as it is lit.
+pub fn keenness(which: usize, side: usize) -> f32 {
+    let of = scatter(of_the_arm(which, side) + 29.3);
+
+    of * of
+}
+
 /// How far a filament wanders off its own line, as a share of the shell, and
 /// how far round that wander turns from one link to the next.
 ///
@@ -300,7 +323,11 @@ pub fn aim(which: usize, side: usize, since: f32) -> (f32, f32) {
         * SWAYS
         * (0.25 + 0.75 * scatter(n + 19.3));
 
-    let lean = (from_lean + was_lean + (now_lean - was_lean) * eased + sway).clamp(0.10, 1.0);
+    // and how near the line to the eye this one keeps, which is the whole
+    // of what makes the reaching legible
+    let tight = 1.0 - KEENEST * keenness(which, side);
+    let lean =
+        ((from_lean + was_lean + (now_lean - was_lean) * eased + sway) * tight).clamp(0.06, 1.0);
     let roll = from_roll + rate * since + was_roll + turn * eased;
 
     (FAN * lean, roll)
@@ -973,8 +1000,13 @@ mod tests {
                 let creep = sorted[sorted.len() / 2];
                 creeps[which] = creep;
 
+                // **A keen arm creeps less and that is the reaching, not a
+                // fault.** An arm pointing nearly at you sits near the pole
+                // of its own cone, where rolling at the same rate moves its
+                // tip hardly at all, so this floor is what a keen arm
+                // manages rather than what a dull one does.
                 assert!(
-                    creep > 0.0005,
+                    creep > 0.00015,
                     "arm {} creeps {:.5} a frame, so it is standing still",
                     which,
                     creep
@@ -1222,6 +1254,76 @@ mod tests {
             differ as f32 / of > 0.15,
             "the two globes are lit and dark together in {:.2} of samples",
             1.0 - differ as f32 / of
+        );
+    }
+
+    /// Spec 0122: some arms come far nearer the line to you than others, and
+    /// which ones is a thing about the arm.
+    ///
+    /// **Jake, having walked round it: the arms should also reach toward
+    /// wherever I am standing.** They already did, by construction and under
+    /// `the_filaments_reach_for_whoever_is_there`, and that is the point: it
+    /// was true and could not be seen. The fan is eighty-six degrees, which
+    /// is most of a hemisphere, so the whole bunch does swing as you move and
+    /// what you see is a starfish either way.
+    ///
+    /// What makes it legible is that the arms are not alike in it. A keen one
+    /// gives up four fifths of the fan and comes nearly to you; a dull one
+    /// spreads as before. So the claim is a spread of keenness rather than
+    /// any one arm's angle, and that the keenest arm is the same arm from
+    /// one moment to the next, since a globe whose keen arms changed every
+    /// second would read as flicker and not as reaching.
+    #[test]
+    fn some_arms_come_far_nearer_you_than_others() {
+        let reaches = reaches();
+        let (middle, _) = globe(reaches, 1);
+        let eye = middle + vec3(1.3, 0.2, 0.4);
+        let toward = (eye - middle).normalize();
+        let mut leans = [0.0f32; FILAMENTS];
+
+        for (which, mine) in leans.iter_mut().enumerate() {
+            let mut off: Vec<f32> = (0..300)
+                .map(|tenths| {
+                    let since = tenths as f32 * 0.11;
+                    let tip = (filament(reaches, which, 1, eye, since)[LINKS] - middle).normalize();
+
+                    tip.dot(toward).clamp(-1.0, 1.0).acos()
+                })
+                .collect();
+
+            off.sort_by(|one, two| one.total_cmp(two));
+            *mine = off[off.len() / 2];
+        }
+
+        let keenest = leans.iter().copied().fold(f32::MAX, f32::min);
+        let dullest = leans.iter().copied().fold(f32::MIN, f32::max);
+
+        assert!(
+            keenest < dullest * 0.4,
+            "the keenest arm sits {:.2} off the line to you and the dullest {:.2}, \
+             which is one spread shared out",
+            keenest,
+            dullest
+        );
+        assert!(
+            keenest < 0.45,
+            "the keenest arm is {:.2} off the line to you, which is not reaching",
+            keenest
+        );
+
+        // and it is the same arm that is keen, rather than a different one
+        // each moment
+        let mine = leans
+            .iter()
+            .enumerate()
+            .min_by(|one, two| one.1.total_cmp(two.1))
+            .map(|(which, _)| which)
+            .unwrap_or(0);
+
+        assert!(
+            keenness(mine, 1) > 0.5,
+            "the arm that sits nearest you has a keenness of {:.2}, so it got there by chance",
+            keenness(mine, 1)
         );
     }
 

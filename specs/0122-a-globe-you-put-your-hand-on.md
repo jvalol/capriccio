@@ -3,9 +3,9 @@
 **Status:** implemented
 **Date:** 2026-11-21
 **Built:** 2026-11-21, the same day, in three rounds off three screenshots,
-a fourth for the fault they left behind, and seven more on Jake's own
-pictures of it running, on a photograph and a video of the real thing, and on
-the room wanting to be symmetrical.
+a fourth for the fault they left behind, and eight more on Jake's own
+pictures of it running, on a photograph and a video of the real thing, on the
+room wanting to be symmetrical, and on walking round the pair.
 
 ## Goal
 
@@ -92,6 +92,13 @@ struck, and about once a second it jumps instead, each arm on its own era.
 So what you mostly see is creeping and what you sometimes see is a strike
 landing somewhere else, and no two arms are doing either at the same time.
 
+**And how near your own line it keeps.** Each arm has a keenness of its own,
+squared off its own dice so most are dull and a few are not. A keen one gives
+up four fifths of the fan and comes nearly to you; a dull one spreads as
+before. That is what makes the reaching legible, and it is a thing about the
+arm rather than about the moment, so the same arms come to you for as long as
+they are lit.
+
 An arm cannot go out if it is the last one: independent throws do come up all
 dark, and a plasma globe that blinks off is a broken one, so when nothing at
 all is lit the arm that came nearest to staying strikes. All of it is worked out from the time and the eye, so there is nothing
@@ -115,6 +122,8 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   positions. — `plasma::tests::every_filament_runs_from_the_core_to_the_glass`
 - The filaments favour the side the eye is on, all the way
   round. — `plasma::tests::the_filaments_reach_for_whoever_is_there`
+- And some come far nearer the line to you than others, the same ones from
+  one moment to the next. — `plasma::tests::some_arms_come_far_nearer_you_than_others`
 - The shell is see-through, the plasma glows, and one channel of it stays
   under one so that it has a
   colour. — `plasma::tests::the_glass_is_see_through_and_the_plasma_is_not`
@@ -248,7 +257,28 @@ up all dark sooner than it feels like they should: inside ten minutes of
 running, at nearly a third each. So an arm cannot go out if it is the last
 one, and the globe is never dark by construction rather than by luck.
 
-**And then there were two.** Jake, with the room in front of him: make it
+**And the reaching was true and could not be seen.** Jake, having walked
+round the pair: the arms should also reach toward wherever I am standing.
+They already did, by construction and under test since the first build, which
+is the whole of the problem. The fan is eighty-six degrees, most of a
+hemisphere, so the bunch does swing as you move and what you see is a
+starfish either way.
+
+What makes it legible is that the arms are not alike in it. Keenness is a
+property of each arm now, and the test asks for the spread rather than for
+any one angle: the keenest arm sits under half as far off your line as the
+dullest, and it is the same arm from one moment to the next, since keen arms
+that changed every second would read as flicker and not as reaching. With the
+keenness turned off, the keenest sits 0.63 off your line against the dullest
+at 1.12 and the test says so.
+
+It also moved a floor in `the_arms_crawl_at_their_own_rates_and_jump_apart`,
+and for a reason worth keeping: an arm pointing nearly at you sits near the
+pole of its own cone, where rolling at the same rate moves its tip hardly at
+all. A keen arm creeps less on the screen, which is the reaching working
+rather than the crawling failing.
+
+**And before that there were two.** Jake, with the room in front of him: make it
 symmetrical, add another sparkle ball to the left. One globe beside a ball is
 a ball with a thing next to it; one either side is a row, and the ball is the
 middle of it rather than the odd one over.
