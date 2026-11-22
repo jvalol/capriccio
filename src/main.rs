@@ -4075,11 +4075,17 @@ impl Arcade {
 
         // the track and the common, which is what tells a street from a
         // mown gap between two rows of cabins
-        for ground in [village::track(reaches), village::common(reaches)] {
+        // the street is paved and the common is not, per spec 0123: a
+        // village square is where the fire and the cooking are and that is
+        // beaten earth in any town.
+        for (ground, under) in [
+            (village::track(reaches), aim::VILLAGE_SETT),
+            (village::common(reaches), aim::VILLAGE_EARTH),
+        ] {
             scene.push_material(
                 cube,
                 &Transform::at(ground.center()).with_scale(ground.size()),
-                aim::VILLAGE_EARTH,
+                under,
                 aim::MATTE,
             );
         }
@@ -4123,23 +4129,39 @@ impl Arcade {
         for one in village::built(reaches) {
             let walls = one.walls();
 
+            let render = village::rendered(&one);
+
             scene.push_material(
                 cube,
                 &Transform::at(walls.center()).with_scale(walls.size()),
-                aim::VILLAGE_WALL,
+                render,
                 aim::MATTE,
             );
 
-            // **Boards on it, and shingle courses on the roof.** Spec
-            // 0068's second round: every surface out here was one flat
-            // colour, which the steading gets away with at thirty metres
-            // and a village looked at from the street does not.
-            for (at, size, tone, pick) in village::boarding(&one) {
-                scene.push_textured(
+            // **Boards on the barn, render on the houses.** Spec 0068's
+            // second round put boards on everything, because every surface
+            // out here was one flat colour and a village looked at from the
+            // street cannot carry that. Spec 0123 answers the same question
+            // the other way for the houses: an Altstadt facade is smooth,
+            // and what breaks it is the rows of windows, their shutters and
+            // the stone at its foot rather than a grain.
+            if one.render.is_none() {
+                for (at, size, tone, pick) in village::boarding(&one) {
+                    scene.push_textured(
+                        cube,
+                        self.siding[pick],
+                        &Transform::at(at).with_scale(size),
+                        render * tone,
+                        aim::MATTE,
+                    );
+                }
+            } else {
+                let foot = village::stone_course(&one);
+
+                scene.push_material(
                     cube,
-                    self.siding[pick],
-                    &Transform::at(at).with_scale(size),
-                    aim::VILLAGE_WALL * tone,
+                    &Transform::at(foot.center()).with_scale(foot.size()),
+                    aim::VILLAGE_STONE,
                     aim::MATTE,
                 );
             }
@@ -4200,17 +4222,73 @@ impl Arcade {
         }
 
         for (at, looks) in village::windows(reaches) {
+            let sideways = if looks.x.abs() > 0.5 {
+                Vec3::Z
+            } else {
+                Vec3::X
+            };
             let across = if looks.x.abs() > 0.5 {
                 vec3(0.06, village::WINDOW_HIGH, village::WINDOW_WIDE)
             } else {
                 vec3(village::WINDOW_WIDE, village::WINDOW_HIGH, 0.06)
             };
 
+            // the painted surround first, then the pane proud of it
+            let frame = if looks.x.abs() > 0.5 {
+                vec3(
+                    0.05,
+                    village::WINDOW_HIGH + village::SURROUND * 2.0,
+                    village::WINDOW_WIDE + village::SURROUND * 2.0,
+                )
+            } else {
+                vec3(
+                    village::WINDOW_WIDE + village::SURROUND * 2.0,
+                    village::WINDOW_HIGH + village::SURROUND * 2.0,
+                    0.05,
+                )
+            };
+
+            scene.push_material(
+                cube,
+                &Transform::at(at + looks * village::PROUD).with_scale(frame),
+                aim::VILLAGE_SURROUND,
+                aim::MATTE,
+            );
+            // **Dark glass by day and lit by night**, which is what a window
+            // is. Drawn through `gives_off` alone it is never under one, so
+            // at noon every house on the street had its lamps blazing and
+            // the picture read as dusk with a blue sky over it.
+            let night = (1.0 - garden::sun_up(self.since)).clamp(0.0, 1.0);
+            let pane = aim::VILLAGE_GLASS.truncate().lerp(
+                garden::gives_off(aim::VALHALLA_LIT.truncate(), self.since),
+                night,
+            );
+
             scene.push_plain(
                 cube,
-                &Transform::at(at).with_scale(across),
-                garden::gives_off(aim::VALHALLA_LIT.truncate(), self.since).extend(1.0),
+                &Transform::at(at + looks * (village::PROUD * 2.0)).with_scale(across),
+                pane.extend(1.0),
             );
+
+            // a shutter either side of it, which is the one dark thing on a
+            // pale wall and what makes a row of windows read as a row
+            for side in [-1.0f32, 1.0] {
+                let out = sideways
+                    * side
+                    * (village::WINDOW_WIDE * 0.5 + village::SHUTTER_WIDE * 0.5 + 0.03);
+                let leaf = if looks.x.abs() > 0.5 {
+                    vec3(0.05, village::WINDOW_HIGH * 1.06, village::SHUTTER_WIDE)
+                } else {
+                    vec3(village::SHUTTER_WIDE, village::WINDOW_HIGH * 1.06, 0.05)
+                };
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(at + out + looks * (village::PROUD * 1.5)).with_scale(leaf),
+                    aim::VILLAGE_SHUTTER,
+                    aim::MATTE,
+                );
+            }
         }
 
         // a door apiece, on the face that looks at the street

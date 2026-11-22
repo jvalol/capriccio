@@ -1372,18 +1372,54 @@ pub const FAR_TOWER: Vec4 = vec4(0.095, 0.115, 0.175, 1.0);
 
 /// them does not, so the stars burn and the sky stays blue.
 pub const NIGHT_BURNS: Vec3 = glam::vec3(1.70, 1.85, 2.60);
-/// The village out in the field, per spec 0068.
+/// The village out in the field, per spec 0068, rendered per spec 0123.
 ///
-/// **Paler and warmer than the steading.** `VALHALLA_WALL` is a dark
-/// daubed brown, which is right for a longhouse under a storm at the top
-/// of a bridge. A pioneer cabin is sawn boards gone grey-gold in the sun,
-/// and the two places have to read as two places: the same brown twice
-/// would say the same builder made both.
+/// **A render apiece, and the point is that no two neighbours match.** Jake:
+/// the village is really drab, steer in the direction of Heidelberg. It was
+/// drab by arithmetic rather than by taste, nine colours named for the place
+/// and eight of them brown, so a picture of it was a brown street between
+/// brown buildings. An Altstadt is ochres, creams, roses and pale greens, one
+/// to a house, and a street of one render is a terrace rather than a town.
+///
+/// Six, because there are seven buildings and six is enough that the one
+/// repeat is not a pair standing together. `village::rendered` is what picks
+/// from them, so the drawing and any test ask the same thing once.
+pub const VILLAGE_RENDERS: [Vec4; 6] = [
+    vec4(0.80, 0.67, 0.45, 1.0),
+    vec4(0.85, 0.80, 0.67, 1.0),
+    vec4(0.77, 0.57, 0.52, 1.0),
+    vec4(0.66, 0.70, 0.57, 1.0),
+    vec4(0.87, 0.84, 0.77, 1.0),
+    vec4(0.83, 0.69, 0.51, 1.0),
+];
+
+/// The wall of anything out here that is not a rendered house: the barn.
 pub const VILLAGE_WALL: Vec4 = vec4(0.46, 0.385, 0.285, 1.0);
 
-/// And its roof, which is shingle rather than turf, so darker than the
-/// wall rather than the same colour in shadow.
-pub const VILLAGE_ROOF: Vec4 = vec4(0.27, 0.215, 0.165, 1.0);
+/// And its roof, which is clay tile now rather than timber shingle, so warm
+/// red rather than brown. The one hue in the Altstadt that every roof shares,
+/// where no two walls do.
+pub const VILLAGE_ROOF: Vec4 = vec4(0.55, 0.27, 0.19, 1.0);
+
+/// The red sandstone the castle, the bridge and every Altstadt doorway are
+/// built of, which out here is the course at the foot of a rendered wall.
+///
+/// **A course and not a plinth.** What it is for is that a render running
+/// straight into the street looks like a sheet standing in mud; a stone foot
+/// is what every one of those houses has and what gives the wall a bottom.
+pub const VILLAGE_STONE: Vec4 = vec4(0.52, 0.33, 0.28, 1.0);
+
+/// And the shutters either side of a window, which are the one dark thing on
+/// a pale wall and the reason a row of windows reads as a row.
+pub const VILLAGE_SHUTTER: Vec4 = vec4(0.26, 0.34, 0.29, 1.0);
+
+/// And the painted surround round a window, which is white on every one of
+/// those facades whatever colour the render is.
+pub const VILLAGE_SURROUND: Vec4 = vec4(0.90, 0.88, 0.84, 1.0);
+
+/// And the glass itself with nothing lit behind it, which is what a window
+/// is in daylight: dark, and giving back a little of the sky.
+pub const VILLAGE_GLASS: Vec4 = vec4(0.15, 0.17, 0.21, 1.0);
 
 /// The sawn timber of its fittings: the wagons, the rail, the fences and
 /// the well's frame. One colour for all of them, because they are one
@@ -1392,13 +1428,25 @@ pub const VILLAGE_ROOF: Vec4 = vec4(0.27, 0.215, 0.165, 1.0);
 pub const VILLAGE_TIMBER: Vec4 = vec4(0.38, 0.30, 0.215, 1.0);
 
 /// Its ironwork, which is the wheel rims, the pot and the well's chain.
-/// The beaten earth of its street, which is the one surface here that is
-/// neither grass nor timber.
+/// The beaten earth of the common and the way in off the field, which is
+/// what is left of the street's own surface after spec 0123 paved it.
 pub const VILLAGE_EARTH: Vec4 = vec4(0.235, 0.195, 0.145, 1.0);
 
-/// The ruts worn down the street, which are the same earth packed harder
-/// and damper than what is either side of them.
-pub const VILLAGE_RUT: Vec4 = vec4(0.17, 0.138, 0.102, 1.0);
+/// The street itself, which is paved now: warm grey setts with a dark joint
+/// between them, and the lines the wheels have polished.
+///
+/// **Setts rather than cobbles, at 0.28.** The street's whole face is one
+/// texture 2048 across, because the ruts follow a curve down it in the
+/// world's own numbers and a tiled pattern cannot carry that. A texel is
+/// 0.028 along, so a cobble the size of a fist would be three texels and
+/// read as noise. A market street is laid in squared setts anyway, and those
+/// are ten texels across and read as stone.
+pub const VILLAGE_SETT: Vec4 = vec4(0.44, 0.415, 0.385, 1.0);
+pub const VILLAGE_JOINT: Vec4 = vec4(0.235, 0.22, 0.205, 1.0);
+
+/// The ruts, which on a paved street are not worn into it but polished
+/// along it: the same stone, darker and smoother, where the wheels run.
+pub const VILLAGE_RUT: Vec4 = vec4(0.30, 0.285, 0.27, 1.0);
 
 /// And a cabin's door, a shade darker than the boards round it so it reads
 /// as an opening rather than as a panel.

@@ -179,6 +179,10 @@ pub struct Built {
     /// Which way its gable looks, as a facing. The street is east and west,
     /// so the cabins face across it and the barn closes the end.
     pub faces: f32,
+    /// Which render it wears, per spec 0123, or none at all if it is the
+    /// barn. A barn is not a townhouse and painting it one would say the
+    /// place has no working buildings in it.
+    pub render: Option<usize>,
 }
 
 impl Built {
@@ -211,36 +215,48 @@ pub const SET_OFF: f32 = STREET_WIDE * 0.5;
 /// barracks, which is what this was on its first build.
 pub fn built(reaches: f32) -> Vec<Built> {
     let middle = at(reaches);
-    let one = |along: f32, side: f32, wide: f32, long: f32, eaves: f32, ridge: f32| Built {
-        at: vec3(
-            middle.x + along,
-            middle.y,
-            middle.z + side * (SET_OFF + long * 0.5),
-        ),
-        wide,
-        long,
-        eaves,
-        ridge,
-        // **Looking at the street, which is the other way round from the
-        // first build.** A facing of nought in this building looks down
-        // -z, so the row standing north of the street has to be PI to
-        // look back at it. Written the obvious way, every door and every
-        // window was on the back of its own cabin and the street was a
-        // run of blank gables.
-        faces: if side > 0.0 { 0.0 } else { PI },
-    };
+    let one =
+        |along: f32, side: f32, wide: f32, long: f32, eaves: f32, ridge: f32, render: usize| {
+            Built {
+                at: vec3(
+                    middle.x + along,
+                    middle.y,
+                    middle.z + side * (SET_OFF + long * 0.5),
+                ),
+                wide,
+                long,
+                eaves,
+                ridge,
+                // **Looking at the street, which is the other way round from the
+                // first build.** A facing of nought in this building looks down
+                // -z, so the row standing north of the street has to be PI to
+                // look back at it. Written the obvious way, every door and every
+                // window was on the back of its own cabin and the street was a
+                // run of blank gables.
+                faces: if side > 0.0 { 0.0 } else { PI },
+                render: Some(render),
+            }
+        };
 
+    // **Three storeys and four, per spec 0123.** They stood 2.4 to 2.8 to
+    // the eaves, which is one, and a ten metre street between one-storey
+    // buildings is a frontier main street because that is what it is. The
+    // street is not squeezed to answer that; the buildings are given the
+    // height the street already had room for. Each still differs from its
+    // neighbour, which is spec 0068's own argument for why this reads as a
+    // village and not a row of sheds, and no two side by side take the same
+    // render.
     vec![
         // the north side, nearest the way you come in
-        one(-16.0, -1.0, 7.0, 6.0, 2.5, 4.1),
-        one(-4.0, -1.0, 9.0, 7.0, 2.8, 4.6),
-        one(9.0, -1.0, 6.0, 5.5, 2.4, 3.8),
+        one(-16.0, -1.0, 7.0, 6.0, 9.2, 13.0, 0),
+        one(-4.0, -1.0, 9.0, 7.0, 11.6, 15.8, 2),
+        one(9.0, -1.0, 6.0, 5.5, 8.4, 12.0, 4),
         // and the south, set along differently so the street is not a
         // corridor of pairs, and with a wide gap left between the last two
         // for the common the fire stands on
-        one(-22.0, 1.0, 6.5, 6.0, 2.5, 4.0),
-        one(-11.0, 1.0, 8.0, 6.5, 2.6, 4.3),
-        one(11.0, 1.0, 7.5, 6.0, 2.5, 4.2),
+        one(-22.0, 1.0, 6.5, 6.0, 8.8, 12.4, 1),
+        one(-11.0, 1.0, 8.0, 6.5, 10.4, 14.4, 3),
+        one(11.0, 1.0, 7.5, 6.0, 9.6, 13.4, 5),
         // **And the barn, closing the west end from beyond it.** It was
         // put inside the street's own run on the first build, 15 deep
         // against a street 10 wide, so it lay across the thing it was
@@ -250,9 +266,10 @@ pub fn built(reaches: f32) -> Vec<Built> {
             at: vec3(middle.x - STREET_LONG * 0.5 - 8.0, middle.y, middle.z),
             wide: 12.0,
             long: 15.0,
-            eaves: 4.2,
-            ridge: 7.4,
+            eaves: 6.0,
+            ridge: 10.6,
             faces: FRAC_PI_2,
+            render: None,
         },
     ]
 }
@@ -714,9 +731,34 @@ pub fn rut_runs(side: f32, along: f32) -> f32 {
 /// power of two each way because the mips halve to a pixel and a run of
 /// odd sizes rounds differently every level.
 pub const FACE_WIDE: u32 = 2048;
-pub const FACE_TALL: u32 = 256;
 
-/// The track's face: earth, with the two ruts worn into it. Spec 0096.
+/// **Five hundred and twelve across, where it was two fifty six.** The face
+/// is one texture over a street 58 by 10, so at 256 a texel is 3.9
+/// centimetres across and spec 0123's joint between two setts is 3.5: the
+/// joints fell under a texel, aliased away, and what the street read as was
+/// a chequer of bare stones. At 512 a joint is two and a half texels and a
+/// sett is fourteen.
+pub const FACE_TALL: u32 = 512;
+
+/// How big one sett is and how wide the joint between two of them.
+pub const SETT: f32 = 0.28;
+pub const JOINT: f32 = 0.05;
+
+/// A number between nought and one from two, which is what gives one sett a
+/// different grey from the one beside it.
+///
+/// Its own here rather than reached for out of `plasma`: that one is a dice
+/// for an arm of a plasma globe and this one is a dice for a paving stone,
+/// and a module borrowing another module's randomness is a coupling that
+/// says the two have something to do with each other.
+fn speckle(a: f32, b: f32) -> f32 {
+    let x = (a * 12.9898 + b * 78.233).sin() * 43758.547;
+
+    x - x.floor()
+}
+
+/// The street's face: setts, with the two polished lines the wheels run in.
+/// Spec 0096, paved by spec 0123.
 ///
 /// **Painted and not built.** The ruts were 116 slabs standing two
 /// millimetres proud of the track, 58 a side, which is a texture's job done
@@ -725,10 +767,18 @@ pub const FACE_TALL: u32 = 256;
 /// Jake, who found it: textured surfaces should have small shadows, mipmaps
 /// are a thing for a reason. The engine's `build_mips` says the same in its
 /// own words, that without it a textured floor seen at an angle shimmers.
+/// Setts are the same argument at a smaller size: a street of little boxes
+/// would be nine thousand of them.
+///
+/// **And the ruts stayed when the earth went.** A paved street does not rut,
+/// but it polishes: the stone where the wheels run is darker and smoother
+/// than the stone either side, which is the same two lines down the same
+/// curve and keeps the picture's own account of itself true.
 pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
     let ground = track(reaches);
     let (from, size) = (ground.min, ground.size());
-    let earth = crate::aim::VILLAGE_EARTH;
+    let sett = crate::aim::VILLAGE_SETT;
+    let joint = crate::aim::VILLAGE_JOINT;
     let rut = crate::aim::VILLAGE_RUT;
     let mut pixels = Vec::with_capacity((FACE_WIDE * FACE_TALL * 4) as usize);
 
@@ -739,16 +789,43 @@ pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
             let along = from.x + (x as f32 + 0.5) / FACE_WIDE as f32 * size.x;
             let across = from.z + (y as f32 + 0.5) / FACE_TALL as f32 * size.z;
 
+            // which course it is in, and half a sett along on every other
+            // one, which is what stops a pavement reading as graph paper
+            let course = (across / SETT).floor();
+            let shift = if course as i32 % 2 == 0 {
+                0.0
+            } else {
+                SETT * 0.5
+            };
+            let stone = ((along + shift) / SETT).floor();
+
+            // how near this texel is to the joint round its own sett
+            let into = |v: f32| (v - v.floor() - 0.5).abs();
+            let edge = into((along + shift) / SETT)
+                .min(into(across / SETT))
+                .mul_add(-2.0, 1.0)
+                * SETT;
+            let laid = (edge / JOINT).clamp(0.0, 1.0);
+
+            // this sett's own grey, and then the joint cut round it
+            // **A tenth either way and not a fifth.** Setts differ from
+            // their neighbours and a street of one grey is concrete, but at
+            // 0.82 to 1.18 what the eye reads first is the chequer rather
+            // than the stone.
+            let own = speckle(stone, course);
+            let mine = sett * (0.9 + 0.2 * own);
+            let stoned = joint.lerp(mine, laid);
+
             // how far off the nearer rut it is, soft over the last fifth of
             // the width so the edge is worn rather than cut
             let off = [-1.0f32, 1.0]
                 .iter()
                 .map(|side| (across - (ground.center().z + rut_runs(*side, along))).abs())
                 .fold(f32::MAX, f32::min);
-            let edge = RUT_WIDE * 0.1;
-            let worn = ((RUT_WIDE * 0.5 + edge - off) / (edge * 2.0)).clamp(0.0, 1.0);
+            let wear = RUT_WIDE * 0.1;
+            let worn = ((RUT_WIDE * 0.5 + wear - off) / (wear * 2.0)).clamp(0.0, 1.0);
 
-            let colour = earth.lerp(rut, worn);
+            let colour = stoned.lerp(rut * (0.92 + 0.16 * own), worn);
             pixels.extend_from_slice(&[
                 encoded(colour.x),
                 encoded(colour.y),
@@ -951,27 +1028,122 @@ pub fn shingling(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
 /// this does the same thing with one opening instead of a row.
 pub const WINDOW_WIDE: f32 = 0.85;
 pub const WINDOW_HIGH: f32 = 0.95;
-pub const WINDOW_UP: f32 = 1.25;
-pub const SET_BACK: f32 = 0.3;
+
+/// How far the painted surround stands out past the pane, and how far off
+/// the wall each of the three layers sits.
+///
+/// **A pane alone is invisible in daylight.** It is drawn through
+/// `garden::gives_off`, which is never under one, so by day it is a pale
+/// warm patch on a pale warm render and by night it is a lit window. The
+/// surround is what gives it an edge at noon, which is what every Altstadt
+/// facade has in white against its colour.
+pub const SURROUND: f32 = 0.09;
+pub const PROUD: f32 = 0.03;
+pub const WINDOW_UP: f32 = 1.45;
+
+/// How tall a storey is, and how wide a bay.
+///
+/// **What the rows are spaced by, per spec 0123.** There was one window to a
+/// building, at 1.25, which says nothing about how tall the building is. A
+/// row to each floor is the other half of what three storeys look like, and
+/// the bays across are what stop a four-window row on a nine metre front
+/// reading as portholes.
+pub const STOREY: f32 = 2.9;
+
+/// How wide a shutter leaf is.
+pub const SHUTTER_WIDE: f32 = 0.34;
+pub const BAY: f32 = 3.0;
+
+/// How many floors of windows one of them carries.
+///
+/// Its eaves in whole storeys, so a taller building has more of them without
+/// anything being written down twice.
+pub fn storeys(one: &Built) -> usize {
+    ((one.eaves / STOREY).floor() as usize).max(1)
+}
+
+/// And how many windows across its front.
+pub fn bays(across: f32) -> usize {
+    ((across / BAY).round() as usize).max(2)
+}
+
+/// Each of a building's four walls: which way it looks, where its face is,
+/// how wide it is and which way along it the bays run.
+///
+/// **All four and not the front alone, per spec 0123.** A terrace shows one
+/// face and these stand free, so three of their four walls were blank. It
+/// matters more now than it did: a blank wall two and a half metres high is
+/// a shed and the same wall at eleven is a slab, and the staged shot looks
+/// along the street, where the fronts are side on and the flanks are what
+/// you see.
+pub fn walls_of(one: &Built) -> Vec<(Vec3, Vec3, f32, Vec3)> {
+    [
+        (Vec3::Z, one.long, one.wide, Vec3::X),
+        (-Vec3::Z, one.long, one.wide, Vec3::X),
+        (Vec3::X, one.wide, one.long, Vec3::Z),
+        (-Vec3::X, one.wide, one.long, Vec3::Z),
+    ]
+    .iter()
+    .copied()
+    .map(|(looks, deep, across, sideways)| {
+        // **On the wall's face.** It was three tenths inside it, which is
+        // a pane inside a solid box, which the engine draws nowhere at all:
+        // every window in this village had been buried since it was built,
+        // and nobody saw it because a one-storey cabin at thirty metres is
+        // a shape rather than a facade.
+        (looks, looks * (deep * 0.5), across, sideways)
+    })
+    .collect()
+}
 
 pub fn windows(reaches: f32) -> Vec<(Vec3, Vec3)> {
-    built(reaches)
-        .into_iter()
-        .map(|one| {
-            let looks = looks(one.faces);
-            let out = if one.faces == FRAC_PI_2 {
-                vec3(one.wide * 0.5 - SET_BACK, 0.0, 0.0)
-            } else {
-                vec3(
-                    0.0,
-                    0.0,
-                    -(one.long * 0.5 - SET_BACK) * one.faces.cos().signum(),
-                )
-            };
+    let mut out = Vec::new();
 
-            (one.at + out + Vec3::Y * WINDOW_UP, looks)
-        })
-        .collect()
+    for one in built(reaches) {
+        for (looks, face, across, sideways) in walls_of(&one) {
+            let bays = bays(across);
+            let step = across / bays as f32;
+
+            for floor in 0..storeys(&one) {
+                for bay in 0..bays {
+                    let off = (bay as f32 + 0.5) * step - across * 0.5;
+                    let up = WINDOW_UP + floor as f32 * STOREY;
+
+                    out.push((one.at + face + sideways * off + Vec3::Y * up, looks));
+                }
+            }
+        }
+    }
+
+    out
+}
+
+/// What each one is rendered in, which is a colour from spec 0123's palette
+/// or the barn's own brown.
+pub fn rendered(one: &Built) -> glam::Vec4 {
+    match one.render {
+        Some(n) => crate::aim::VILLAGE_RENDERS[n % crate::aim::VILLAGE_RENDERS.len()],
+        None => crate::aim::VILLAGE_WALL,
+    }
+}
+
+/// How high the stone course at the foot of a rendered wall stands.
+pub const STONE_UP: f32 = 1.0;
+
+/// That course, as the box it is drawn with: the walls again, cut to its
+/// height and standing a little proud so it reads as stone laid against the
+/// render rather than as a stripe painted on it.
+pub const STONE_OUT: f32 = 0.08;
+
+pub fn stone_course(one: &Built) -> Aabb {
+    Aabb::from_center_size(
+        one.at + Vec3::Y * STONE_UP * 0.5,
+        vec3(
+            one.wide + STONE_OUT * 2.0,
+            STONE_UP,
+            one.long + STONE_OUT * 2.0,
+        ),
+    )
 }
 
 /// Where the lamp inside each one sits, which is what the window shows.
@@ -1310,11 +1482,19 @@ mod tests {
             }
         }
 
-        // and the earth between them is the earth, read back through the
-        // sRGB the sampler will undo
-        let middle = texel(from.x + size.x * 0.5, ground.center().z);
-        let back = {
-            let one = middle as f32 / 255.0;
+        // and what is between them is paving, read back through the sRGB
+        // the sampler will undo.
+        //
+        // **A sett or the joint round it, and never the earth.** This asked
+        // for `VILLAGE_EARTH` exactly, which was right while the street was
+        // beaten earth and one flat colour. Spec 0123 paved it, so there is
+        // no one colour to ask for any more: each sett is its own tenth
+        // either side of `VILLAGE_SETT` and the joints between them are
+        // darker still. What survives the paving is the claim underneath,
+        // which is that the street is the street and not the field.
+        let linear = |texel: u8| {
+            let one = texel as f32 / 255.0;
+
             if one <= 0.040_45 {
                 one / 12.92
             } else {
@@ -1322,12 +1502,24 @@ mod tests {
             }
         };
 
-        assert!(
-            (back - crate::aim::VILLAGE_EARTH.x).abs() < 0.01,
-            "the track's earth went in at {:.3} and comes back at {:.3}",
-            crate::aim::VILLAGE_EARTH.x,
-            back
-        );
+        for share in [0.2f32, 0.4, 0.6, 0.8] {
+            let back = linear(texel(from.x + size.x * share, ground.center().z));
+            let sett = crate::aim::VILLAGE_SETT.x;
+            let joint = crate::aim::VILLAGE_JOINT.x;
+
+            assert!(
+                (back - sett).abs() < sett * 0.15 || (back - joint).abs() < joint * 0.2,
+                "the street reads {:.3} at {:.1} along, where a sett is {:.3} and its joint {:.3}",
+                back,
+                from.x + size.x * share,
+                sett,
+                joint
+            );
+            assert!(
+                (back - crate::aim::VILLAGE_EARTH.x).abs() > 0.05,
+                "the street still reads as the earth it was paved over"
+            );
+        }
     }
     use super::*;
 
