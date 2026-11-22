@@ -3367,7 +3367,7 @@ impl Arcade {
     /// or is not. Out here the ground and the sky are centred on where you
     /// stand, because a field whose ground ends is a stage and a field whose
     /// sky ends is a tent, and what the room is about is that neither does.
-    fn draw_the_field(&self, scene: &mut Scene) {
+    fn draw_the_field(&self, scene: &mut Scene, camera: &Camera) {
         let reaches = self.room.reaches;
 
         // from anywhere the field can be seen, which is the whole of the
@@ -3586,7 +3586,7 @@ impl Arcade {
             }
         }
 
-        self.draw_bridge(scene);
+        self.draw_bridge(scene, camera);
         // **Beside the bridge and not inside it.** Spec 0068's village is
         // out in the field and nothing was answered to earn it, where
         // `draw_bridge` returns at once until the trail is done. Put in
@@ -3708,7 +3708,7 @@ impl Arcade {
         }
     }
 
-    fn draw_bridge(&self, scene: &mut Scene) {
+    fn draw_bridge(&self, scene: &mut Scene, camera: &Camera) {
         let Some(cube) = self.cube else {
             return;
         };
@@ -3944,7 +3944,7 @@ impl Arcade {
         // is the ending given away to anybody who walked out of the garden
         // on their first minute.
         if bridge::whole(&self.trail) {
-            self.draw_valhalla(scene, cube);
+            self.draw_valhalla(scene, cube, camera);
             self.draw_the_gate(scene, cube);
         }
     }
@@ -4877,7 +4877,7 @@ impl Arcade {
     }
 
     /// in the sky above a field with no way up to it is worse than nothing.
-    fn draw_valhalla(&self, scene: &mut Scene, cube: MeshId) {
+    fn draw_valhalla(&self, scene: &mut Scene, cube: MeshId, camera: &Camera) {
         let reaches = self.room.reaches;
         let ground = valhalla::ground(reaches);
 
@@ -4984,7 +4984,7 @@ impl Arcade {
             );
         }
 
-        self.draw_the_hall(scene, cube);
+        self.draw_the_hall(scene, cube, camera);
 
         // **The fire in the lane and the wood that feeds it.** Spec 0067.
         // These are what the people's rounds are for: an errand with
@@ -5228,7 +5228,7 @@ impl Arcade {
     /// your back to is filled first, from the reflection that can see it,
     /// per engine spec 0095. Filled from the eye instead it came back black,
     /// and black only inside the other wall's glass.
-    fn draw_the_hall(&self, scene: &mut Scene, cube: MeshId) {
+    fn draw_the_hall(&self, scene: &mut Scene, cube: MeshId, camera: &Camera) {
         let reaches = self.room.reaches;
         let one = valhalla::hall(reaches);
         let floor = valhalla::floor(reaches);
@@ -5356,6 +5356,23 @@ impl Arcade {
         // is for. Three casting lamps is three shadow maps of one fire
         // and only two slots to put them in, and the two that won would
         // be picked by depth rather than by sense.
+        //
+        // **And it only asks while the hall is in front of you.** The
+        // engine carries two shadowing lamps for the whole building and
+        // gives them out in the order they are asked for, and this one
+        // asked whether or not any of what it lights was on screen. With
+        // the trail finished it took a slot in a picture of the arcade
+        // aisle, from a hall 164 metres west and 27 up, and the nook's
+        // right-hand gallery lamp lost its shadow to a fire nobody in
+        // that picture can see.
+        //
+        // That is spec 0094's fault arriving another way. It fixed a
+        // shadow that moved as you walked, by choosing the gallery's
+        // casters by place; the place held, and the second of them
+        // stopped getting a slot the day the bridge was finished. The
+        // gallery takes this same cull before it asks. This did not.
+        let seen = camera.frustum();
+
         for (n, at) in valhalla::fires(reaches).into_iter().enumerate() {
             let own = bridge::burning(self.since + n as f32 * 1.7);
             let lamp = blitzkit::lighting::PointLight::new(
@@ -5365,11 +5382,13 @@ impl Arcade {
                 aim::HEARTH_REACH,
             );
 
-            scene.push_light(if n == valhalla::FIRES / 2 {
-                lamp.casting()
-            } else {
-                lamp
-            });
+            scene.push_light(
+                if n == valhalla::FIRES / 2 && seen.holds_sphere(at, aim::HEARTH_REACH) {
+                    lamp.casting()
+                } else {
+                    lamp
+                },
+            );
         }
 
         // the triangle over each gable, which was open to the sky until
@@ -10879,7 +10898,7 @@ impl Game for Arcade {
         // **Only while you are out there, or about to be.** Nothing of this
         // is a place, so none of it can be left standing: the slab alone is
         // four hundred metres of ground at the hall's own floor height.
-        self.draw_the_field(scene);
+        self.draw_the_field(scene, camera);
         self.draw_the_outside(scene, cube);
 
         // the garden, per spec 0010: its sky, its ground, and the walls round
@@ -18002,6 +18021,102 @@ mod tests {
             "valhalla-hall",
             vec3(door.x - 2.0, door.y + valhalla::FLOOR_UP, door.z),
             vec3(one.at.x - one.wide * 0.4, door.y + EYE + 0.2, door.z),
+        );
+    }
+
+    /// The lamps a scene ends up with, for a question a picture cannot
+    /// answer.
+    ///
+    /// A shadow that is missing looks exactly like a surface nothing is
+    /// standing on, so the only way to ask whether a lamp got a slot is to
+    /// ask the scene. None of the renderer's work is wanted here beyond
+    /// building one, which is what `offscreen` is for, and a machine
+    /// without an adapter says so by drawing nothing, as every picture test
+    /// here already does.
+    fn lamps_at_the_end(at: Vec3, looking_at: Vec3) -> Option<(Vec<Vec3>, Vec<Vec3>)> {
+        let mut renderer = pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))?;
+        let (scene, _) = standing_at_the_end(at, looking_at)(&mut renderer);
+        let lamps = scene.point_lights();
+
+        Some((
+            scene
+                .casting_lamps()
+                .iter()
+                .map(|n| lamps[*n].position)
+                .collect(),
+            lamps.iter().map(|lamp| lamp.position).collect(),
+        ))
+    }
+
+    /// Spec 0128: the fire up the bridge does not take a shadow off a room
+    /// a hundred and sixty metres away.
+    ///
+    /// **Because the engine hands out its two on a first come first
+    /// served.** The hearth asked whether or not any of what it lights was
+    /// on screen, and from the arcade doorway with the trail done it asked
+    /// first, so the nook's right-hand gallery lamp lit without casting.
+    /// That is spec 0094's fault by another road: it stopped a shadow
+    /// moving as you walk and this put one out when a bridge was finished.
+    #[test]
+    fn no_fire_up_the_bridge_takes_a_shadow_from_the_gallery() {
+        let reaches = reaches();
+        let doorway = room::Room::of(games()).doorway();
+        let Some((casting, lit)) = lamps_at_the_end(doorway, vec3(0.0, EYE, -reaches * 0.5)) else {
+            return;
+        };
+
+        let fire = valhalla::fires(reaches)[valhalla::FIRES / 2];
+        let near = |want: Vec3| move |at: &Vec3| at.distance(want) < 0.01;
+
+        assert!(
+            !casting.iter().any(near(fire)),
+            "the hall's fire at {} casts from the arcade doorway, where {:?} cast",
+            fire,
+            casting
+        );
+
+        // and the two it was taking the slot from, which is the half worth
+        // asserting: an empty list of casters would pass the line above.
+        for n in [1, display::count() - 2] {
+            let want = room::gallery_lamps(reaches)[n];
+
+            assert!(
+                casting.iter().any(near(want)),
+                "the gallery's lamp {} at {} does not cast, out of {:?} that do and {} lit",
+                n,
+                want,
+                casting,
+                lit.len()
+            );
+        }
+    }
+
+    /// And the other half of it: the fire still casts in the room it is the
+    /// only light in.
+    ///
+    /// A cull is two claims and the easy one to leave untested is that the
+    /// thing still happens where it should. Standing where
+    /// `the_hall_inside_is_drawn` stands, which is the picture that would
+    /// go flat if this came out.
+    #[test]
+    fn the_hall_up_the_bridge_still_casts_its_own_fire() {
+        let reaches = reaches();
+        let one = valhalla::hall(reaches);
+        let (door, _, _) = valhalla::doorway(reaches);
+        let Some((casting, _)) = lamps_at_the_end(
+            vec3(door.x - 2.0, door.y + valhalla::FLOOR_UP, door.z),
+            vec3(one.at.x - one.wide * 0.4, door.y + EYE + 0.2, door.z),
+        ) else {
+            return;
+        };
+
+        let fire = valhalla::fires(reaches)[valhalla::FIRES / 2];
+
+        assert!(
+            casting.iter().any(|at| at.distance(fire) < 0.01),
+            "the hall's fire at {} does not cast from inside the hall, where {:?} do",
+            fire,
+            casting
         );
     }
 
