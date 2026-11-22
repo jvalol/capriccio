@@ -687,9 +687,10 @@ fn staged_as() -> Option<String> {
 /// room that changed under them left three pictures of a building that no
 /// longer existed, published, with every check green.
 ///
-/// The hall's pose is not in here. It is a pose kept for its reasoning and
-/// there is no file on the site that holds it, and a shot with nowhere to go
-/// is not a shot.
+/// The hall's own pose is in here now. It sat in this file for its reasoning
+/// with no file on the site to go in, which is a shot with nowhere to go, and
+/// spec 0121 gave it `media/screenshot.png` when the deep's four pictures
+/// left.
 fn shots() -> Vec<(String, String)> {
     // Every one is named, the staged shot included, and that is not tidiness.
     // The photographer reads these lines with the tab as its separator, and a
@@ -732,6 +733,19 @@ pub const POSED_OUT: f32 = 1.2;
 pub const POSED_PAST: f32 = 1.5;
 const POSED_PITCH: f32 = -0.05;
 
+/// Which game the staged shot stands at.
+///
+/// **Named, where the camera is still worked out from where it stands.** It
+/// was `row.get(1)`, the second cabinet in the row and whichever game that
+/// happened to be. That was tessera when this picture was composed and snake
+/// by the night it was next rendered, because games went in between and the
+/// row moved under the index. What a written-down bearing does to a picture
+/// when the rows move, an index does to its subject.
+///
+/// The camera is still derived rather than written, which is the whole of the
+/// argument above: moving the rows moves the shot and never stales it.
+pub const POSED_AT: &str = "tessera";
+
 /// Where the camera stands for a staged shot, and which way it looks.
 ///
 /// **Worked out from a cabinet and not written down**, which this file has
@@ -752,7 +766,12 @@ fn posed(room: &Room) -> (Vec3, f32) {
 
     row.sort_by(|one, other| other.at.z.total_cmp(&one.at.z));
 
-    let Some(stood) = row.get(1).or_else(|| row.first()) else {
+    let Some(stood) = row
+        .iter()
+        .find(|stood| stood.cabinet.name == POSED_AT)
+        .or_else(|| row.get(1))
+        .or_else(|| row.first())
+    else {
         return (Vec3::new(0.8, 0.0, 6.2), 0.25);
     };
 
