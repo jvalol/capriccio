@@ -676,18 +676,90 @@ fn path_heads(reaches: f32, on: f32) -> (Vec3, Vec3) {
     (along, vec3(-along.z, 0.0, along.x))
 }
 
-/// How far the way there is worn out from its middle at a point on it, on
-/// the given side.
+/// How far the way there is worn out from its middle at a share of the run,
+/// on the given side.
 ///
 /// **A path has two edges and neither is a line.** Worn by feet that mostly
 /// go down the middle, so the band is about as wide everywhere and about is
-/// the whole of it: an edge off one number is a kerb. Read off the metres
-/// walked rather than the step, and each side off its own phase, so the two
-/// do not swell and shrink together like a throat.
-fn path_half(walked: f32, side: f32) -> f32 {
+/// the whole of it: an edge off one number is a kerb. Each side has its own
+/// phase, so the two do not swell and shrink together like a throat.
+///
+/// **Read off the share of the run and not off the metres walked**, which
+/// are two numbers that nearly agree and are wanted in two places. The
+/// ribbon's uv needs the metres actually walked, or the grit stretches
+/// where the line bends. Its edge needs a number anything asking about the
+/// edge can work out for itself: `on_the_way` is handed a spot in a field
+/// and has no walk behind it, and an edge it reckoned a different way from
+/// the one the mesh is built on is the grass line and the real line coming
+/// apart.
+fn path_edge(reaches: f32, on: f32, side: f32) -> f32 {
+    let (from, to) = path_runs(reaches);
+    let down = (to - from).length() * on;
+
     PATH_WIDE * 0.5
-        + (walked * 0.9 + side * 5.0).sin() * 0.09
-        + (walked * 2.3 + side * 11.0).sin() * 0.05
+        + (down * 0.9 + side * 5.0).sin() * 0.09
+        + (down * 2.3 + side * 11.0).sin() * 0.05
+}
+
+/// How far in from its edge the way there is trodden bare.
+///
+/// **Grass comes over the edge of a path, and the edge is where it starts.**
+/// Spec 0126 left the grit stopping dead at a line with mown turf beside it,
+/// because `field::cover` was kept off `along_the_path`: four metres either
+/// side of a path 1.2 wide, so the one thing that could have broken the line
+/// was the one thing not allowed within three metres of it. A hand's breadth
+/// in from each side is what a tuft may stand on.
+pub const PATH_OVER: f32 = 0.18;
+
+/// Whether a spot is on the worn part of the way there, where nothing grows.
+///
+/// **The footprint and not the sightline.** [`along_the_path`] is the view
+/// down the run, which is why it is four metres wide and why the trees
+/// honour it. Ground cover honours this instead, which is the ribbon itself
+/// less [`PATH_OVER`] at each side. The bridge's abutment is the same
+/// lesson written down two specs earlier: its own footprint and not
+/// `bridge::shades`, or there is a bald stripe down the field.
+pub fn on_the_way(reaches: f32, at: Vec3) -> bool {
+    beside_the_way(reaches, at).is_some_and(|off| off < 0.0)
+}
+
+/// How far a spot lies outside the worn part of the way there, in metres,
+/// or nothing at all if it is not near it.
+///
+/// Negative on the path itself. [`on_the_way`] is this and a sign test; the
+/// number is here because whether the grit's edge is broken is a question
+/// about how near the nearest tuft gets to it, and a test that can only ask
+/// yes or no cannot tell a verge from a path.
+pub fn beside_the_way(reaches: f32, at: Vec3) -> Option<f32> {
+    // the four metre corridor first, which is the cheap half of this and
+    // takes nearly every spot the field asks about
+    if !along_the_path(reaches, at) {
+        return None;
+    }
+
+    let (from, to) = path_runs(reaches);
+    let way = to - from;
+    let how_far = way.length_squared();
+
+    if how_far < 1e-6 {
+        return None;
+    }
+
+    // and then the curve itself, finely, because a tuft judged off the path
+    // when it is on it stands in the middle of the gravel
+    let part = ((at - from).dot(way) / how_far).clamp(0.0, 1.0);
+    let (on, near) = (-20..=20)
+        .map(|n| (part + n as f32 * 0.005).clamp(0.0, 1.0))
+        .map(|on| (on, path_at(reaches, on)))
+        .min_by(|a, b| {
+            a.1.distance_squared(at)
+                .total_cmp(&b.1.distance_squared(at))
+        })?;
+
+    let (_, across) = path_heads(reaches, on);
+    let off = (at - near).dot(across);
+
+    Some(off.abs() - (path_edge(reaches, on, off.signum()) - PATH_OVER))
 }
 
 /// The way there, as one worn ribbon laid on the field.
@@ -714,7 +786,8 @@ pub fn path_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
     let mut indices = Vec::with_capacity(PATH_STEPS * 6);
     // metres walked rather than the share of the run, because the bow makes
     // the line longer than the line between its ends and a texture laid in
-    // shares would stretch where it bends
+    // shares would stretch where it bends. The edge is reckoned off the
+    // share instead, and `path_edge` says why the two are not one number.
     let mut walked = 0.0f32;
     let mut last = path_at(reaches, 0.0);
 
@@ -727,7 +800,7 @@ pub fn path_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
         last = here;
 
         for side in [-1.0f32, 1.0].iter().copied() {
-            let half = path_half(walked, side);
+            let half = path_edge(reaches, on, side);
             let at = here + across * (half * side);
 
             // **u in tiles and v edge to edge.** Along the walk a tile has
@@ -2924,15 +2997,31 @@ mod tests {
             for about in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
                 let at = (i + about.0, j + about.1);
 
-                for one in crate::field::trees(REACHES, at)
-                    .into_iter()
-                    .chain(crate::field::cover(REACHES, at))
-                {
+                // **A tree and a tuft are kept off two different things.**
+                // The trees honour the sightline, which is what spec 0086
+                // wore this run for. Ground cover honours the footprint,
+                // since spec 0127: kept off the sightline it left a mown
+                // verge three metres wide either side, and the one thing
+                // that could break the grit's edge was the one thing not
+                // allowed near it.
+                for one in crate::field::trees(REACHES, at) {
                     stood += 1;
 
                     assert!(
                         !along_the_path(REACHES, one.at),
-                        "something grows at {:?}, which is on the way to the village",
+                        "a tree grows at {:?}, which is in the view down the \
+                         way to the village",
+                        one.at
+                    );
+                }
+
+                for one in crate::field::cover(REACHES, at) {
+                    stood += 1;
+
+                    assert!(
+                        !on_the_way(REACHES, one.at),
+                        "something grows at {:?}, which is on the way to the \
+                         village and not beside it",
                         one.at
                     );
                 }
@@ -3226,6 +3315,64 @@ mod tests {
             other,
             other.distance(bowed),
             other.distance(straight)
+        );
+    }
+
+    /// Spec 0127: and the field grows up to the edge of it.
+    #[test]
+    fn the_grass_comes_over_the_edge_of_the_way_there() {
+        // the middle of the path is the path, and a step off it is not
+        let middle = path_at(REACHES, 0.5);
+        let (_, across) = path_heads(REACHES, 0.5);
+
+        assert!(
+            on_the_way(REACHES, middle),
+            "the middle of the way there is not on it"
+        );
+        assert!(
+            !on_the_way(REACHES, middle + across * (PATH_WIDE * 0.5 + 0.2)),
+            "a hand's breadth past the edge is still counted as the path"
+        );
+
+        // **And the thing that was actually wrong.** Kept off the
+        // sightline, ground cover stopped three metres short of the grit on
+        // both sides and the edge had nothing to break it. So this counts
+        // what stands near enough to do so, which is the number the change
+        // was made for: a yes or no about the path itself would pass just
+        // as well with the verge back.
+        let cell = crate::field::CELL;
+        let mut near = 0;
+        let mut nearest: Option<f32> = None;
+
+        for n in 0..=120 {
+            let on = path_at(REACHES, n as f32 / 120.0);
+            let (i, j) = ((on.x / cell).round() as i32, (on.z / cell).round() as i32);
+
+            for about in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
+                for one in crate::field::cover(REACHES, (i + about.0, j + about.1)) {
+                    let Some(off) = beside_the_way(REACHES, one.at) else {
+                        continue;
+                    };
+
+                    nearest = Some(nearest.map_or(off, |was: f32| was.min(off)));
+
+                    if off < 0.3 {
+                        near += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            near > 20,
+            "only {} things the field sows stand within a third of a metre \
+             of the way there, and the nearest of anything it sows is {}: \
+             the grit ends at a line with a verge beside it",
+            near,
+            nearest.map_or(
+                "nothing within four metres at all".to_string(),
+                |off| format!("{off:.2} off its edge")
+            )
         );
     }
 

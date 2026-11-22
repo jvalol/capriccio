@@ -671,8 +671,16 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // the bank's own footprint, not `bridge::shades`, which keeps
         // trees off the whole hundred metre run and would leave a bald
         // stripe down the field.
+        //
+        // **And the way there is its footprint too**, for that same
+        // reason, which it was not until spec 0127. `along_the_path` is
+        // four metres either side of a path 1.2 wide: what it kept off was
+        // not the path but a mown verge round it, so the grit ended at a
+        // line with nothing growing near enough to break it. `on_the_way`
+        // is the ribbon less a hand's breadth at each side, and a tuft
+        // standing on that comes over the edge the way grass does.
         if crate::village::shades(reaches, at)
-            || crate::village::along_the_path(reaches, at)
+            || crate::village::on_the_way(reaches, at)
             || crate::bridge::banked(reaches, at)
             || crate::bridge::on_the_ledger(reaches, at)
         {
