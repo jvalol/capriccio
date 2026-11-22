@@ -865,6 +865,9 @@ struct Arcade {
     carpet: Option<TextureId>,
     /// The village track's face, with its ruts painted into it. Spec 0096.
     track_face: Option<TextureId>,
+    /// And the shape of the setts in it, which the sun shades rather than
+    /// the colour pretending to. Spec 0125.
+    track_bump: Option<TextureId>,
     /// The worn track in it at the foot of the near wall, which is the one
     /// thing in the hall that says the way through is there. Spec 0020.
     worn: Option<TextureId>,
@@ -1598,6 +1601,7 @@ impl Arcade {
             floor: None,
             carpet: None,
             track_face: None,
+            track_bump: None,
             worn: None,
             flat_quad: None,
             thundered: None,
@@ -4107,13 +4111,19 @@ impl Arcade {
         // Spec 0096. Two millimetres up, which is `behind::TRACK_HIGH`'s
         // reason word for word: in the track's own plane it would be two
         // exposed faces sharing one.
-        if let (Some(face), Some(quad)) = (self.track_face, self.flat_quad) {
+        if let (Some(face), Some(bump), Some(quad)) =
+            (self.track_face, self.track_bump, self.flat_quad)
+        {
             let ground = village::track(reaches);
             let size = ground.size();
 
-            scene.push_textured(
+            // **Bumped and not textured**, which is the one call that makes
+            // the sun shade the joints rather than the colour pretending to.
+            // Spec 0125, on the engine's 0110.
+            scene.push_bumped(
                 quad,
                 face,
+                bump,
                 &Transform::at(vec3(
                     ground.center().x,
                     ground.max.y + behind::TRACK_HIGH,
@@ -8335,6 +8345,7 @@ impl Game for Arcade {
         // and the village track's, which is one texture against the 116
         // slabs it replaces. Spec 0096.
         self.track_face = Some(renderer.add_texture(&village::face(self.room.reaches)));
+        self.track_bump = Some(renderer.add_texture(&village::bumps(self.room.reaches)));
         {
             // and the wear in it at the foot of the near wall, per spec 0020
             let track = behind::track(self.room.reaches);

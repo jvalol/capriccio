@@ -768,8 +768,9 @@ pub const ARC: f32 = STREET_WIDE * 0.55;
 /// came back as bright streaks down the street, and a groove of four
 /// millimetres drew the same streaks as one of thirty five, which rules out
 /// the angle the walls are lit at and points at the mesh's own normals or at
-/// how its texture registers on it. The street is a flat quad and the depth
-/// is the dome baked into the colour.
+/// how its texture registers on it. The street is a flat quad, and what the
+/// sun shades is [`bumps`], which answers the same question this does without
+/// a vertex in it. Spec 0125.
 ///
 /// **The fan, which is the whole of the pattern.** The nearest fan centre is
 /// on the centre line, `ARC` apart down the street. From there a stone is a
@@ -783,26 +784,68 @@ pub const ARC: f32 = STREET_WIDE * 0.55;
 pub fn sett_at(along: f32, across: f32, middle: f32) -> ((f32, f32, f32), f32) {
     let fan = ((along / ARC) - 0.5).round();
     let (dx, dz) = (along - (fan + 0.5) * ARC, across - middle);
-    // a ring of nothing at the middle of a fan would be a stone of no size,
-    // so the first ring is a whole stone rather than a point
-    let out = (dx * dx + dz * dz).sqrt().max(SETT * 0.5);
-    let ring = (out / SETT).floor();
+    let far = (dx * dx + dz * dz).sqrt();
+
+    // **The keystone.** Every radial joint in a fan meets at its middle, so
+    // reckoned the same way as the rest the middle is a point with three
+    // joints running out of it and `atan2` swinging a whole turn across one
+    // texel. In the colour that is a fleck and in `bumps` it was a
+    // starburst leaning fifty three out of a hundred and twenty eight, in
+    // the middle of what should be the flattest stone on the street. A fan
+    // is laid from one stone and not from a point, which is what this is.
+    let keystone = SETT * 0.5;
+
+    if far < keystone {
+        return ((fan, -1.0, 0.0), (keystone - far).min(to_seam(along, fan)));
+    }
+
+    // the rings are reckoned from the keystone's edge, so every one of them
+    // is a whole sett deep
+    let ring = ((far - keystone) / SETT).floor();
+    let inner = keystone + ring * SETT;
 
     // how far round the arc one stone takes, which is a stone's width in
     // arc length rather than in angle: the outer rings hold more of them
-    let step = SETT / out;
+    let step = SETT / far;
     let round = dz.atan2(dx);
     let nth = (round / step).floor();
 
-    let to_ring = (out - ring * SETT).min((ring + 1.0) * SETT - out);
-    let to_side = ((round - nth * step).min((nth + 1.0) * step - round)) * out;
+    let to_ring = (far - inner).min(inner + SETT - far);
+
+    // **And the ray the angle wraps on is a joint as well.** `atan2` answers
+    // between minus pi and pi, so the one cell in every ring that straddles
+    // the far side of a fan's centre is cut in two by the arithmetic rather
+    // than by a joint, and its two halves sit at whatever height each of
+    // them reckons. Found the same way the seam was: a line of leaning
+    // texels in the middle of what `sett_at` called a stone, out along minus
+    // x from every fan centre on the street.
+    let to_side = (round - nth * step)
+        .min((nth + 1.0) * step - round)
+        .min(std::f32::consts::PI - round.abs())
+        * far;
 
     // **The joint round the arc counts for more than the joint along it.**
     // The street is looked down, so a ring joint crosses the view and a
     // radial one runs away along it: read straight, the arcs are all you
     // see and the stones in them are not there. Three quarters is what puts
     // a stone back inside its own arc.
-    ((fan, ring, nth), to_ring.min(to_side * 0.75))
+    (
+        (fan, ring, nth),
+        to_ring.min(to_side * 0.75).min(to_seam(along, fan)),
+    )
+}
+
+/// How far a spot is from the line where one fan gives way to the next.
+///
+/// **Where one fan ends is a joint too.** `fan` steps at the half way line
+/// between two centres, so on that line what a stone is reckoned from
+/// changes: read without this, the last ring of one fan butts the first of
+/// the next at whatever height each of them happened to be, which is a step
+/// in the street rather than a joint in it. In the colour it passes for a
+/// butt line and in [`bumps`] it is a ridge across the street every `ARC`,
+/// which is how it was found.
+fn to_seam(along: f32, fan: f32) -> f32 {
+    ARC * (0.5 - ((along / ARC) - 0.5 - fan).abs())
 }
 
 /// How wide the kerb either side of the street is and how far it stands over
@@ -900,11 +943,16 @@ pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
                 * (0.78 + 0.46 * own)
                 * vec3(0.95 + 0.1 * warm, 1.0, 1.06 - 0.12 * warm).extend(1.0);
 
-            // and the dome on it, which is what stands in for depth here:
-            // the engine has no normal maps and no occlusion, so a stone
-            // falls away toward its own joint in the colour instead. It
-            // does not move when the sun does, and at a hand's width the
-            // eye does not ask it to.
+            // **The dome stays, and it is the occlusion half of it.** It
+            // was written when this engine had no normal maps and stood in
+            // for the shape of a stone altogether. `bumps` carries the
+            // shape now, so the obvious thing was to take this out, and
+            // taking it out washed the street pale: it falls away in every
+            // direction at once rather than toward the sun, which is what
+            // occlusion looks like and what a slot between two stones
+            // actually does to the light reaching the bottom of it. What
+            // `bumps` adds is the part this one cannot have, which is a
+            // stone lit on the side the sun is on.
             let dome = 0.78 + 0.26 * (near / (SETT * 0.5)).clamp(0.0, 1.0).sqrt();
             let stoned = joint.lerp(mine * dome, laid);
 
@@ -931,6 +979,96 @@ pub fn face(reaches: f32) -> blitzkit::texture::TextureData {
                 encoded(colour.z),
                 255,
             ]);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(FACE_WIDE, FACE_TALL, pixels)
+}
+
+/// How deep the joint is cut and how far the stone domes over it, in metres.
+///
+/// **A hand deep is not what a street is.** Spec 0124 reached for thirty five
+/// millimetres of groove when it was cutting them as geometry, which is a
+/// gutter rather than a joint; a sett is set in sand with a centimetre or so
+/// of it showing. The dome is the smaller of the two on purpose: a cobble is
+/// rounded and a sett is cut, and what reads as stone laid by hand is the
+/// slot between them rather than the curve on top.
+pub const SUNK: f32 = 0.014;
+pub const DOMED: f32 = 0.004;
+
+/// How high the street stands at one spot, in metres over its own plane.
+///
+/// Off `sett_at`'s one number, so the shape the sun shades and the joint the
+/// colour draws cannot come apart: this is the same stone falling away toward
+/// the same edge.
+fn proud_at(along: f32, across: f32, middle: f32) -> f32 {
+    let (_, near) = sett_at(along, across, middle);
+    // the joint's wall, over the joint's own width, and smoothed because a
+    // step of one texel is a seam rather than an edge once the mips average
+    // it
+    let up = (near / JOINT).clamp(0.0, 1.0);
+
+    SUNK * up * up * (3.0 - 2.0 * up) + DOMED * (near / (SETT * 0.5)).clamp(0.0, 1.0).sqrt()
+}
+
+/// The street's shape, as a normal map in register with [`face`]. Spec 0125,
+/// on the engine's spec 0110.
+///
+/// **This is the thing spec 0124 put out of scope.** That spec baked the
+/// depth into the colour and said in as many words what it cost: a stone
+/// that falls away toward its joint in the albedo does not move when the sun
+/// does, so at eight in the morning and at noon the street was lit exactly
+/// alike. The engine can be told now, so it is told, and [`face`]'s dome came
+/// down to the part of it that was never about the sun.
+///
+/// **Raw bytes and not [`encoded`].** The bump binding reads the upload
+/// through `texture::DATA`, which is the same bytes as numbers rather than as
+/// a colour. Put the sRGB curve on a direction and it is not that direction:
+/// a half encodes to 188, so a surface meant to lean a little leans a long
+/// way and the whole street tilts one way. Every other texture in this
+/// building goes through `encoded` and this one must not.
+///
+/// The field is built first and differenced after, rather than asking
+/// `sett_at` five times a texel: it is 3.1 million texels and four of the
+/// five answers would be thrown away.
+pub fn bumps(reaches: f32) -> blitzkit::texture::TextureData {
+    let ground = track(reaches);
+    let (from, size) = (ground.min, ground.size());
+    let middle = ground.center().z;
+    let (wide, tall) = (FACE_WIDE as usize, FACE_TALL as usize);
+
+    let mut high = vec![0.0f32; wide * tall];
+    for (y, row) in high.chunks_exact_mut(wide).enumerate() {
+        let across = from.z + (y as f32 + 0.5) / FACE_TALL as f32 * size.z;
+
+        for (x, at) in row.iter_mut().enumerate() {
+            let along = from.x + (x as f32 + 0.5) / FACE_WIDE as f32 * size.x;
+            *at = proud_at(along, across, middle);
+        }
+    }
+
+    // how much world a texel is worth each way, which is what turns a
+    // difference in height into a slope. The street is 72 along by 10
+    // across, so they are not the same number.
+    let (per_u, per_v) = (size.x / FACE_WIDE as f32, size.z / FACE_TALL as f32);
+    let mut pixels = Vec::with_capacity(wide * tall * 4);
+
+    for y in 0..tall {
+        for x in 0..wide {
+            // **The quad's own u and v, which `room::tiled_plane` lays along
+            // x and z in that order.** The shader builds its frame off those,
+            // so red leans the normal along the street and green across it.
+            // Swapped, the joints would light as if the sun were somewhere
+            // else.
+            let (left, right) = (x.saturating_sub(1), (x + 1).min(wide - 1));
+            let (near, far) = (y.saturating_sub(1), (y + 1).min(tall - 1));
+            let du =
+                (high[y * wide + right] - high[y * wide + left]) / ((right - left) as f32 * per_u);
+            let dv = (high[far * wide + x] - high[near * wide + x]) / ((far - near) as f32 * per_v);
+            let out = vec3(-du, -dv, 1.0).normalize();
+            let byte = |n: f32| ((n * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u8;
+
+            pixels.extend_from_slice(&[byte(out.x), byte(out.y), byte(out.z), 255]);
         }
     }
 
@@ -1659,6 +1797,172 @@ mod tests {
                 warmth(crate::aim::VILLAGE_SETT)
             );
         }
+    }
+
+    /// Spec 0125: the street's shape is in a normal map, it leans the way
+    /// the stone it is on falls, and it is written as numbers rather than
+    /// as a colour.
+    ///
+    /// **The last of those three is the one that cannot be seen.** A bump
+    /// map put through `encoded` still looks like a bump map and still
+    /// bends every draw on the street, by the wrong amount and in a way no
+    /// picture names: a flat texel's 128 encodes to 188, so the middle of
+    /// every stone leans a quarter turn off the surface it is on. The check
+    /// for it is the flat half of this test, which is why the bound there
+    /// is tight.
+    #[test]
+    fn the_street_leans_at_its_joints_and_lies_flat_on_its_stones() {
+        let reaches = 9.0;
+        let ground = track(reaches);
+        let map = bumps(reaches);
+        let (from, size) = (ground.min, ground.size());
+        let level = map.levels.first().expect("a base level");
+
+        assert_eq!(
+            (map.width(), map.height()),
+            (FACE_WIDE, FACE_TALL),
+            "the shape and the colour are read off one set of texture \
+             coordinates, so they have to be the same size"
+        );
+
+        // nothing on the street leans into the ground it is laid on
+        let under = level
+            .pixels
+            .chunks_exact(4)
+            .filter(|texel| texel[2] < 128)
+            .count();
+        assert_eq!(
+            under, 0,
+            "{} texels of the street lean into the earth",
+            under
+        );
+
+        let world = |x: usize, y: usize| {
+            (
+                from.x + (x as f32 + 0.5) / FACE_WIDE as f32 * size.x,
+                from.z + (y as f32 + 0.5) / FACE_TALL as f32 * size.z,
+            )
+        };
+        let lean = |x: usize, y: usize| {
+            let n = (y * FACE_WIDE as usize + x) * 4;
+
+            (
+                level.pixels[n] as f32 - 128.0,
+                level.pixels[n + 1] as f32 - 128.0,
+            )
+        };
+
+        let (mut flattest, mut keenest) = (0.0f32, 0.0f32);
+        let (mut stones, mut joints) = (0, 0);
+
+        for y in [
+            FACE_TALL as usize / 4,
+            FACE_TALL as usize / 2,
+            FACE_TALL as usize * 3 / 4,
+        ] {
+            for x in 1..FACE_WIDE as usize - 1 {
+                let (along, across) = world(x, y);
+                let (_, near) = sett_at(along, across, ground.center().z);
+                let (du, dv) = lean(x, y);
+                let most = du.abs().max(dv.abs());
+
+                if near >= SETT * 0.3 {
+                    // The middle of a stone, where the dome is all there
+                    // is. Three tenths and not a half: `sett_at` answers
+                    // with the nearer of two edges and the one round the
+                    // arc is counted at three quarters, so the furthest
+                    // from an edge anywhere on this street can be is
+                    // 0.075 and a half of a sett is unreachable.
+                    stones += 1;
+                    flattest = flattest.max(most);
+                } else if near < JOINT * 0.3 {
+                    // and the bottom of a joint, where the wall is
+                    joints += 1;
+                    keenest = keenest.max(most);
+                }
+            }
+        }
+
+        assert!(
+            stones > 100 && joints > 100,
+            "{} stone texels and {} joint ones is not enough of either to be reading the street",
+            stones,
+            joints
+        );
+        assert!(
+            flattest < 12.0,
+            "the middle of a stone leans {:.0} out of 128, where the dome alone is worth about \
+             three and an sRGB encode would be worth sixty",
+            flattest
+        );
+        assert!(
+            keenest > 25.0,
+            "the keenest joint in the street leans {:.0} out of 128, which is a street the sun \
+             cannot find the joints in",
+            keenest
+        );
+
+        // **And each joint wall leans up out of the joint.** The sign the
+        // other way round lights every joint as a ridge, which is a street
+        // of raised lines rather than of set stones and reads at a glance
+        // as the same street. Read on a radius out of a fan's own centre,
+        // at the angular middle of a cell where `to_side` is a whole half
+        // stone and cannot be the nearer edge, so what the gradient has in
+        // it is the ring wall alone and the inner and outer walls of one
+        // stone must lean opposite ways.
+        //
+        // The angle is not along either axis, so a street whose red and
+        // green were swapped fails this as well: the radius has both an x
+        // and a z in it and they are not the same number.
+        let middle = ground.center().z;
+        let fan = ((ground.center().x / ARC) - 0.5).round();
+        let centre = (fan + 0.5) * ARC;
+        let mut walls = 0;
+
+        for ring in [2.0f32, 3.0, 5.0] {
+            for turn in [0.6f32, 2.3, -1.1] {
+                let inner = SETT * 0.5 + ring * SETT;
+
+                for (at, sense) in [
+                    (inner + JOINT * 0.5, -1.0f32),
+                    (inner + SETT - JOINT * 0.5, 1.0),
+                ] {
+                    // the angular middle of whichever cell that angle falls
+                    // in, where `to_side` is a whole three quarters of half
+                    // a sett and so cannot be the nearer edge: what is left
+                    // in the gradient is the ring's own wall
+                    let step = SETT / at;
+                    let turn = ((turn / step).floor() + 0.5) * step;
+                    let (out, back) = (turn.cos(), turn.sin());
+                    let (along, across) = (centre + out * at, middle + back * at);
+                    let x = ((along - from.x) / size.x * FACE_WIDE as f32) as usize;
+                    let y = ((across - from.z) / size.z * FACE_TALL as f32) as usize;
+                    let (du, dv) = lean(x, y);
+                    // how far the lean points out along the radius it was
+                    // read on, which is the whole claim in one number
+                    let outward = (du * out + dv * back) * sense;
+
+                    walls += 1;
+                    assert!(
+                        outward > 8.0,
+                        "the {} wall of ring {} at {:.1} radians leans {:.0} {:.0}, which is \
+                         {:.0} up out of its own joint",
+                        if sense < 0.0 { "inner" } else { "outer" },
+                        ring,
+                        turn,
+                        du,
+                        dv,
+                        outward
+                    );
+                }
+            }
+        }
+
+        assert_eq!(
+            walls, 18,
+            "{} joint walls is not the two faces of each of nine stones",
+            walls
+        );
     }
     use super::*;
 
