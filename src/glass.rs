@@ -2479,7 +2479,9 @@ mod tests {
         // the body walking it would have stood inside the thing. What the
         // claim was ever about is getting all the way round the exhibit,
         // and the exhibit is two things now.
-        let pair = plinth(reaches).union(&crate::plasma::pedestal(reaches));
+        let pair = crate::plasma::solid(reaches)
+            .into_iter()
+            .fold(plinth(reaches), |all, one| all.union(&one));
         let out = crate::RADIUS + 0.4;
         let ring = [
             vec3(pair.min.x - out, UP + 0.2, pair.min.z - out),
@@ -2515,41 +2517,54 @@ mod tests {
     fn the_pedestal_leaves_the_walk_open() {
         let reaches = reaches();
         let die = plinth(reaches);
-        let stands = crate::plasma::pedestal(reaches);
-        let gap = stands.min.x - die.max.x;
 
-        assert!(
-            gap > 0.0 && gap < 0.6,
-            "the two stand {:.2} apart, which is a slot rather than a pair",
-            gap
-        );
+        for side in 0..crate::plasma::SIDES.len() {
+            let out = crate::plasma::SIDES[side];
+            let stands = crate::plasma::pedestal(reaches, side);
+            let gap = if out > 0.0 {
+                stands.min.x - die.max.x
+            } else {
+                die.min.x - stands.max.x
+            };
 
-        // the east colonnade, which is what the lane past it runs between
-        let column = frames(reaches)
-            .into_iter()
-            .map(|(at, size)| at.x - size.x * 0.5)
-            .filter(|west| *west > stands.max.x)
-            .fold(f32::MAX, f32::min);
-        let lane = column - stands.max.x;
+            assert!(
+                gap > 0.0 && gap < 0.6,
+                "the two stand {:.2} apart, which is a slot rather than a pair",
+                gap
+            );
 
-        assert!(
-            lane >= crate::back::CLEAR,
-            "the lane east of it is {:.2} and a body wants {:.2}",
-            lane,
-            crate::back::CLEAR
-        );
+            // the colonnade on that side, which is what the lane past it
+            // runs between: the nearest column face lying that way
+            let face = if out > 0.0 {
+                stands.max.x
+            } else {
+                stands.min.x
+            };
+            let lane = frames(reaches)
+                .into_iter()
+                .map(|(at, size)| ((at.x - out * size.x * 0.5) - face) * out)
+                .filter(|gap| *gap > 0.0)
+                .fold(f32::MAX, f32::min);
 
-        // and it walks, which is the thing a measurement cannot say
-        let down = (stands.max.x + column) * 0.5;
-        let to = vec3(down, UP, stands.max.z + 3.0);
-        let at = walked(vec3(down, UP + 0.2, stands.min.z - 3.0), to, 6.0);
+            assert!(
+                lane >= crate::back::CLEAR,
+                "the lane past it is {:.2} and a body wants {:.2}",
+                lane,
+                crate::back::CLEAR
+            );
 
-        assert!(
-            at.distance(to) < 0.8,
-            "walking the east lane stopped {:.2} short of {:?}",
-            at.distance(to),
-            to
-        );
+            // and it walks, which is the thing a measurement cannot say
+            let down = face + out * lane * 0.5;
+            let to = vec3(down, UP, stands.max.z + 3.0);
+            let at = walked(vec3(down, UP + 0.2, stands.min.z - 3.0), to, 6.0);
+
+            assert!(
+                at.distance(to) < 0.8,
+                "walking the lane stopped {:.2} short of {:?}",
+                at.distance(to),
+                to
+            );
+        }
     }
 
     /// The plinth has the room's length behind it from either end of the

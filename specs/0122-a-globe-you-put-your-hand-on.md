@@ -3,8 +3,9 @@
 **Status:** implemented
 **Date:** 2026-11-21
 **Built:** 2026-11-21, the same day, in three rounds off three screenshots,
-a fourth for the fault they left behind, and six more on Jake's own
-pictures of it running, then on a photograph and a video of the real thing.
+a fourth for the fault they left behind, and seven more on Jake's own
+pictures of it running, on a photograph and a video of the real thing, and on
+the room wanting to be symmetrical.
 
 ## Goal
 
@@ -50,11 +51,11 @@ from the real exhibit and the only honest target available.
 
 ## Behavior
 
-**The pedestal.** 0.52 square and 0.95 tall, standing 0.30 east of the mirror
-ball's plinth on that plinth's own z centre line, so the two read as a pair
-across the walk. Cut in the courses `plinth_pieces` already cuts, which takes
+**The pedestals.** Two of them, 0.52 square and 0.95 tall, standing 0.30
+either side of the mirror ball's plinth on that plinth's own z centre line,
+so the three read as a row with the ball in the middle of it. Cut in the courses `plinth_pieces` already cuts, which takes
 a box now so that both plinths in this room are cut once rather than twice.
-The east lane past it keeps 1.65, over this building's 1.05.
+The lane past each keeps 1.65, over this building's 1.05.
 
 **It is lower on purpose.** The mirror ball's middle is at eye height because
 walking at it is walking into it. This one's is 1.17 over the floor, which is
@@ -103,9 +104,12 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
 
 ## Acceptance criteria
 
-- The pedestal stands clear of the mirror ball's plinth and leaves a body room
-  to pass on the east side, and the lane
+- Each pedestal stands clear of the mirror ball's plinth and leaves a body
+  room to pass, and the lane past it
   walks. — `glass::tests::the_pedestal_leaves_the_walk_open`
+- The two stand symmetrically about the ball and are not each other, in where
+  their arms point or when they are
+  lit. — `plasma::tests::the_two_stand_either_side_and_are_not_each_other`
 - Every filament runs from the electrode to the shell and nowhere outside it,
   over a sweep of times and eye
   positions. — `plasma::tests::every_filament_runs_from_the_core_to_the_glass`
@@ -244,7 +248,21 @@ up all dark sooner than it feels like they should: inside ten minutes of
 running, at nearly a third each. So an arm cannot go out if it is the last
 one, and the globe is never dark by construction rather than by luck.
 
-**And then a photograph and a video of the real thing.** Jake sent both.
+**And then there were two.** Jake, with the room in front of him: make it
+symmetrical, add another sparkle ball to the left. One globe beside a ball is
+a ball with a thing next to it; one either side is a row, and the ball is the
+middle of it rather than the odd one over.
+
+The thing that needed thinking about is that a globe's arms are worked out
+from a scatter of which arm it is, so two globes seeded that way are one
+globe drawn twice, standing a metre and a half apart in plain sight of each
+other. The dice are drawn off which arm *and* which globe now, and the test
+asks for it from the far side: the arms of the two point different ways in
+almost every sample, and the two are lit and dark apart often enough to tell.
+With the globe left out of the seed that second claim fails at once and says
+so, which is what a control is for.
+
+**And before that, a photograph and a video of the real thing.** Jake sent both.
 What they changed, in the order the difference mattered.
 
 The electrode is a ball, not a point: nearly a quarter of the globe across,

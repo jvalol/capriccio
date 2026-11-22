@@ -13290,10 +13290,8 @@ impl Game for Arcade {
             ));
         }
 
-        // and spec 0122's globe, whose fitting is the globe itself.
-        {
-            let at = plasma::lamp(self.room.reaches);
-
+        // and spec 0122's globes, whose fitting is the globe itself.
+        for at in plasma::lamps(self.room.reaches) {
             shades.push((
                 eye.distance_squared(at),
                 at,

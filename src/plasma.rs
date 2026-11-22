@@ -29,6 +29,13 @@ use crate::aim::Plain;
 /// there is no room in the walk for the first.
 pub const APART: f32 = 0.30;
 
+/// Which side of the ball's plinth each one stands on.
+///
+/// **Two, since Jake asked for the room to be symmetrical.** One globe
+/// beside a ball is a ball with a thing next to it; one either side is a
+/// row, and the ball is the middle of it rather than the odd one over.
+pub const SIDES: [f32; 2] = [-1.0, 1.0];
+
 /// The pedestal: how wide it is and how high it stands.
 ///
 /// **Lower than the ball's plinth, which is the whole siting.** The ball's
@@ -45,15 +52,19 @@ pub const STEM: f32 = 0.010;
 
 /// Where the pedestal stands, derived off the ball's plinth so that moving
 /// one moves the other.
-pub fn pedestal(reaches: f32) -> Aabb {
+pub fn pedestal(reaches: f32, side: usize) -> Aabb {
     let plinth = crate::glass::plinth(reaches);
     let middle = plinth.center();
-    let west = plinth.max.x + APART;
+    let from = if SIDES[side] > 0.0 {
+        plinth.max.x + APART
+    } else {
+        plinth.min.x - APART - PEDESTAL
+    };
 
     Aabb::new(
-        vec3(west, plinth.min.y, middle.z - PEDESTAL * 0.5),
+        vec3(from, plinth.min.y, middle.z - PEDESTAL * 0.5),
         vec3(
-            west + PEDESTAL,
+            from + PEDESTAL,
             plinth.min.y + PEDESTAL_UP,
             middle.z + PEDESTAL * 0.5,
         ),
@@ -61,8 +72,8 @@ pub fn pedestal(reaches: f32) -> Aabb {
 }
 
 /// The globe: where its middle is and how big it is.
-pub fn globe(reaches: f32) -> (Vec3, f32) {
-    let stands = pedestal(reaches);
+pub fn globe(reaches: f32, side: usize) -> (Vec3, f32) {
+    let stands = pedestal(reaches, side);
     let at = stands.center();
 
     (vec3(at.x, stands.max.y + SHELL, at.z), SHELL)
@@ -72,7 +83,9 @@ pub fn globe(reaches: f32) -> (Vec3, f32) {
 /// is 0.22 inside a footprint of 0.26, so it never stands out past what is
 /// holding it.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
-    vec![pedestal(reaches)]
+    (0..SIDES.len())
+        .map(|side| pedestal(reaches, side))
+        .collect()
 }
 
 /// How many filaments there are and how many links each is drawn in.
@@ -202,6 +215,16 @@ pub const DIES_IN: f32 = 0.09;
 /// 0122, so what stands in for a dice is a function of which arm and which
 /// jump. Not a good hash and it does not need to be one. It needs to be
 /// unlike its neighbour, which the multiply and the fraction see to.
+/// The number an arm's own dice are drawn off: which arm it is, and which
+/// globe it is on.
+///
+/// **Both of them, since there are two globes.** Seeded off the arm number
+/// alone, the pair would be one globe drawn twice, and they stand a metre
+/// and a half apart in plain sight of each other.
+fn of_the_arm(which: usize, side: usize) -> f32 {
+    which as f32 + side as f32 * 101.7
+}
+
 pub fn scatter(of: f32) -> f32 {
     let x = (of * 12.9898 + 78.233).sin() * 43758.547;
 
@@ -222,11 +245,11 @@ pub const RUNS_BACK: u32 = 64;
 /// What it is for is that an arm which has just struck should come back
 /// somewhere new rather than where the last one went out. Inside a run it
 /// does not move, so the arm crawls on from where it is.
-pub fn struck_at(which: usize, step: f32) -> f32 {
+pub fn struck_at(which: usize, side: usize, step: f32) -> f32 {
     let mut at = step;
 
     for _ in 0..RUNS_BACK {
-        if !alight(which, at - 1.0) {
+        if !alight(which, side, at - 1.0) {
             return at;
         }
 
@@ -243,10 +266,10 @@ pub fn struck_at(which: usize, step: f32) -> f32 {
 /// this arm's own rate and in its own direction, and the kick of whichever
 /// jump era it is in. Never past the fan, whatever any of them say, which is
 /// what keeps every arm on the side the eye is on.
-pub fn aim(which: usize, since: f32) -> (f32, f32) {
-    let n = which as f32;
+pub fn aim(which: usize, side: usize, since: f32) -> (f32, f32) {
+    let n = of_the_arm(which, side);
     let round = std::f32::consts::TAU;
-    let run = struck_at(which, clock(which, since).0);
+    let run = struck_at(which, side, clock(which, side, since).0);
     let seed = n * 31.7 + run * 7.13;
 
     // where the run began
@@ -266,8 +289,8 @@ pub fn aim(which: usize, since: f32) -> (f32, f32) {
     let frac = (into / JUMPS_IN).min(1.0);
     let eased = 1.0 - (1.0 - frac) * (1.0 - frac);
 
-    let (was_lean, was_roll) = kick(which, mark - 1.0);
-    let (now_lean, now_roll) = kick(which, mark);
+    let (was_lean, was_roll) = kick(which, side, mark - 1.0);
+    let (now_lean, now_roll) = kick(which, side, mark);
     // the short way round, or a kick at six radians crossing to one at a
     // tenth sweeps the whole circle to get there
     let turn = (now_roll - was_roll + round * 0.5).rem_euclid(round) - round * 0.5;
@@ -285,8 +308,8 @@ pub fn aim(which: usize, since: f32) -> (f32, f32) {
 
 /// What one jump moves an arm by: a shove round the line and a nudge in or
 /// out of the middle.
-fn kick(which: usize, mark: f32) -> (f32, f32) {
-    let seed = which as f32 * 23.9 + mark * 11.37;
+fn kick(which: usize, side: usize, mark: f32) -> (f32, f32) {
+    let seed = of_the_arm(which, side) * 23.9 + mark * 11.37;
 
     (
         (scatter(seed) - 0.5) * 0.5,
@@ -299,8 +322,8 @@ fn kick(which: usize, mark: f32) -> (f32, f32) {
 /// Its own function because three things ask it, and an arm whose shape,
 /// whose jump and whose life disagreed about which beat it was in would
 /// strike in one place and light up in another.
-pub fn clock(which: usize, since: f32) -> (f32, f32) {
-    let n = which as f32;
+pub fn clock(which: usize, side: usize, since: f32) -> (f32, f32) {
+    let n = of_the_arm(which, side);
     let beat = HOLDS * (0.55 + 0.9 * scatter(n + 0.5));
     let tick = since / beat + scatter(n + 11.3) * 7.0;
     let step = tick.floor();
@@ -310,12 +333,12 @@ pub fn clock(which: usize, since: f32) -> (f32, f32) {
 
 /// Whether an arm is lit at all on one of its beats, and by how much it
 /// cleared the threshold, which is what settles ties when none of them did.
-pub fn alight(which: usize, step: f32) -> bool {
-    stayed(which, step) > GOES_OUT
+pub fn alight(which: usize, side: usize, step: f32) -> bool {
+    stayed(which, side, step) > GOES_OUT
 }
 
-fn stayed(which: usize, step: f32) -> f32 {
-    scatter(which as f32 * 31.7 + step * 7.13 + 19.4)
+fn stayed(which: usize, side: usize, step: f32) -> f32 {
+    scatter(of_the_arm(which, side) * 31.7 + step * 7.13 + 19.4)
 }
 
 /// And how brightly, now: nought when it is out, and the ramps at either end
@@ -325,8 +348,8 @@ fn stayed(which: usize, step: f32) -> f32 {
 /// again next beat does not go out in between, it jumps, and fading it down
 /// and back up at every jump would be seven things blinking in time with
 /// their own movement. It only dies when there is nothing to jump to.
-pub fn burning(which: usize, since: f32) -> f32 {
-    let mine = on_its_own(which, since);
+pub fn burning(which: usize, side: usize, since: f32) -> f32 {
+    let mine = on_its_own(which, side, since);
 
     if mine > 0.0 {
         return mine;
@@ -338,13 +361,13 @@ pub fn burning(which: usize, since: f32) -> f32 {
     // plasma globe that blinks off is a broken plasma globe. So when nothing
     // at all is lit, the arm that came nearest to staying strikes instead.
     // It arrives at once rather than ramping, which is what a strike is.
-    if (0..FILAMENTS).any(|other| other != which && on_its_own(other, since) > 0.0) {
+    if (0..FILAMENTS).any(|other| other != which && on_its_own(other, side, since) > 0.0) {
         return 0.0;
     }
 
     let nearest = (0..FILAMENTS)
         .max_by(|one, two| {
-            let of = |it: &usize| stayed(*it, clock(*it, since).0);
+            let of = |it: &usize| stayed(*it, side, clock(*it, side, since).0);
 
             of(one).total_cmp(&of(two))
         })
@@ -358,15 +381,15 @@ pub fn burning(which: usize, since: f32) -> f32 {
 }
 
 /// What an arm would be doing with no regard for the others.
-fn on_its_own(which: usize, since: f32) -> f32 {
-    let (step, through) = clock(which, since);
+fn on_its_own(which: usize, side: usize, since: f32) -> f32 {
+    let (step, through) = clock(which, side, since);
 
-    if !alight(which, step) {
+    if !alight(which, side, step) {
         return 0.0;
     }
 
     let up = (through / STRIKES_IN).min(1.0);
-    let down = if alight(which, step + 1.0) {
+    let down = if alight(which, side, step + 1.0) {
         1.0
     } else {
         ((1.0 - through) / DIES_IN).min(1.0)
@@ -386,8 +409,14 @@ fn on_its_own(which: usize, since: f32) -> f32 {
 /// run is crooked. That keeps it inside the shell as well: the furthest any
 /// link gets from the middle is the shell times the square root of one plus
 /// `BOW` squared at the widest, which is under the shell.
-pub fn filament(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; LINKS + 1] {
-    let (middle, shell) = globe(reaches);
+pub fn filament(
+    reaches: f32,
+    which: usize,
+    side: usize,
+    eye: Vec3,
+    since: f32,
+) -> [Vec3; LINKS + 1] {
+    let (middle, shell) = globe(reaches, side);
     let toward = {
         let out = (eye - middle).normalize_or_zero();
 
@@ -399,19 +428,19 @@ pub fn filament(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; LIN
     };
     // a frame about that line, picked off whichever axis it is least like,
     // because the cross product of a line with itself is nothing
-    let side = if toward.y.abs() < 0.9 {
+    let across = if toward.y.abs() < 0.9 {
         toward.cross(Vec3::Y).normalize()
     } else {
         toward.cross(Vec3::X).normalize()
     };
-    let other = toward.cross(side);
+    let other = toward.cross(across);
 
-    let n = which as f32;
+    let n = of_the_arm(which, side);
     // where it stands: crawling on from where this run struck, with the odd
     // jump laid over it. Its own rate, its own way round and its own era, so
     // no two arms are doing the same thing at the same time.
-    let (lean, roll) = aim(which, since);
-    let along = toward * lean.cos() + (side * roll.cos() + other * roll.sin()) * lean.sin();
+    let (lean, roll) = aim(which, side, since);
+    let along = toward * lean.cos() + (across * roll.cos() + other * roll.sin()) * lean.sin();
 
     let mut links = [Vec3::ZERO; LINKS + 1];
 
@@ -420,12 +449,12 @@ pub fn filament(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; LIN
         let held = (t * std::f32::consts::PI).sin() * shell;
         // the thread's own shape is re-struck when the arm strikes, so a
         // fresh arm is a new discharge rather than the old one moved
-        let struck =
-            scatter(n * 5.1 + struck_at(which, clock(which, since).0)) * std::f32::consts::TAU;
+        let struck = scatter(n * 5.1 + struck_at(which, side, clock(which, side, since).0))
+            * std::f32::consts::TAU;
         let slow = since * (3.2 + n * 0.5) + k as f32 * WANDERS_BY + struck;
         let fast = since * (7.9 + n * 0.9) + k as f32 * CRINKLES_BY + struck * 2.0;
-        let off = (side * slow.cos() + other * slow.sin()) * (held * WANDER)
-            + (side * fast.cos() + other * fast.sin()) * (held * CRINKLE);
+        let off = (across * slow.cos() + other * slow.sin()) * (held * WANDER)
+            + (across * fast.cos() + other * fast.sin()) * (held * CRINKLE);
 
         // out of the electrode's own face rather than its middle, since
         // the electrode is a ball you can see and not a point
@@ -457,14 +486,18 @@ const _: () = assert!(SPARK < BLOOM, "the spark's core is wider than its bloom")
 
 /// Where that spark's middle is, as a share of the shell: in by the bloom,
 /// so nothing of it stands outside the glass.
-pub fn spark_at(reaches: f32, which: usize, eye: Vec3, since: f32) -> Vec3 {
-    pulled_in(reaches, filament(reaches, which, eye, since)[LINKS])
+pub fn spark_at(reaches: f32, which: usize, side: usize, eye: Vec3, since: f32) -> Vec3 {
+    pulled_in(
+        reaches,
+        side,
+        filament(reaches, which, side, eye, since)[LINKS],
+    )
 }
 
 /// The same for any point on the glass: pulled in along its own radius by the
 /// bloom, so nothing of the spark stands outside.
-pub fn pulled_in(reaches: f32, tip: Vec3) -> Vec3 {
-    let (middle, shell) = globe(reaches);
+pub fn pulled_in(reaches: f32, side: usize, tip: Vec3) -> Vec3 {
+    let (middle, shell) = globe(reaches, side);
     let out = (tip - middle).normalize_or_zero();
 
     middle + out * (shell * (1.0 - BLOOM))
@@ -490,11 +523,17 @@ pub const FORK_SPREAD: f32 = 0.55;
 ///
 /// Seeded off the same lit run as its parent, so it is re-struck when the
 /// parent is and crawls with it rather than wandering off on its own clock.
-pub fn branch(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; BRANCH_LINKS + 1] {
-    let (middle, shell) = globe(reaches);
-    let parent = filament(reaches, which, eye, since);
-    let run = struck_at(which, clock(which, since).0);
-    let seed = which as f32 * 41.3 + run * 13.9;
+pub fn branch(
+    reaches: f32,
+    which: usize,
+    side: usize,
+    eye: Vec3,
+    since: f32,
+) -> [Vec3; BRANCH_LINKS + 1] {
+    let (middle, shell) = globe(reaches, side);
+    let parent = filament(reaches, which, side, eye, since);
+    let run = struck_at(which, side, clock(which, side, since).0);
+    let seed = of_the_arm(which, side) * 41.3 + run * 13.9;
 
     // where it leaves, in the outer half of the parent
     let at = ((FORKS_AT + 0.4 * scatter(seed)) * LINKS as f32) as usize;
@@ -503,15 +542,15 @@ pub fn branch(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; BRANC
     // and which way it goes: off the parent's own line by about a third of
     // a right angle, rolled somewhere round it
     let along = (parent[LINKS] - middle).normalize_or_zero();
-    let side = if along.y.abs() < 0.9 {
+    let across = if along.y.abs() < 0.9 {
         along.cross(Vec3::Y).normalize()
     } else {
         along.cross(Vec3::X).normalize()
     };
-    let other = along.cross(side);
+    let other = along.cross(across);
     let roll = scatter(seed + 5.3) * std::f32::consts::TAU + since * 0.4;
     let spread = FORK_SPREAD * (0.5 + 0.5 * scatter(seed + 8.7));
-    let out = (along * spread.cos() + (side * roll.cos() + other * roll.sin()) * spread.sin())
+    let out = (along * spread.cos() + (across * roll.cos() + other * roll.sin()) * spread.sin())
         .normalize_or_zero();
     let lands = middle + out * shell;
 
@@ -520,12 +559,13 @@ pub fn branch(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; BRANC
     for (k, link) in links.iter_mut().enumerate() {
         let t = k as f32 / BRANCH_LINKS as f32;
         let held = (t * std::f32::consts::PI).sin() * shell;
-        let slow = since * (2.9 + which as f32 * 0.4) + k as f32 * WANDERS_BY + seed;
-        let fast = since * (6.1 + which as f32 * 0.6) + k as f32 * CRINKLES_BY + seed * 2.0;
+        let slow = since * (2.9 + of_the_arm(which, side) * 0.4) + k as f32 * WANDERS_BY + seed;
+        let fast =
+            since * (6.1 + of_the_arm(which, side) * 0.6) + k as f32 * CRINKLES_BY + seed * 2.0;
 
         *link = from.lerp(lands, t)
-            + (side * slow.cos() + other * slow.sin()) * (held * WANDER)
-            + (side * fast.cos() + other * fast.sin()) * (held * CRINKLE);
+            + (across * slow.cos() + other * slow.sin()) * (held * WANDER)
+            + (across * fast.cos() + other * fast.sin()) * (held * CRINKLE);
     }
 
     links
@@ -543,8 +583,10 @@ pub const LAMP_LIT: f32 = 0.55;
 pub const LAMP_RANGE: f32 = 1.6;
 
 /// Where that lamp hangs, which is the globe's own middle.
-pub fn lamp(reaches: f32) -> Vec3 {
-    globe(reaches).0
+pub fn lamps(reaches: f32) -> Vec<Vec3> {
+    (0..SIDES.len())
+        .map(|side| globe(reaches, side).0)
+        .collect()
 }
 
 /// What the ball sees of it, since the tracer reads a box's shape and would
@@ -554,7 +596,10 @@ pub fn lamp(reaches: f32) -> Vec3 {
 /// drift from it. The globe is a lathe and the filaments are a hand's width,
 /// and neither is in `solid`, so neither is traced.
 pub fn named(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
-    vec![(pedestal(reaches), crate::aim::GLASS_TRIM)]
+    solid(reaches)
+        .into_iter()
+        .map(|box_| (box_, crate::aim::GLASS_TRIM))
+        .collect()
 }
 
 /// The pedestal as it is drawn, in the courses the ball's plinth is cut in.
@@ -572,8 +617,8 @@ pub fn named(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
 /// shadowed squares with a stair-stepped diagonal through it, which reads
 /// like a shadow map and is not one. The plinth beside it is filtered out of
 /// that loop by name and has been since it was built.
-pub fn pieces(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
-    crate::glass::plinth_courses(pedestal(reaches))
+pub fn pieces(reaches: f32, side: usize) -> Vec<(Aabb, glam::Vec4)> {
+    crate::glass::plinth_courses(pedestal(reaches, side))
 }
 
 /// Draws the pedestal, the globe and whatever the filaments are doing.
@@ -585,9 +630,25 @@ pub fn draw(
     cube: MeshId,
     sphere: Option<MeshId>,
 ) {
-    let stands = pedestal(reaches);
+    for side in 0..SIDES.len() {
+        draw_one(scene, reaches, side, since, eye, cube, sphere);
+    }
+}
 
-    for (box_, colour) in pieces(reaches) {
+/// One of them: its stand, its stem, its arms and their sparks, its electrode
+/// and the glass over the lot.
+fn draw_one(
+    scene: &mut Scene,
+    reaches: f32,
+    side: usize,
+    since: f32,
+    eye: Vec3,
+    cube: MeshId,
+    sphere: Option<MeshId>,
+) {
+    let stands = pedestal(reaches, side);
+
+    for (box_, colour) in pieces(reaches, side) {
         scene.push_plain(
             cube,
             &Transform::at(box_.center()).with_scale(box_.size()),
@@ -595,7 +656,7 @@ pub fn draw(
         );
     }
 
-    let (middle, shell) = globe(reaches);
+    let (middle, shell) = globe(reaches, side);
 
     // the stem, from the stand's top up to the electrode
     let foot = stands.max.y;
@@ -613,13 +674,13 @@ pub fn draw(
     // comes to nothing at the glass rather than arriving there as thick as
     // it set out, and an arm that is out this beat is not drawn at all.
     for which in 0..FILAMENTS {
-        let burning = burning(which, since);
+        let burning = burning(which, side, since);
 
         if burning <= 0.0 {
             continue;
         }
 
-        let links = filament(reaches, which, eye, since);
+        let links = filament(reaches, which, side, eye, since);
 
         for (k, pair) in links.windows(2).enumerate() {
             let (from, to) = (pair[0], pair[1]);
@@ -633,10 +694,9 @@ pub fn draw(
             let t = (k as f32 + 0.5) / (LINKS - 1) as f32;
             let thick = THREAD * (1.0 - (1.0 - THINS_TO) * t);
             let lit = (1.0 - (1.0 - DIMS_TO) * t) * burning;
-            // white where it leaves the electrode and violet by the glass,
-            // because what is hottest is whitest
-            // and it is violet well before the glass, not halfway along:
-            // what is white in the photograph is the first fifth
+            // white where it leaves the electrode and violet well before the
+            // glass, because what is hottest is whitest and what is white in
+            // the photograph is the first fifth
             let hue = crate::aim::PLASMA_HOT
                 .truncate()
                 .lerp(crate::aim::PLASMA.truncate(), (t * COOLS_BY).min(1.0));
@@ -653,7 +713,7 @@ pub fn draw(
         // the branch off it, which every filament in the real thing has.
         // Thinner and dimmer than its parent, because it is what is left of
         // the discharge after the fork.
-        let twig = branch(reaches, which, eye, since);
+        let twig = branch(reaches, which, side, eye, since);
 
         for pair in twig.windows(2) {
             let (from, to) = (pair[0], pair[1]);
@@ -681,12 +741,12 @@ pub fn draw(
         let Some(sphere) = sphere else {
             continue;
         };
-        let breath = 0.85 + 0.15 * (since * (2.1 + which as f32 * 0.37) + which as f32 * 2.9).sin();
-        let (_, shell) = globe(reaches);
+        let n = of_the_arm(which, side);
+        let breath = 0.85 + 0.15 * (since * (2.1 + n * 0.37) + n * 2.9).sin();
 
         for (at, size) in [
-            (spark_at(reaches, which, eye, since), 1.0),
-            (pulled_in(reaches, twig[BRANCH_LINKS]), 0.55),
+            (spark_at(reaches, which, side, eye, since), 1.0),
+            (pulled_in(reaches, side, twig[BRANCH_LINKS]), 0.55),
         ] {
             scene.push_fitting(
                 sphere,
@@ -714,14 +774,9 @@ pub fn draw(
     );
     // **With a highlight on it, which is the whole of what says glass.**
     // Drawn plain and nearly clear it was not there at all: the filaments
-    // hung in the air and the thing read as a sparkler rather than
-    // something under a dome. What a hot spot off the bay lamps gives it is
-    // a rim and a curve.
-    // **With a highlight on it, which is the whole of what says glass.**
-    // Drawn plain and nearly clear it was not there at all: the filaments
-    // hung in the air and the thing read as a sparkler rather than
-    // something under a dome. What a hot spot off the bay lamps gives it is
-    // a rim and a curve.
+    // hung in the air and the thing read as a sparkler rather than something
+    // under a dome. What a hot spot off the bay lamps gives it is a rim and
+    // a curve.
     scene.push_material(
         sphere,
         &Transform::at(middle).with_scale(Vec3::splat(shell * 2.0)),
@@ -740,8 +795,8 @@ mod tests {
 
     /// A ring of places to stand, so every test that asks about the eye asks
     /// from all round rather than from the one spot that happens to work.
-    fn all_round(reaches: f32) -> Vec<Vec3> {
-        let (middle, _) = globe(reaches);
+    fn all_round(reaches: f32, side: usize) -> Vec<Vec3> {
+        let (middle, _) = globe(reaches, side);
 
         (0..16)
             .map(|n| {
@@ -769,39 +824,42 @@ mod tests {
     #[test]
     fn every_filament_runs_from_the_core_to_the_glass() {
         let reaches = reaches();
-        let (middle, shell) = globe(reaches);
 
-        for eye in all_round(reaches) {
-            for tenths in 0..40 {
-                let since = tenths as f32 * 0.37;
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
 
-                for which in 0..FILAMENTS {
-                    let links = filament(reaches, which, eye, since);
+            for eye in all_round(reaches, side) {
+                for tenths in 0..40 {
+                    let since = tenths as f32 * 0.37;
 
-                    assert!(
-                        (links[0].distance(middle) - CORE).abs() < 1e-5,
-                        "filament {} starts {} out and the electrode is {}",
-                        which,
-                        links[0].distance(middle),
-                        CORE
-                    );
-                    assert!(
-                        (links[LINKS].distance(middle) - shell).abs() < 1e-4,
-                        "filament {} ends {} from the middle and the shell is {}",
-                        which,
-                        links[LINKS].distance(middle),
-                        shell
-                    );
+                    for which in 0..FILAMENTS {
+                        let links = filament(reaches, which, side, eye, since);
 
-                    for (k, link) in links.iter().enumerate() {
                         assert!(
-                            link.distance(middle) <= shell + 1e-4,
-                            "link {} of filament {} is {} out and the shell is {}",
-                            k,
+                            (links[0].distance(middle) - CORE).abs() < 1e-5,
+                            "filament {} starts {} out and the electrode is {}",
                             which,
-                            link.distance(middle),
+                            links[0].distance(middle),
+                            CORE
+                        );
+                        assert!(
+                            (links[LINKS].distance(middle) - shell).abs() < 1e-4,
+                            "filament {} ends {} from the middle and the shell is {}",
+                            which,
+                            links[LINKS].distance(middle),
                             shell
                         );
+
+                        for (k, link) in links.iter().enumerate() {
+                            assert!(
+                                link.distance(middle) <= shell + 1e-4,
+                                "link {} of filament {} is {} out and the shell is {}",
+                                k,
+                                which,
+                                link.distance(middle),
+                                shell
+                            );
+                        }
                     }
                 }
             }
@@ -822,29 +880,32 @@ mod tests {
     #[test]
     fn the_filaments_reach_for_whoever_is_there() {
         let reaches = reaches();
-        let (middle, shell) = globe(reaches);
         let least = FAN.cos();
 
         assert!(least > 0.0, "a fan of {} is not a lean at all", FAN);
 
-        for eye in all_round(reaches) {
-            let toward = (eye - middle).normalize();
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
 
-            for tenths in 0..40 {
-                let since = tenths as f32 * 0.37;
+            for eye in all_round(reaches, side) {
+                let toward = (eye - middle).normalize();
 
-                for which in 0..FILAMENTS {
-                    let tip = filament(reaches, which, eye, since)[LINKS];
-                    let leans = ((tip - middle) / shell).dot(toward);
+                for tenths in 0..40 {
+                    let since = tenths as f32 * 0.37;
 
-                    assert!(
-                        leans >= least - 1e-3,
-                        "filament {} leans {} toward an eye at {:?} and the fan allows {}",
-                        which,
-                        leans,
-                        eye,
-                        least
-                    );
+                    for which in 0..FILAMENTS {
+                        let tip = filament(reaches, which, side, eye, since)[LINKS];
+                        let leans = ((tip - middle) / shell).dot(toward);
+
+                        assert!(
+                            leans >= least - 1e-3,
+                            "filament {} leans {} toward an eye at {:?} and the fan allows {}",
+                            which,
+                            leans,
+                            eye,
+                            least
+                        );
+                    }
                 }
             }
         }
@@ -877,97 +938,102 @@ mod tests {
     #[test]
     fn the_arms_crawl_at_their_own_rates_and_jump_apart() {
         let reaches = reaches();
-        let (middle, shell) = globe(reaches);
-        let eye = middle + vec3(1.2, 0.3, 0.6);
         let frames = 7200;
         let step = 1.0 / 60.0;
         let leapt = 8.0;
 
-        let mut creeps = [0.0f32; FILAMENTS];
-        let mut leaping = vec![vec![false; frames]; FILAMENTS];
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
+            let eye = middle + vec3(1.2, 0.3, 0.6);
+            let mut creeps = [0.0f32; FILAMENTS];
+            let mut leaping = vec![vec![false; frames]; FILAMENTS];
 
-        for (which, mine) in leaping.iter_mut().enumerate() {
-            let mut moves: Vec<(usize, f32)> = Vec::new();
+            for (which, mine) in leaping.iter_mut().enumerate() {
+                let mut moves: Vec<(usize, f32)> = Vec::new();
 
-            for (frame, _) in (0..frames).map(|f| (f, ())) {
-                let since = frame as f32 * step;
+                for (frame, _) in (0..frames).map(|f| (f, ())) {
+                    let since = frame as f32 * step;
 
-                if burning(which, since) <= 0.0 || burning(which, since + step) <= 0.0 {
-                    continue;
+                    if burning(which, side, since) <= 0.0
+                        || burning(which, side, since + step) <= 0.0
+                    {
+                        continue;
+                    }
+
+                    let was = (filament(reaches, which, side, eye, since)[LINKS] - middle) / shell;
+                    let now =
+                        (filament(reaches, which, side, eye, since + step)[LINKS] - middle) / shell;
+
+                    moves.push((frame, was.distance(now)));
                 }
 
-                let was = (filament(reaches, which, eye, since)[LINKS] - middle) / shell;
-                let now = (filament(reaches, which, eye, since + step)[LINKS] - middle) / shell;
+                let mut sorted: Vec<f32> = moves.iter().map(|(_, d)| *d).collect();
+                sorted.sort_by(|one, two| one.total_cmp(two));
 
-                moves.push((frame, was.distance(now)));
-            }
+                let creep = sorted[sorted.len() / 2];
+                creeps[which] = creep;
 
-            let mut sorted: Vec<f32> = moves.iter().map(|(_, d)| *d).collect();
-            sorted.sort_by(|one, two| one.total_cmp(two));
-
-            let creep = sorted[sorted.len() / 2];
-            creeps[which] = creep;
-
-            assert!(
-                creep > 0.0005,
-                "arm {} creeps {:.5} a frame, so it is standing still",
-                which,
-                creep
-            );
-            assert!(
-                creep < 0.02,
-                "arm {} creeps {:.5} a frame, so it is sweeping",
-                which,
-                creep
-            );
-
-            for (frame, far) in moves {
-                mine[frame] = far > creep * leapt;
-            }
-
-            let leaps = mine.iter().filter(|it| **it).count();
-
-            assert!(leaps > 10, "arm {} never jumped at all", which);
-            // A jump takes `JUMPS_IN` out of an era of `ERA`, so the share
-            // is a few hundredths by construction. What this asks is the
-            // intent rather than the arithmetic: that crawling is what an
-            // arm is mostly doing.
-            assert!(
-                (leaps as f32 / frames as f32) < 0.15,
-                "arm {} jumped in {:.4} of frames, so it is not crawling",
-                which,
-                leaps as f32 / frames as f32
-            );
-        }
-
-        let quickest = creeps.iter().copied().fold(f32::MIN, f32::max);
-        let slowest = creeps.iter().copied().fold(f32::MAX, f32::min);
-
-        assert!(
-            quickest / slowest > 3.0,
-            "the quickest arm creeps {:.2} times the slowest, which is one rate shared out",
-            quickest / slowest
-        );
-
-        for (which, mine) in leaping.iter().enumerate() {
-            for (other, theirs) in leaping.iter().enumerate().skip(which + 1) {
-                let together = mine
-                    .iter()
-                    .zip(theirs.iter())
-                    .filter(|(one, two)| **one && **two)
-                    .count() as f32
-                    / frames as f32;
-
-                // Two arms each jumping a twentieth of the time meet in a
-                // four hundredth of frames if nothing links them. This
-                // allows four times that and still fails anything in step.
                 assert!(
-                    together < 0.02,
-                    "arms {} and {} jump together in {:.4} of frames",
+                    creep > 0.0005,
+                    "arm {} creeps {:.5} a frame, so it is standing still",
                     which,
-                    other,
-                    together
+                    creep
                 );
+                assert!(
+                    creep < 0.02,
+                    "arm {} creeps {:.5} a frame, so it is sweeping",
+                    which,
+                    creep
+                );
+
+                for (frame, far) in moves {
+                    mine[frame] = far > creep * leapt;
+                }
+
+                let leaps = mine.iter().filter(|it| **it).count();
+
+                assert!(leaps > 10, "arm {} never jumped at all", which);
+                // A jump takes `JUMPS_IN` out of an era of `ERA`, so the share
+                // is a few hundredths by construction. What this asks is the
+                // intent rather than the arithmetic: that crawling is what an
+                // arm is mostly doing.
+                assert!(
+                    (leaps as f32 / frames as f32) < 0.15,
+                    "arm {} jumped in {:.4} of frames, so it is not crawling",
+                    which,
+                    leaps as f32 / frames as f32
+                );
+            }
+
+            let quickest = creeps.iter().copied().fold(f32::MIN, f32::max);
+            let slowest = creeps.iter().copied().fold(f32::MAX, f32::min);
+
+            assert!(
+                quickest / slowest > 3.0,
+                "the quickest arm creeps {:.2} times the slowest, which is one rate shared out",
+                quickest / slowest
+            );
+
+            for (which, mine) in leaping.iter().enumerate() {
+                for (other, theirs) in leaping.iter().enumerate().skip(which + 1) {
+                    let together = mine
+                        .iter()
+                        .zip(theirs.iter())
+                        .filter(|(one, two)| **one && **two)
+                        .count() as f32
+                        / frames as f32;
+
+                    // Two arms each jumping a twentieth of the time meet in a
+                    // four hundredth of frames if nothing links them. This
+                    // allows four times that and still fails anything in step.
+                    assert!(
+                        together < 0.02,
+                        "arms {} and {} jump together in {:.4} of frames",
+                        which,
+                        other,
+                        together
+                    );
+                }
             }
         }
     }
@@ -991,43 +1057,46 @@ mod tests {
     fn the_arms_come_and_go_and_the_globe_is_never_dark() {
         let frames = 36_000;
         let step = 1.0 / 60.0;
-        let mut counted = [0usize; FILAMENTS + 1];
-        let mut alight = [0usize; FILAMENTS];
 
-        for frame in 0..frames {
-            let since = frame as f32 * step;
-            let lit = (0..FILAMENTS).filter(|one| burning(*one, since) > 0.0);
-            let mut now = 0;
+        for side in 0..SIDES.len() {
+            let mut counted = [0usize; FILAMENTS + 1];
+            let mut alight = [0usize; FILAMENTS];
 
-            for which in lit {
-                alight[which] += 1;
-                now += 1;
+            for frame in 0..frames {
+                let since = frame as f32 * step;
+                let lit = (0..FILAMENTS).filter(|one| burning(*one, side, since) > 0.0);
+                let mut now = 0;
+
+                for which in lit {
+                    alight[which] += 1;
+                    now += 1;
+                }
+
+                counted[now] += 1;
             }
 
-            counted[now] += 1;
-        }
+            assert_eq!(counted[0], 0, "the globe went dark");
 
-        assert_eq!(counted[0], 0, "the globe went dark");
+            for (which, lit) in alight.iter().enumerate() {
+                let share = *lit as f32 / frames as f32;
 
-        for (which, lit) in alight.iter().enumerate() {
-            let share = *lit as f32 / frames as f32;
+                assert!(
+                    (0.45..0.92).contains(&share),
+                    "arm {} is lit in {:.3} of frames",
+                    which,
+                    share
+                );
+            }
+
+            // and the count wavers rather than sitting at one number
+            let seen = counted.iter().filter(|it| **it > frames / 200).count();
 
             assert!(
-                (0.45..0.92).contains(&share),
-                "arm {} is lit in {:.3} of frames",
-                which,
-                share
+                seen >= 4,
+                "the lit count only ever took {} values, so nothing comes and goes",
+                seen
             );
         }
-
-        // and the count wavers rather than sitting at one number
-        let seen = counted.iter().filter(|it| **it > frames / 200).count();
-
-        assert!(
-            seen >= 4,
-            "the lit count only ever took {} values, so nothing comes and goes",
-            seen
-        );
     }
 
     /// Spec 0122: the spark at an arm's end is on that arm, against the
@@ -1043,38 +1112,117 @@ mod tests {
     #[test]
     fn the_spark_sits_against_the_glass_and_inside_it() {
         let reaches = reaches();
-        let (middle, shell) = globe(reaches);
 
-        for eye in all_round(reaches) {
-            for tenths in 0..40 {
-                let since = tenths as f32 * 0.37;
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
 
-                for which in 0..FILAMENTS {
-                    let tip = filament(reaches, which, eye, since)[LINKS] - middle;
-                    let at = spark_at(reaches, which, eye, since) - middle;
+            for eye in all_round(reaches, side) {
+                for tenths in 0..40 {
+                    let since = tenths as f32 * 0.37;
 
-                    assert!(
-                        at.normalize().distance(tip.normalize()) < 1e-3,
-                        "arm {}'s spark is off the line of the arm",
-                        which
-                    );
-                    assert!(
-                        at.length() + shell * BLOOM <= shell + 1e-4,
-                        "arm {}'s bloom reaches {} and the glass is at {}",
-                        which,
-                        at.length() + shell * BLOOM,
-                        shell
-                    );
-                    assert!(
-                        at.length() > shell * 0.8,
-                        "arm {}'s spark is {} out of {}, so it is adrift inside",
-                        which,
-                        at.length(),
-                        shell
-                    );
+                    for which in 0..FILAMENTS {
+                        let tip = filament(reaches, which, side, eye, since)[LINKS] - middle;
+                        let at = spark_at(reaches, which, side, eye, since) - middle;
+
+                        assert!(
+                            at.normalize().distance(tip.normalize()) < 1e-3,
+                            "arm {}'s spark is off the line of the arm",
+                            which
+                        );
+                        assert!(
+                            at.length() + shell * BLOOM <= shell + 1e-4,
+                            "arm {}'s bloom reaches {} and the glass is at {}",
+                            which,
+                            at.length() + shell * BLOOM,
+                            shell
+                        );
+                        assert!(
+                            at.length() > shell * 0.8,
+                            "arm {}'s spark is {} out of {}, so it is adrift inside",
+                            which,
+                            at.length(),
+                            shell
+                        );
+                    }
                 }
             }
         }
+    }
+
+    /// Spec 0122: the two of them stand symmetrically about the ball, and
+    /// are not each other.
+    ///
+    /// **Jake: make it symmetrical, add another sparkle ball to the left.**
+    /// One globe beside a ball is a ball with a thing next to it; one either
+    /// side is a row with the ball in the middle of it.
+    ///
+    /// The second claim is the one that needed writing down. Two globes a
+    /// metre and a half apart in plain sight of each other, whose arms are
+    /// seeded off the arm number alone, are one globe drawn twice, and the
+    /// eye catches that at once. Their dice are drawn off which arm *and*
+    /// which globe, and this is what holds that.
+    #[test]
+    fn the_two_stand_either_side_and_are_not_each_other() {
+        let reaches = reaches();
+        let line = crate::glass::plinth(reaches).center().x;
+        let west = pedestal(reaches, 0);
+        let east = pedestal(reaches, 1);
+
+        assert!(
+            ((line - west.center().x) - (east.center().x - line)).abs() < 1e-4,
+            "they stand {:.3} and {:.3} off the ball's own line",
+            line - west.center().x,
+            east.center().x - line
+        );
+        assert!(
+            west.center().x < line && east.center().x > line,
+            "both of them are on one side"
+        );
+        assert!(
+            (west.size() - east.size()).abs().max_element() < 1e-4
+                && (west.center().z - east.center().z).abs() < 1e-4
+                && (west.center().y - east.center().y).abs() < 1e-4,
+            "one of them is a different size or stands somewhere else down the room"
+        );
+
+        // and the two are not the same globe twice: an arm of one is
+        // somewhere else, and lit at different times, from the arm of the
+        // other that shares its number
+        let eye = globe(reaches, 0).0 + vec3(1.2, 0.3, 0.6);
+        let mut apart = 0;
+        let mut differ = 0;
+
+        for tenths in 0..200 {
+            let since = tenths as f32 * 0.17;
+
+            for which in 0..FILAMENTS {
+                let one = (filament(reaches, which, 0, eye, since)[LINKS] - globe(reaches, 0).0)
+                    .normalize();
+                let two = (filament(reaches, which, 1, eye, since)[LINKS] - globe(reaches, 1).0)
+                    .normalize();
+
+                if one.distance(two) > 0.2 {
+                    apart += 1;
+                }
+
+                if (burning(which, 0, since) > 0.0) != (burning(which, 1, since) > 0.0) {
+                    differ += 1;
+                }
+            }
+        }
+
+        let of = (200 * FILAMENTS) as f32;
+
+        assert!(
+            apart as f32 / of > 0.8,
+            "the arms of the two globes point the same way in {:.2} of samples",
+            1.0 - apart as f32 / of
+        );
+        assert!(
+            differ as f32 / of > 0.15,
+            "the two globes are lit and dark together in {:.2} of samples",
+            1.0 - differ as f32 / of
+        );
     }
 
     /// Spec 0122: the shell is see-through and the plasma inside it is not.
@@ -1140,24 +1288,24 @@ mod tests {
     #[test]
     fn the_lamp_is_in_the_globe() {
         let reaches = reaches();
-        let (middle, shell) = globe(reaches);
-        let stands = pedestal(reaches);
 
-        assert!(
-            lamp(reaches).distance(middle) < shell,
-            "the lamp is outside the glass"
-        );
-        assert!(
-            shell <= PEDESTAL * 0.5,
-            "a shell of {} hangs over a pedestal of {}",
-            shell,
-            PEDESTAL
-        );
-        assert!(
-            middle.y - shell >= stands.max.y - 1e-4,
-            "the globe sinks {} into the pedestal",
-            stands.max.y - (middle.y - shell)
-        );
+        for (side, at) in lamps(reaches).into_iter().enumerate() {
+            let (middle, shell) = globe(reaches, side);
+            let stands = pedestal(reaches, side);
+
+            assert!(at.distance(middle) < shell, "the lamp is outside the glass");
+            assert!(
+                shell <= PEDESTAL * 0.5,
+                "a shell of {} hangs over a pedestal of {}",
+                shell,
+                PEDESTAL
+            );
+            assert!(
+                middle.y - shell >= stands.max.y - 1e-4,
+                "the globe sinks {} into the pedestal",
+                stands.max.y - (middle.y - shell)
+            );
+        }
     }
 
     /// Spec 0122: nothing drawn round the globe shares a plane with anything
@@ -1195,16 +1343,24 @@ mod tests {
                 .into_iter()
                 .map(|(b, _)| b),
         );
-        drawn.extend(pieces(reaches).into_iter().map(|(b, _)| b));
+        for side in 0..SIDES.len() {
+            drawn.extend(pieces(reaches, side).into_iter().map(|(b, _)| b));
+        }
 
-        let corner = Aabb::from_center_size(
-            pedestal(reaches).center(),
-            Vec3::splat(PEDESTAL * 2.0 + 1.0),
-        );
+        let corners: Vec<Aabb> = (0..SIDES.len())
+            .map(|side| {
+                Aabb::from_center_size(
+                    pedestal(reaches, side).center(),
+                    Vec3::splat(PEDESTAL * 2.0 + 1.0),
+                )
+            })
+            .collect();
 
         for fight in Fights::of(drawn, 0, 0, &looking).fights.iter() {
             assert!(
-                !corner.contains_point(fight.patch.center()),
+                !corners
+                    .iter()
+                    .any(|corner| corner.contains_point(fight.patch.center())),
                 "two drawn faces share a plane at {:?}, over {:.2} by {:.2}",
                 fight.patch.center(),
                 fight.patch.size().x.max(fight.patch.size().y),
@@ -1225,8 +1381,13 @@ mod tests {
     fn the_globe_stands_inside_the_room() {
         let reaches = reaches();
         let room = crate::glass::inside(reaches);
-        let (middle, shell) = globe(reaches);
-        let ball = Aabb::from_center_size(middle, Vec3::splat(shell * 2.0));
+        let balls: Vec<Aabb> = (0..SIDES.len())
+            .map(|side| {
+                let (middle, shell) = globe(reaches, side);
+
+                Aabb::from_center_size(middle, Vec3::splat(shell * 2.0))
+            })
+            .collect();
         let mine = solid(reaches);
         let theirs: Vec<Aabb> = crate::glass::solid(reaches)
             .into_iter()
@@ -1239,7 +1400,7 @@ mod tests {
             "the room's own solid list no longer holds the pedestal"
         );
 
-        for one in mine.iter().chain(std::iter::once(&ball)) {
+        for one in mine.iter().chain(balls.iter()) {
             assert!(
                 one.min.x > room.min.x
                     && one.max.x < room.max.x
