@@ -312,9 +312,15 @@ pub const GLASS_PANEL: Vec4 = vec4(0.13, 0.14, 0.17, 1.0);
 /// The electrode is dimmer than what comes off it. It is the one solid thing
 /// in there and a core as bright as its own filaments is a white marble with
 /// threads on it.
+/// **And a filament is two colours, not one.** Jake, with a photograph of
+/// the real thing: it is white where it leaves the electrode and violet by
+/// the time it reaches the glass, because what is hottest is whitest. One
+/// colour dimmed along its run is a violet thread turned down, which is a
+/// different thing and reads as paint.
 pub const PLASMA_GLASS: Vec4 = vec4(0.58, 0.56, 0.72, 0.16);
+pub const PLASMA_HOT: Vec4 = vec4(3.6, 2.9, 4.4, 1.0);
 pub const PLASMA: Vec4 = vec4(3.4, 0.60, 4.2, 1.0);
-pub const PLASMA_CORE: Vec4 = vec4(1.25, 0.40, 1.45, 1.0);
+pub const PLASMA_CORE: Vec4 = vec4(1.12, 0.62, 1.28, 1.0);
 
 /// And the stem that carries the electrode, which is the piece that says the
 /// thing is a lamp and not a marble. Dark, because everything above it is

@@ -40,7 +40,7 @@ pub const PEDESTAL_UP: f32 = 0.95;
 
 /// The shell, the electrode inside it, and the stem that carries it.
 pub const SHELL: f32 = 0.22;
-pub const CORE: f32 = 0.011;
+pub const CORE: f32 = 0.040;
 pub const STEM: f32 = 0.010;
 
 /// Where the pedestal stands, derived off the ball's plinth so that moving
@@ -76,7 +76,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 }
 
 /// How many filaments there are and how many links each is drawn in.
-pub const FILAMENTS: usize = 7;
+pub const FILAMENTS: usize = 16;
 pub const LINKS: usize = 18;
 
 /// How thick one is at the electrode, and how much of that is left at the
@@ -89,11 +89,18 @@ pub const LINKS: usize = 18;
 /// glowing tentacled monster rather than an electric orb. A discharge is
 /// widest where it leaves the electrode and comes to nothing at the glass,
 /// and that taper is most of what tells the two apart.
-pub const THREAD: f32 = 0.0038;
+pub const THREAD: f32 = 0.0050;
 pub const THINS_TO: f32 = 0.12;
 
 /// And how much of its brightness is left there, for the same reason.
 pub const DIMS_TO: f32 = 0.35;
+
+/// And how quickly it goes from white to violet, as a multiple of its run.
+///
+/// Over two, so it is the colour of the glass end by the time it is less
+/// than half way there. Graded evenly it was a white tube with a violet tip,
+/// where the photograph is a white root on a violet thread.
+pub const COOLS_BY: f32 = 2.4;
 
 /// How wide the fan of them opens off the line to the eye, as a half angle.
 ///
@@ -124,22 +131,69 @@ pub const FAN: f32 = 1.5;
 /// and a small fast one laid on it. Both are nought at the electrode and
 /// nought at the glass, so a filament starts and ends exactly where it is
 /// meant to and only its run is crooked.
-pub const WANDER: f32 = 0.055;
+pub const WANDER: f32 = 0.022;
 pub const WANDERS_BY: f32 = 0.55;
-pub const CRINKLE: f32 = 0.018;
+pub const CRINKLE: f32 = 0.007;
 pub const CRINKLES_BY: f32 = 2.4;
 
-/// How long an arm holds still between jumps, and how much of that hold it
-/// spends moving.
+/// How long an arm's life beat is: how often it is thrown for whether it is
+/// lit at all.
 ///
-/// **Because they were all turning the same way at the same speed.** Jake,
-/// watching it: the arms should move erratically, not in sync with each
-/// other. Every one was a sine of the time at a rate a few hundredths off
-/// its neighbour's, which is seven things doing one thing slightly out of
-/// step rather than seven things each doing their own. And a discharge does
-/// not sweep. It stands where it is, and then it is somewhere else.
-pub const HOLDS: f32 = 0.55;
-pub const JUMPS_IN: f32 = 0.12;
+/// **Not the same clock as its movement, which is the point.** Jake, on the
+/// version where it was: the arms should move erratically, not in sync with
+/// each other. An arm whose coming and going and whose crawling share one
+/// clock does both on the same stride, and seven of those are one thing
+/// happening seven times. Two clocks per arm, each with its own rate and its
+/// own offset, is where the variety comes from.
+pub const HOLDS: f32 = 0.40;
+
+/// How fast an arm crawls round the inside of the glass, in radians a
+/// second, before its own share of it.
+///
+/// **Crawling and not only jumping.** Jake again: they should crawl more
+/// than jump across the inner surface, though some jumping is good too, and
+/// in general more variety in how they move. What was here held an arm
+/// still for a beat and snapped it somewhere else, which is all jump and no
+/// crawl, and every arm did it at the same size of stride.
+///
+/// Each arm takes its own share of this and its own direction, so some creep
+/// and some travel, and two next to each other are not going the same way.
+pub const CRAWLS_AT: f32 = 0.70;
+
+/// How often an arm jumps anyway, in seconds, and how long a jump takes.
+///
+/// A jump is rare against the crawl: a few seconds apart, each arm on its
+/// own era, so what you mostly see is creeping and what you sometimes see is
+/// a strike landing somewhere else. The jump itself is a tenth of a second,
+/// because anything slower is a sweep and the whole argument against the
+/// first version was that it swept.
+pub const ERA: f32 = 1.5;
+pub const JUMPS_IN: f32 = 0.09;
+
+/// How far an arm's lean sways on its own, as a share of the fan, and how
+/// fast. Its own share of each, so one arm breathes in and out of the middle
+/// while another sits near the rim.
+pub const SWAYS: f32 = 0.26;
+pub const SWAYS_AT: f32 = 0.34;
+
+/// How often an arm goes out for a beat instead of striking again, and how
+/// much of a beat the striking and the dying take.
+///
+/// **Because jumping about is not the same as coming and going.** Jake:
+/// there should be arms that pop in and out of existence in addition to
+/// jumping around the sphere. Seven arms that are always there and only
+/// ever move are seven arms, and what the thing does is strike, hold, and
+/// stop, with the next one somewhere else. The count is what should waver,
+/// not only the places.
+///
+/// Under a fifth, which leaves eight of the ten lit on average and still
+/// gives runs of two and three dark often enough to notice. It was nearly a
+/// third of seven, which Jake read as too few arms. Both ramps are short,
+/// because a filament that fades in over half a second is a lamp on a
+/// dimmer: what reads as a strike is a frame or two.
+pub const GOES_OUT: f32 = 0.18;
+pub const STRIKES_IN: f32 = 0.05;
+pub const DIES_IN: f32 = 0.09;
 
 /// A number between nought and one from a number.
 ///
@@ -154,18 +208,171 @@ pub fn scatter(of: f32) -> f32 {
     x - x.floor()
 }
 
-/// Where one arm stands on one of its jumps, as how far it leans off the line
-/// to the eye and where round that line it sits.
+/// How far back a lit run is followed to find where it began.
 ///
-/// Never past the fan, whatever the dice say, which is what keeps every arm
-/// on the side the eye is on.
-pub fn aim(which: usize, step: f32) -> (f32, f32) {
-    let seed = which as f32 * 31.7 + step * 7.13;
+/// Bounded, because an arm lit for a thousand beats is still only asking
+/// where this run started and a walk with no end is a frame that never
+/// finishes. Past the bound every step answers the same thing rather than
+/// a different one each time, or a very long run would re-seed itself every
+/// beat, which is the jumping this is here to avoid.
+pub const RUNS_BACK: u32 = 64;
+
+/// Which beat an arm's current lit run began on.
+///
+/// What it is for is that an arm which has just struck should come back
+/// somewhere new rather than where the last one went out. Inside a run it
+/// does not move, so the arm crawls on from where it is.
+pub fn struck_at(which: usize, step: f32) -> f32 {
+    let mut at = step;
+
+    for _ in 0..RUNS_BACK {
+        if !alight(which, at - 1.0) {
+            return at;
+        }
+
+        at -= 1.0;
+    }
+
+    0.0
+}
+
+/// Where one arm stands now, as how far it leans off the line to the eye and
+/// where round that line it sits.
+///
+/// Three things in one: where this lit run started, a crawl from there at
+/// this arm's own rate and in its own direction, and the kick of whichever
+/// jump era it is in. Never past the fan, whatever any of them say, which is
+/// what keeps every arm on the side the eye is on.
+pub fn aim(which: usize, since: f32) -> (f32, f32) {
+    let n = which as f32;
+    let round = std::f32::consts::TAU;
+    let run = struck_at(which, clock(which, since).0);
+    let seed = n * 31.7 + run * 7.13;
+
+    // where the run began
+    let from_roll = scatter(seed) * round;
+    let from_lean = 0.18 + 0.78 * scatter(seed + 3.7);
+
+    // and how it creeps from there: its own rate, its own way round
+    let rate = CRAWLS_AT
+        * (0.11 + 0.89 * scatter(n + 2.3))
+        * if scatter(n + 5.9) > 0.5 { 1.0 } else { -1.0 };
+
+    // the jumps it makes while it is lit, each arm on its own era
+    let era = ERA * (0.6 + 1.2 * scatter(n + 7.1));
+    let tick = since / era + scatter(n + 13.7) * 5.0;
+    let mark = tick.floor();
+    let into = (tick - mark) * era;
+    let frac = (into / JUMPS_IN).min(1.0);
+    let eased = 1.0 - (1.0 - frac) * (1.0 - frac);
+
+    let (was_lean, was_roll) = kick(which, mark - 1.0);
+    let (now_lean, now_roll) = kick(which, mark);
+    // the short way round, or a kick at six radians crossing to one at a
+    // tenth sweeps the whole circle to get there
+    let turn = (now_roll - was_roll + round * 0.5).rem_euclid(round) - round * 0.5;
+
+    // and the sway, which is this arm's own breathing in and out of the fan
+    let sway = (since * SWAYS_AT * (0.4 + 1.2 * scatter(n + 17.1)) + n * 1.7).sin()
+        * SWAYS
+        * (0.25 + 0.75 * scatter(n + 19.3));
+
+    let lean = (from_lean + was_lean + (now_lean - was_lean) * eased + sway).clamp(0.10, 1.0);
+    let roll = from_roll + rate * since + was_roll + turn * eased;
+
+    (FAN * lean, roll)
+}
+
+/// What one jump moves an arm by: a shove round the line and a nudge in or
+/// out of the middle.
+fn kick(which: usize, mark: f32) -> (f32, f32) {
+    let seed = which as f32 * 23.9 + mark * 11.37;
 
     (
-        FAN * (0.22 + 0.78 * scatter(seed)),
-        scatter(seed + 3.7) * std::f32::consts::TAU,
+        (scatter(seed) - 0.5) * 0.5,
+        scatter(seed + 9.1) * std::f32::consts::TAU,
     )
+}
+
+/// An arm's own clock: which beat it is in, and how far through that beat.
+///
+/// Its own function because three things ask it, and an arm whose shape,
+/// whose jump and whose life disagreed about which beat it was in would
+/// strike in one place and light up in another.
+pub fn clock(which: usize, since: f32) -> (f32, f32) {
+    let n = which as f32;
+    let beat = HOLDS * (0.55 + 0.9 * scatter(n + 0.5));
+    let tick = since / beat + scatter(n + 11.3) * 7.0;
+    let step = tick.floor();
+
+    (step, tick - step)
+}
+
+/// Whether an arm is lit at all on one of its beats, and by how much it
+/// cleared the threshold, which is what settles ties when none of them did.
+pub fn alight(which: usize, step: f32) -> bool {
+    stayed(which, step) > GOES_OUT
+}
+
+fn stayed(which: usize, step: f32) -> f32 {
+    scatter(which as f32 * 31.7 + step * 7.13 + 19.4)
+}
+
+/// And how brightly, now: nought when it is out, and the ramps at either end
+/// of a beat it is lit for.
+///
+/// **The dying ramp asks the next beat, not this one.** An arm that is lit
+/// again next beat does not go out in between, it jumps, and fading it down
+/// and back up at every jump would be seven things blinking in time with
+/// their own movement. It only dies when there is nothing to jump to.
+pub fn burning(which: usize, since: f32) -> f32 {
+    let mine = on_its_own(which, since);
+
+    if mine > 0.0 {
+        return mine;
+    }
+
+    // **An arm cannot go out if it is the last one.** Each arm's life is its
+    // own throw and nothing in seven independent throws stops all seven
+    // coming up dark: at `GOES_OUT` it happened inside ten minutes, and a
+    // plasma globe that blinks off is a broken plasma globe. So when nothing
+    // at all is lit, the arm that came nearest to staying strikes instead.
+    // It arrives at once rather than ramping, which is what a strike is.
+    if (0..FILAMENTS).any(|other| other != which && on_its_own(other, since) > 0.0) {
+        return 0.0;
+    }
+
+    let nearest = (0..FILAMENTS)
+        .max_by(|one, two| {
+            let of = |it: &usize| stayed(*it, clock(*it, since).0);
+
+            of(one).total_cmp(&of(two))
+        })
+        .unwrap_or(0);
+
+    if nearest == which {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// What an arm would be doing with no regard for the others.
+fn on_its_own(which: usize, since: f32) -> f32 {
+    let (step, through) = clock(which, since);
+
+    if !alight(which, step) {
+        return 0.0;
+    }
+
+    let up = (through / STRIKES_IN).min(1.0);
+    let down = if alight(which, step + 1.0) {
+        1.0
+    } else {
+        ((1.0 - through) / DIES_IN).min(1.0)
+    };
+
+    up.min(down)
 }
 
 /// One filament's links, from the electrode out to the shell.
@@ -200,23 +407,10 @@ pub fn filament(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; LIN
     let other = toward.cross(side);
 
     let n = which as f32;
-    // where it stands: held still, then struck somewhere else. Its own beat
-    // and its own offset into that beat, so no two arms ever move together.
-    let beat = HOLDS * (0.55 + 0.9 * scatter(n + 0.5));
-    let tick = since / beat + scatter(n + 11.3) * 7.0;
-    let step = tick.floor();
-    // and how far through the jump it is, leaving fast and settling
-    let frac = ((tick - step) / JUMPS_IN).min(1.0);
-    let eased = 1.0 - (1.0 - frac) * (1.0 - frac);
-
-    let (was_lean, was_roll) = aim(which, step - 1.0);
-    let (now_lean, now_roll) = aim(which, step);
-    // the short way round, or an arm at six radians crossing to one at a
-    // tenth sweeps the whole circle to get there
-    let round = std::f32::consts::TAU;
-    let turn = (now_roll - was_roll + round * 0.5).rem_euclid(round) - round * 0.5;
-    let lean = was_lean + (now_lean - was_lean) * eased;
-    let roll = was_roll + turn * eased;
+    // where it stands: crawling on from where this run struck, with the odd
+    // jump laid over it. Its own rate, its own way round and its own era, so
+    // no two arms are doing the same thing at the same time.
+    let (lean, roll) = aim(which, since);
     let along = toward * lean.cos() + (side * roll.cos() + other * roll.sin()) * lean.sin();
 
     let mut links = [Vec3::ZERO; LINKS + 1];
@@ -224,15 +418,114 @@ pub fn filament(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; LIN
     for (k, link) in links.iter_mut().enumerate() {
         let t = k as f32 / LINKS as f32;
         let held = (t * std::f32::consts::PI).sin() * shell;
-        // the thread's own shape is re-struck with the arm, so a jump is a
-        // new discharge rather than the same one swinging
-        let struck = scatter(n * 5.1 + step) * std::f32::consts::TAU;
-        let slow = since * (1.7 + n * 0.3) + k as f32 * WANDERS_BY + struck;
-        let fast = since * (4.3 + n * 0.5) + k as f32 * CRINKLES_BY + struck * 2.0;
+        // the thread's own shape is re-struck when the arm strikes, so a
+        // fresh arm is a new discharge rather than the old one moved
+        let struck =
+            scatter(n * 5.1 + struck_at(which, clock(which, since).0)) * std::f32::consts::TAU;
+        let slow = since * (3.2 + n * 0.5) + k as f32 * WANDERS_BY + struck;
+        let fast = since * (7.9 + n * 0.9) + k as f32 * CRINKLES_BY + struck * 2.0;
         let off = (side * slow.cos() + other * slow.sin()) * (held * WANDER)
             + (side * fast.cos() + other * fast.sin()) * (held * CRINKLE);
 
-        *link = middle + along * (t * shell) + off;
+        // out of the electrode's own face rather than its middle, since
+        // the electrode is a ball you can see and not a point
+        *link = middle + along * (CORE + t * (shell - CORE)) + off;
+    }
+
+    links
+}
+
+/// The spark where an arm meets the glass: how big its core is and how big
+/// the bloom round it, both as a share of the shell, and how much of the
+/// bloom you see through.
+///
+/// **Jake: there should be a gentle spark against the glass at the end of
+/// each arm.** A filament that thins away and simply stops is a line that
+/// ran out. Where a discharge meets glass it spreads, and that is the one
+/// place along an arm that is wider than the thread rather than narrower.
+///
+/// Two spheres and not one, because a hard dot is not gentle and a soft edge
+/// has to be built here rather than asked for: a small bright core with a
+/// see-through bloom round it, which is the same trick the garden's lanterns
+/// are under one room along. Both sit far enough in that the bloom is
+/// tangent to the glass rather than through it.
+pub const SPARK: f32 = 0.007;
+pub const BLOOM: f32 = 0.030;
+pub const BLOOM_THROUGH: f32 = 0.07;
+
+const _: () = assert!(SPARK < BLOOM, "the spark's core is wider than its bloom");
+
+/// Where that spark's middle is, as a share of the shell: in by the bloom,
+/// so nothing of it stands outside the glass.
+pub fn spark_at(reaches: f32, which: usize, eye: Vec3, since: f32) -> Vec3 {
+    pulled_in(reaches, filament(reaches, which, eye, since)[LINKS])
+}
+
+/// The same for any point on the glass: pulled in along its own radius by the
+/// bloom, so nothing of the spark stands outside.
+pub fn pulled_in(reaches: f32, tip: Vec3) -> Vec3 {
+    let (middle, shell) = globe(reaches);
+    let out = (tip - middle).normalize_or_zero();
+
+    middle + out * (shell * (1.0 - BLOOM))
+}
+
+/// How many links a branch is drawn in, where along its parent it leaves,
+/// and how far off that parent's line it goes.
+///
+/// **Every arm in the real thing forks.** Jake's video of one: not a single
+/// filament in it runs from the electrode to the glass without splitting,
+/// and several split twice. A tree of single threads is the one thing that
+/// still read as drawn rather than struck.
+///
+/// It leaves in the outer half, because a fork at the root is two arms and
+/// not one, and it lands on the glass like its parent rather than stopping
+/// in the air.
+pub const BRANCH_LINKS: usize = 7;
+pub const FORKS_AT: f32 = 0.42;
+pub const FORK_SPREAD: f32 = 0.55;
+
+/// A branch off one arm: where it leaves it and the links from there to the
+/// glass.
+///
+/// Seeded off the same lit run as its parent, so it is re-struck when the
+/// parent is and crawls with it rather than wandering off on its own clock.
+pub fn branch(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; BRANCH_LINKS + 1] {
+    let (middle, shell) = globe(reaches);
+    let parent = filament(reaches, which, eye, since);
+    let run = struck_at(which, clock(which, since).0);
+    let seed = which as f32 * 41.3 + run * 13.9;
+
+    // where it leaves, in the outer half of the parent
+    let at = ((FORKS_AT + 0.4 * scatter(seed)) * LINKS as f32) as usize;
+    let from = parent[at.min(LINKS - 1)];
+
+    // and which way it goes: off the parent's own line by about a third of
+    // a right angle, rolled somewhere round it
+    let along = (parent[LINKS] - middle).normalize_or_zero();
+    let side = if along.y.abs() < 0.9 {
+        along.cross(Vec3::Y).normalize()
+    } else {
+        along.cross(Vec3::X).normalize()
+    };
+    let other = along.cross(side);
+    let roll = scatter(seed + 5.3) * std::f32::consts::TAU + since * 0.4;
+    let spread = FORK_SPREAD * (0.5 + 0.5 * scatter(seed + 8.7));
+    let out = (along * spread.cos() + (side * roll.cos() + other * roll.sin()) * spread.sin())
+        .normalize_or_zero();
+    let lands = middle + out * shell;
+
+    let mut links = [Vec3::ZERO; BRANCH_LINKS + 1];
+
+    for (k, link) in links.iter_mut().enumerate() {
+        let t = k as f32 / BRANCH_LINKS as f32;
+        let held = (t * std::f32::consts::PI).sin() * shell;
+        let slow = since * (2.9 + which as f32 * 0.4) + k as f32 * WANDERS_BY + seed;
+        let fast = since * (6.1 + which as f32 * 0.6) + k as f32 * CRINKLES_BY + seed * 2.0;
+
+        *link = from.lerp(lands, t)
+            + (side * slow.cos() + other * slow.sin()) * (held * WANDER)
+            + (side * fast.cos() + other * fast.sin()) * (held * CRINKLE);
     }
 
     links
@@ -318,8 +611,14 @@ pub fn draw(
     // the filaments, which are what the thing is. Each link is thinner and
     // dimmer than the one before it, so a filament leaves the electrode and
     // comes to nothing at the glass rather than arriving there as thick as
-    // it set out.
+    // it set out, and an arm that is out this beat is not drawn at all.
     for which in 0..FILAMENTS {
+        let burning = burning(which, since);
+
+        if burning <= 0.0 {
+            continue;
+        }
+
         let links = filament(reaches, which, eye, since);
 
         for (k, pair) in links.windows(2).enumerate() {
@@ -333,14 +632,71 @@ pub fn draw(
 
             let t = (k as f32 + 0.5) / (LINKS - 1) as f32;
             let thick = THREAD * (1.0 - (1.0 - THINS_TO) * t);
-            let lit = 1.0 - (1.0 - DIMS_TO) * t;
+            let lit = (1.0 - (1.0 - DIMS_TO) * t) * burning;
+            // white where it leaves the electrode and violet by the glass,
+            // because what is hottest is whitest
+            // and it is violet well before the glass, not halfway along:
+            // what is white in the photograph is the first fifth
+            let hue = crate::aim::PLASMA_HOT
+                .truncate()
+                .lerp(crate::aim::PLASMA.truncate(), (t * COOLS_BY).min(1.0));
 
             scene.push_fitting(
                 cube,
                 &Transform::at((from + to) * 0.5)
                     .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
                     .with_scale(vec3(thick, long, thick)),
-                (crate::aim::PLASMA.truncate() * lit).extend(1.0),
+                (hue * lit).extend(1.0),
+            );
+        }
+
+        // the branch off it, which every filament in the real thing has.
+        // Thinner and dimmer than its parent, because it is what is left of
+        // the discharge after the fork.
+        let twig = branch(reaches, which, eye, since);
+
+        for pair in twig.windows(2) {
+            let (from, to) = (pair[0], pair[1]);
+            let span = to - from;
+            let long = span.length();
+
+            if long <= f32::EPSILON {
+                continue;
+            }
+
+            let thin = THREAD * THINS_TO * 1.8;
+
+            scene.push_fitting(
+                cube,
+                &Transform::at((from + to) * 0.5)
+                    .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
+                    .with_scale(vec3(thin, long, thin)),
+                (crate::aim::PLASMA.truncate() * DIMS_TO * burning).extend(1.0),
+            );
+        }
+
+        // and the sparks where the two of them land, which breathe a little
+        // rather than sitting there: the one place on an arm that is a point
+        // and not a line, so a steady one reads as a bead stuck to the glass
+        let Some(sphere) = sphere else {
+            continue;
+        };
+        let breath = 0.85 + 0.15 * (since * (2.1 + which as f32 * 0.37) + which as f32 * 2.9).sin();
+        let (_, shell) = globe(reaches);
+
+        for (at, size) in [
+            (spark_at(reaches, which, eye, since), 1.0),
+            (pulled_in(reaches, twig[BRANCH_LINKS]), 0.55),
+        ] {
+            scene.push_fitting(
+                sphere,
+                &Transform::at(at).with_scale(Vec3::splat(shell * SPARK * 2.0 * breath * size)),
+                (crate::aim::PLASMA.truncate() * burning).extend(1.0),
+            );
+            scene.push_fitting(
+                sphere,
+                &Transform::at(at).with_scale(Vec3::splat(shell * BLOOM * 2.0 * breath * size)),
+                (crate::aim::PLASMA.truncate() * burning * 0.55).extend(BLOOM_THROUGH),
             );
         }
     }
@@ -396,15 +752,20 @@ mod tests {
             .collect()
     }
 
-    /// Spec 0122: every filament runs from the electrode to the shell and
-    /// stays inside it.
+    /// Spec 0122: every filament runs from the electrode's face to the shell
+    /// and stays inside it.
     ///
-    /// **Both ends exactly, which is what the bow is shaped for.** A
+    /// **Both ends exactly, which is what the wander is shaped for.** A
     /// crooked bolt is drawn by pushing its middle off its own line, and
     /// the obvious way to do that leaves the ends pushed off too: one
     /// hanging in the air beside the electrode and one through the glass.
-    /// `BOW` is a sine over the run, so it is nought at nought and nought
-    /// at one.
+    /// Both terms are a sine over the run, so each is nought at nought and
+    /// nought at one.
+    ///
+    /// Its face and not its middle, since Jake's photograph of the real
+    /// thing: the electrode is a ball a quarter of the globe across, and a
+    /// filament that starts at the middle of one spends its widest, hottest
+    /// quarter buried inside it.
     #[test]
     fn every_filament_runs_from_the_core_to_the_glass() {
         let reaches = reaches();
@@ -418,10 +779,11 @@ mod tests {
                     let links = filament(reaches, which, eye, since);
 
                     assert!(
-                        links[0].distance(middle) < 1e-5,
-                        "filament {} starts {} off the electrode",
+                        (links[0].distance(middle) - CORE).abs() < 1e-5,
+                        "filament {} starts {} out and the electrode is {}",
                         which,
-                        links[0].distance(middle)
+                        links[0].distance(middle),
+                        CORE
                     );
                     assert!(
                         (links[LINKS].distance(middle) - shell).abs() < 1e-4,
@@ -488,62 +850,107 @@ mod tests {
         }
     }
 
-    /// Spec 0122: each arm holds still, jumps, and does not jump with its
-    /// neighbours.
+    /// Spec 0122: each arm crawls at its own rate, jumps now and then, and
+    /// does not jump with its neighbours.
     ///
-    /// **Jake, watching the first one that moved: the arms should move
-    /// erratically, not in sync with each other.** Every arm was a sine of
-    /// the time at a rate a few hundredths off its neighbour's, so all seven
-    /// turned the same way at nearly the same speed, which is one movement
-    /// shared out rather than seven of them.
+    /// **Three notes from Jake, each of which broke the one before.** First,
+    /// the arms should move erratically, not in sync with each other, when
+    /// every arm was a sine of the time at a rate a few hundredths off its
+    /// neighbour's. Then, they should crawl more than jump across the inner
+    /// surface, though some jumping is good too, and in general more variety
+    /// in how they move, when the answer to the first note had been to hold
+    /// each arm still for a beat and snap it somewhere else, which is all
+    /// jump and no crawl.
     ///
-    /// Three claims, because "erratic" on its own cannot fail. Each arm is
-    /// still most of the time, which is what a discharge does. Each arm does
-    /// move. And no two of them are moving at once much more often than two
-    /// unrelated things would be, which is the sync itself: seven arms each
-    /// moving a eighth of the time meet by chance in about a sixtieth of
-    /// frames, and in step they would meet in every frame one of them moved.
+    /// So the claims are about the shape of the movement rather than its
+    /// amount. Each arm creeps most of the time, which is its median frame.
+    /// Each arm sometimes goes much further in one frame than that, which is
+    /// a jump. Jumping is the exception and not the rule. No two arms jump
+    /// in the same frame much more often than two unrelated things would.
+    /// And the arms differ: the quickest creeps several times faster than the
+    /// slowest, which is the variety itself and is the one of these that a
+    /// single shared rate would fail.
+    ///
+    /// Measured only while an arm is lit, because movement nobody can see is
+    /// not movement, and an arm that strikes after a dark stretch starts
+    /// somewhere new on purpose.
     #[test]
-    fn the_arms_jump_rather_than_sweep_and_never_together() {
+    fn the_arms_crawl_at_their_own_rates_and_jump_apart() {
         let reaches = reaches();
         let (middle, shell) = globe(reaches);
         let eye = middle + vec3(1.2, 0.3, 0.6);
-        let frames = 2400;
+        let frames = 7200;
         let step = 1.0 / 60.0;
-        let moving = 0.004;
+        let leapt = 8.0;
 
-        let mut budged = vec![vec![false; frames]; FILAMENTS];
+        let mut creeps = [0.0f32; FILAMENTS];
+        let mut leaping = vec![vec![false; frames]; FILAMENTS];
 
-        for frame in 0..frames {
-            let since = frame as f32 * step;
+        for (which, mine) in leaping.iter_mut().enumerate() {
+            let mut moves: Vec<(usize, f32)> = Vec::new();
 
-            for (which, mine) in budged.iter_mut().enumerate() {
+            for (frame, _) in (0..frames).map(|f| (f, ())) {
+                let since = frame as f32 * step;
+
+                if burning(which, since) <= 0.0 || burning(which, since + step) <= 0.0 {
+                    continue;
+                }
+
                 let was = (filament(reaches, which, eye, since)[LINKS] - middle) / shell;
                 let now = (filament(reaches, which, eye, since + step)[LINKS] - middle) / shell;
 
-                mine[frame] = was.distance(now) > moving;
+                moves.push((frame, was.distance(now)));
             }
-        }
 
-        for (which, mine) in budged.iter().enumerate() {
-            let share = mine.iter().filter(|it| **it).count() as f32 / frames as f32;
+            let mut sorted: Vec<f32> = moves.iter().map(|(_, d)| *d).collect();
+            sorted.sort_by(|one, two| one.total_cmp(two));
+
+            let creep = sorted[sorted.len() / 2];
+            creeps[which] = creep;
 
             assert!(
-                share > 0.02,
-                "arm {} moved in {:.3} of frames, so it is standing still",
+                creep > 0.0005,
+                "arm {} creeps {:.5} a frame, so it is standing still",
                 which,
-                share
+                creep
             );
             assert!(
-                share < 0.30,
-                "arm {} moved in {:.3} of frames, so it is sweeping rather than jumping",
+                creep < 0.02,
+                "arm {} creeps {:.5} a frame, so it is sweeping",
                 which,
-                share
+                creep
+            );
+
+            for (frame, far) in moves {
+                mine[frame] = far > creep * leapt;
+            }
+
+            let leaps = mine.iter().filter(|it| **it).count();
+
+            assert!(leaps > 10, "arm {} never jumped at all", which);
+            // A jump takes `JUMPS_IN` out of an era of `ERA`, so the share
+            // is a few hundredths by construction. What this asks is the
+            // intent rather than the arithmetic: that crawling is what an
+            // arm is mostly doing.
+            assert!(
+                (leaps as f32 / frames as f32) < 0.15,
+                "arm {} jumped in {:.4} of frames, so it is not crawling",
+                which,
+                leaps as f32 / frames as f32
             );
         }
 
-        for (which, mine) in budged.iter().enumerate() {
-            for (other, theirs) in budged.iter().enumerate().skip(which + 1) {
+        let quickest = creeps.iter().copied().fold(f32::MIN, f32::max);
+        let slowest = creeps.iter().copied().fold(f32::MAX, f32::min);
+
+        assert!(
+            quickest / slowest > 3.0,
+            "the quickest arm creeps {:.2} times the slowest, which is one rate shared out",
+            quickest / slowest
+        );
+
+        for (which, mine) in leaping.iter().enumerate() {
+            for (other, theirs) in leaping.iter().enumerate().skip(which + 1) {
                 let together = mine
                     .iter()
                     .zip(theirs.iter())
@@ -551,13 +958,121 @@ mod tests {
                     .count() as f32
                     / frames as f32;
 
+                // Two arms each jumping a twentieth of the time meet in a
+                // four hundredth of frames if nothing links them. This
+                // allows four times that and still fails anything in step.
                 assert!(
-                    together < 0.06,
-                    "arms {} and {} are both moving in {:.3} of frames",
+                    together < 0.02,
+                    "arms {} and {} jump together in {:.4} of frames",
                     which,
                     other,
                     together
                 );
+            }
+        }
+    }
+
+    /// Spec 0122: arms come and go, and the globe is never wholly dark.
+    ///
+    /// **Jake: there should be arms that pop in and out of existence in
+    /// addition to jumping around the sphere.** Seven arms that are always
+    /// there and only ever move are seven arms, however erratically they
+    /// move. What should waver is the count.
+    ///
+    /// The second half is the one that found something. Each arm's life is
+    /// its own throw, so nothing in seven independent throws stops all seven
+    /// coming up dark, and this caught it inside ten minutes of running. A
+    /// plasma globe that blinks off is a broken plasma globe, so an arm
+    /// cannot go out if it is the last one: when nothing at all is lit, the
+    /// one that came nearest to staying strikes. That is a guarantee rather
+    /// than a probability now, and this holds it against anyone raising
+    /// `GOES_OUT`.
+    #[test]
+    fn the_arms_come_and_go_and_the_globe_is_never_dark() {
+        let frames = 36_000;
+        let step = 1.0 / 60.0;
+        let mut counted = [0usize; FILAMENTS + 1];
+        let mut alight = [0usize; FILAMENTS];
+
+        for frame in 0..frames {
+            let since = frame as f32 * step;
+            let lit = (0..FILAMENTS).filter(|one| burning(*one, since) > 0.0);
+            let mut now = 0;
+
+            for which in lit {
+                alight[which] += 1;
+                now += 1;
+            }
+
+            counted[now] += 1;
+        }
+
+        assert_eq!(counted[0], 0, "the globe went dark");
+
+        for (which, lit) in alight.iter().enumerate() {
+            let share = *lit as f32 / frames as f32;
+
+            assert!(
+                (0.45..0.92).contains(&share),
+                "arm {} is lit in {:.3} of frames",
+                which,
+                share
+            );
+        }
+
+        // and the count wavers rather than sitting at one number
+        let seen = counted.iter().filter(|it| **it > frames / 200).count();
+
+        assert!(
+            seen >= 4,
+            "the lit count only ever took {} values, so nothing comes and goes",
+            seen
+        );
+    }
+
+    /// Spec 0122: the spark at an arm's end is on that arm, against the
+    /// glass, and wholly inside it.
+    ///
+    /// **Jake: there should be a gentle spark against the glass at the end
+    /// of each arm.** The three ways that can go wrong are all arithmetic.
+    /// It can sit off the arm's own line, which reads as a bead floating
+    /// beside the thread. It can sit short of the glass, which is a bead on
+    /// a string. And its bloom can reach through the glass, which is a thing
+    /// outside a sealed globe. The first build had it four times too big and
+    /// what it drew was balloons, which is the one of these no test can say.
+    #[test]
+    fn the_spark_sits_against_the_glass_and_inside_it() {
+        let reaches = reaches();
+        let (middle, shell) = globe(reaches);
+
+        for eye in all_round(reaches) {
+            for tenths in 0..40 {
+                let since = tenths as f32 * 0.37;
+
+                for which in 0..FILAMENTS {
+                    let tip = filament(reaches, which, eye, since)[LINKS] - middle;
+                    let at = spark_at(reaches, which, eye, since) - middle;
+
+                    assert!(
+                        at.normalize().distance(tip.normalize()) < 1e-3,
+                        "arm {}'s spark is off the line of the arm",
+                        which
+                    );
+                    assert!(
+                        at.length() + shell * BLOOM <= shell + 1e-4,
+                        "arm {}'s bloom reaches {} and the glass is at {}",
+                        which,
+                        at.length() + shell * BLOOM,
+                        shell
+                    );
+                    assert!(
+                        at.length() > shell * 0.8,
+                        "arm {}'s spark is {} out of {}, so it is adrift inside",
+                        which,
+                        at.length(),
+                        shell
+                    );
+                }
             }
         }
     }
@@ -581,7 +1096,8 @@ mod tests {
         );
 
         for (what, colour) in [
-            ("the filaments", crate::aim::PLASMA),
+            ("the filaments at the glass", crate::aim::PLASMA),
+            ("the filaments at the electrode", crate::aim::PLASMA_HOT),
             ("the electrode", crate::aim::PLASMA_CORE),
         ] {
             assert!(
@@ -590,23 +1106,27 @@ mod tests {
                 what,
                 colour
             );
-            // **And one channel under one, which is what keeps the hue.**
-            // The screen clips at one, so a colour past it in all three is
-            // white however it was mixed, and the first build of this drew
-            // five white bolts. The violet only survived in the ball's
-            // reflection, where it is dimmer.
-            assert!(
-                colour.truncate().min_element() < 1.0,
-                "{} are past one in every channel, so they are white: {:?}",
-                what,
-                colour
-            );
             assert_eq!(colour.w, 1.0, "{} are see-through", what);
         }
 
+        // **One channel under one at the glass, which is what keeps the
+        // hue.** The screen clips at one, so a colour past it in all three
+        // is white however it was mixed, and the first build of this drew
+        // five white bolts. The violet only survived in the ball's
+        // reflection, where it is dimmer.
+        //
+        // Only at the glass. The hot end and the electrode are white on
+        // purpose, off Jake's photograph of the real thing: what is hottest
+        // is whitest, and a filament that is one hue end to end is paint.
         assert!(
-            crate::aim::PLASMA_CORE.max_element() < crate::aim::PLASMA.max_element(),
-            "the electrode is brighter than what comes off it"
+            crate::aim::PLASMA.truncate().min_element() < 1.0,
+            "the filaments are past one in every channel at the glass, so they are white: {:?}",
+            crate::aim::PLASMA
+        );
+        assert!(
+            crate::aim::PLASMA_HOT.truncate().min_element()
+                > crate::aim::PLASMA.truncate().min_element(),
+            "the hot end is no whiter than the end at the glass"
         );
     }
 

@@ -3,8 +3,8 @@
 **Status:** implemented
 **Date:** 2026-11-21
 **Built:** 2026-11-21, the same day, in three rounds off three screenshots,
-a fourth for the fault they left behind, and two more on Jake's own pictures
-of the thing running.
+a fourth for the fault they left behind, and six more on Jake's own
+pictures of it running, then on a photograph and a video of the real thing.
 
 ## Goal
 
@@ -62,16 +62,38 @@ where a hand falls, because reaching is how it is met.
 
 **The globe.** A shell of 0.22 radius at the pedestal's top, see-through, with
 a faint cool tint: alpha under one, so the engine draws it after everything
-solid. An electrode of 0.045 at its middle, which is the one solid thing in
-there.
+solid. The electrode is a glowing ball of 0.04 at its middle, nearly a quarter
+of the globe across, which is what the real thing has and what the filaments
+leave the face of.
 
-**The filaments.** Seven, each a chain of eighteen thin boxes from the
-electrode to the shell, hairline and drawn past one so they give off rather
-than take. Each one thins and dims along its run, so it leaves the electrode
-and comes to nothing at the glass. Each wanders slowly and crinkles quickly
-at the same time, which is two terms and not one. And each stands still,
-then strikes somewhere else, on its own beat and its own offset into that
-beat. All of it is worked out from the time and the eye, so there is nothing
+**The filaments.** Sixteen, each a chain of eighteen thin boxes from the
+electrode's face to the shell, hairline and drawn past one so they give off
+rather than take. Each one thins and dims along its run. Each is white where
+it leaves the electrode and violet well before the glass, because what is
+hottest is whitest. Each wanders slowly and crinkles quickly at the same
+time, which is two terms and not one. And each forks: a thinner, dimmer
+branch leaves it in the outer half and lands on the glass like its parent.
+
+**The sparks.** Where a filament meets the glass it spreads, which is the one
+place along an arm that is wider than the thread rather than narrower. Two
+spheres: a small bright core and a see-through bloom round it, which is how a
+soft edge gets built here, both pulled in by the bloom so nothing of them
+stands outside the glass. They breathe a little, since the one place on an arm
+that is a point rather than a line reads as a bead stuck to the glass if it is
+steady.
+
+**How they move.** Each arm has two clocks of its own, and they are not the
+same clock. One is its life: every beat is a throw for whether it is lit at
+all, under a fifth of them dark, which leaves eight of the ten burning on
+average. The other is where it stands. It crawls round the inside of the
+glass at its own rate and in its own direction, from where its current lit run
+struck, and about once a second it jumps instead, each arm on its own era.
+So what you mostly see is creeping and what you sometimes see is a strike
+landing somewhere else, and no two arms are doing either at the same time.
+
+An arm cannot go out if it is the last one: independent throws do come up all
+dark, and a plasma globe that blinks off is a broken one, so when nothing at
+all is lit the arm that came nearest to staying strikes. All of it is worked out from the time and the eye, so there is nothing
 to keep and nothing to save: spec 0120 keeps the trail and nothing else, and
 a toy is a toy as it was built.
 
@@ -97,9 +119,11 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   ball's plinth. — `plasma::tests::the_globe_stands_inside_the_room`
 - And nothing drawn round the globe shares a plane with anything else drawn
   there. — `plasma::tests::nothing_round_the_globe_is_in_one_plane_with_anything`
-- Each arm holds still, each arm moves, and no two of them move together more
-  often than two unrelated things
-  would. — `plasma::tests::the_arms_jump_rather_than_sweep_and_never_together`
+- Each arm creeps, each arm sometimes jumps, jumping is the exception, no two
+  of them jump together, and the quickest creeps several times faster than
+  the slowest. — `plasma::tests::the_arms_crawl_at_their_own_rates_and_jump_apart`
+- Arms come and go, and the globe is never wholly
+  dark. — `plasma::tests::the_arms_come_and_go_and_the_globe_is_never_dark`
 - And the room still cannot be walked into and not out of, which spec 0043
   asks of every room at once. — `room::tests::no_room_lets_you_in_and_not_out`
 
@@ -188,6 +212,65 @@ re-struck at the same moment so a jump reads as a new discharge rather than
 the old one swinging. Where it stands comes out of a scatter of which arm and
 which jump, since the globe keeps nothing and a function of the two is what
 stands in for a dice.
+
+**And then they were seven things snapping about.** Jake, on the version
+that did: there should on average be more arms, and they should crawl more
+than jump across the inner surface, though some jumping is good too, and in
+general more variety in how they move. The answer to the note before had
+been to hold each arm still for a beat and snap it somewhere else, which is
+all jump and no crawl, and every arm snapping the same size of stride.
+
+An arm crawls now, at its own share of a base rate and in its own direction,
+so some creep and some travel and two beside each other are not going the
+same way. The jump is a rare kick laid over the crawl, a few seconds apart on
+each arm's own era. The lean sways on its own rate and its own amplitude, so
+one arm breathes in and out of the middle while another sits near the rim.
+And an arm that strikes after a dark stretch starts somewhere new rather than
+where it went out, which is the one place the old snapping was right.
+
+Ten arms rather than seven, and under a fifth of beats dark rather than
+nearly a third, which is eight burning on average against five.
+
+**And before that they were always all there.** Jake again: there should be arms that pop
+in and out of existence in addition to jumping around the sphere. Seven arms
+that only ever move are seven arms however erratically they move, and the
+count is the other half of what a globe does. Each beat is now a throw for
+whether that arm is lit at all, with short ramps at either end of a lit run,
+and the dying ramp asks the *next* beat rather than this one, since an arm
+that is lit again next beat does not go out in between, it jumps.
+
+Writing the test found the thing worth finding. Seven independent throws come
+up all dark sooner than it feels like they should: inside ten minutes of
+running, at nearly a third each. So an arm cannot go out if it is the last
+one, and the globe is never dark by construction rather than by luck.
+
+**And then a photograph and a video of the real thing.** Jake sent both.
+What they changed, in the order the difference mattered.
+
+The electrode is a ball, not a point: nearly a quarter of the globe across,
+and the filaments leave its face rather than its middle, where a filament
+that starts at the middle of one spends its widest and hottest quarter buried
+inside it. A filament is two colours and not one, white where it leaves and
+violet by the time it reaches the glass, because what is hottest is whitest,
+and one colour dimmed along its run is a violet thread turned down, which
+reads as paint. There are sixteen of them rather than ten.
+
+And every filament in the video forks. Not one of them runs from the
+electrode to the glass without splitting and several split twice, which is
+the one thing that still read as drawn rather than struck. Each arm has a
+branch now, leaving in its outer half, thinner and dimmer because it is what
+is left of the discharge after the fork, landing on the glass like its parent
+and carrying its own spark.
+
+The video also settled the rate, which the note before it had only guessed
+at. A third of a second apart the arrangement is largely re-struck; a sixth
+of a second apart it is recognisably the same. So the jump era is a second
+and a half rather than four, the life beat is shorter, and the thread's own
+wander runs at about twice what it did. That moved the bound in
+`the_arms_crawl_at_their_own_rates_and_jump_apart`, which is honest: a jump
+takes its own fixed time out of an era, so shortening the era raises the
+share by arithmetic, and what the test should hold is that crawling is what
+an arm is mostly doing rather than a particular number.
 
 **And `you_can_walk_round_it` ran through the new pedestal and passed.** Its
 ring stood at `middle.x + 1.3`, three centimetres off that pedestal's east
