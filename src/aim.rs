@@ -314,7 +314,7 @@ pub const GLASS_PANEL: Vec4 = vec4(0.13, 0.14, 0.17, 1.0);
 /// threads on it.
 pub const PLASMA_GLASS: Vec4 = vec4(0.58, 0.56, 0.72, 0.16);
 pub const PLASMA: Vec4 = vec4(3.4, 0.60, 4.2, 1.0);
-pub const PLASMA_CORE: Vec4 = vec4(1.8, 0.52, 2.1, 1.0);
+pub const PLASMA_CORE: Vec4 = vec4(1.25, 0.40, 1.45, 1.0);
 
 /// And the stem that carries the electrode, which is the piece that says the
 /// thing is a lamp and not a marble. Dark, because everything above it is

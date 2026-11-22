@@ -3,7 +3,8 @@
 **Status:** implemented
 **Date:** 2026-11-21
 **Built:** 2026-11-21, the same day, in three rounds off three screenshots,
-and a fourth for the fault they left behind.
+a fourth for the fault they left behind, and two more on Jake's own pictures
+of the thing running.
 
 ## Goal
 
@@ -64,12 +65,15 @@ a faint cool tint: alpha under one, so the engine draws it after everything
 solid. An electrode of 0.045 at its middle, which is the one solid thing in
 there.
 
-**The filaments.** Five, each a chain of six thin boxes from the electrode to
-the shell, 0.014 across and drawn past one so they give off rather than take.
-Each has its own slow wander, so they writhe, and each is pulled toward the
-point on the shell nearest the eye. All of it is worked out from the time and
-the eye, so there is nothing to keep and nothing to save: spec 0120 keeps the
-trail and nothing else, and a toy is a toy as it was built.
+**The filaments.** Seven, each a chain of eighteen thin boxes from the
+electrode to the shell, hairline and drawn past one so they give off rather
+than take. Each one thins and dims along its run, so it leaves the electrode
+and comes to nothing at the glass. Each wanders slowly and crinkles quickly
+at the same time, which is two terms and not one. And each stands still,
+then strikes somewhere else, on its own beat and its own offset into that
+beat. All of it is worked out from the time and the eye, so there is nothing
+to keep and nothing to save: spec 0120 keeps the trail and nothing else, and
+a toy is a toy as it was built.
 
 **The light.** One point light at the globe's middle, in the plasma's own
 colour, reaching 1.6 metres. It is in a fitting by the room skill's rule
@@ -93,6 +97,9 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   ball's plinth. — `plasma::tests::the_globe_stands_inside_the_room`
 - And nothing drawn round the globe shares a plane with anything else drawn
   there. — `plasma::tests::nothing_round_the_globe_is_in_one_plane_with_anything`
+- Each arm holds still, each arm moves, and no two of them move together more
+  often than two unrelated things
+  would. — `plasma::tests::the_arms_jump_rather_than_sweep_and_never_together`
 - And the room still cannot be walked into and not out of, which spec 0043
   asks of every room at once. — `room::tests::no_room_lets_you_in_and_not_out`
 
@@ -102,6 +109,8 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   climb to the glass room and stand at it.
 - Whether the filaments following you reads as a thing answering you or as a
   thing twitching. Walk a circle round it.
+- Whether it reads as electricity rather than as something alive, which is the
+  one thing here that has been wrong twice and that no test can settle.
 - Whether the mirror ball showing the glow beside it is worth the two standing
   together, which is the whole argument for the siting.
 - Whether the glow fights the bay lamps at 0.95.
@@ -157,6 +166,28 @@ rather than a line of `&&`s, because leaving one off is invisible. And the
 check is the engine's own, asked the way spec 0060's hall asks it and
 narrowed to this corner, so the next thing stood in here is held the day it
 goes in.
+
+**It was a glowing tentacled monster.** Jake's words, on the first one that
+ran. Three things made it one, and all three are about the difference
+between a thread of gas and a limb. A filament of one thickness end to end
+is a limb, so each one thins to an eighth and dims by two thirds along its
+run, which is what a discharge does. A smooth glowing curve is a limb, and a
+regular sawtooth is a comic's lightning, so the wander is two terms now, a
+wide slow one that bends the whole thread and a small fast one laid on it:
+one turn rate gives a curve or a sawtooth and nothing in between. And a big
+bright ball where they meet is a head, so the electrode is a third of what it
+was and dimmer, and the stem that carries it is a rod rather than a bar.
+
+**And they all moved together.** Jake, watching that one: the arms should
+move erratically, not in sync with each other. Every arm was a sine of the
+time at a rate a few hundredths off its neighbour's, so all seven turned the
+same way at nearly the same speed, which is one movement shared out rather
+than seven of them. They hold still and strike somewhere else now, each on
+its own beat, each at its own offset into it, with the thread's own shape
+re-struck at the same moment so a jump reads as a new discharge rather than
+the old one swinging. Where it stands comes out of a scatter of which arm and
+which jump, since the globe keeps nothing and a function of the two is what
+stands in for a dice.
 
 **And `you_can_walk_round_it` ran through the new pedestal and passed.** Its
 ring stood at `middle.x + 1.3`, three centimetres off that pedestal's east

@@ -40,8 +40,8 @@ pub const PEDESTAL_UP: f32 = 0.95;
 
 /// The shell, the electrode inside it, and the stem that carries it.
 pub const SHELL: f32 = 0.22;
-pub const CORE: f32 = 0.025;
-pub const STEM: f32 = 0.024;
+pub const CORE: f32 = 0.011;
+pub const STEM: f32 = 0.010;
 
 /// Where the pedestal stands, derived off the ball's plinth so that moving
 /// one moves the other.
@@ -76,16 +76,24 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 }
 
 /// How many filaments there are and how many links each is drawn in.
-pub const FILAMENTS: usize = 5;
-pub const LINKS: usize = 9;
+pub const FILAMENTS: usize = 7;
+pub const LINKS: usize = 18;
 
-/// How thick one is drawn.
+/// How thick one is at the electrode, and how much of that is left at the
+/// glass.
 ///
-/// **Thin, and in more links than seems necessary, for the same reason.** A
-/// link is a box, so a link as thick as it is long is a cube and five bolts
-/// of cubes is a white starfish, which is what the first build drew. Nine
-/// links over a run of 0.22 is 0.024 each, which is four times this.
-pub const THREAD: f32 = 0.006;
+/// **Thin, tapered, and in more links than seems necessary.** A link is a
+/// box, so a link as thick as it is long is a cube and a bolt of cubes is a
+/// white starfish, which is what the first build drew. A thread of one
+/// thickness end to end is the next thing along and is what Jake saw: a
+/// glowing tentacled monster rather than an electric orb. A discharge is
+/// widest where it leaves the electrode and comes to nothing at the glass,
+/// and that taper is most of what tells the two apart.
+pub const THREAD: f32 = 0.0038;
+pub const THINS_TO: f32 = 0.12;
+
+/// And how much of its brightness is left there, for the same reason.
+pub const DIMS_TO: f32 = 0.35;
 
 /// How wide the fan of them opens off the line to the eye, as a half angle.
 ///
@@ -98,19 +106,67 @@ pub const THREAD: f32 = 0.006;
 /// them leans toward whoever is there by construction, and how far it leans
 /// is what wanders. Eighty degrees, which fans them over most of the near
 /// face.
-pub const FAN: f32 = 1.4;
+pub const FAN: f32 = 1.5;
 
-/// How far a filament bows off its own line at the middle of its run, as a
-/// share of the shell, and how far round the bow turns from one link to the
-/// next.
+/// How far a filament wanders off its own line, as a share of the shell, and
+/// how far round that wander turns from one link to the next.
 ///
-/// **Both were far too much and what they drew was a zigzag.** At 0.22 and
-/// 1.9 radians a link the bow swung a hundred and nine degrees between one
-/// link and the next, so a filament came out as a run of hard right angles,
-/// which is a lightning bolt in a comic and not a thread of gas. Small and
-/// slow is a gentle helix, which is what one is.
-pub const BOW: f32 = 0.09;
-pub const TWIST: f32 = 0.6;
+/// **Two of each, because one is either a curve or a sawtooth.** At 0.22 of
+/// the shell and 1.9 radians a link the wander swung a hundred and nine
+/// degrees between one link and the next and a filament was a run of hard
+/// right angles: a lightning bolt in a comic. At 0.09 and 0.6 it is a smooth
+/// helix, which Jake read at once as a glowing tentacled monster, because a
+/// smooth glowing curve of one thickness is a tentacle. One turn rate gives
+/// one or the other and nothing in between.
+///
+/// A spark is a line that wanders slowly and crinkles quickly at the same
+/// time, so there are two terms: a wide slow one that bends the whole thread
+/// and a small fast one laid on it. Both are nought at the electrode and
+/// nought at the glass, so a filament starts and ends exactly where it is
+/// meant to and only its run is crooked.
+pub const WANDER: f32 = 0.055;
+pub const WANDERS_BY: f32 = 0.55;
+pub const CRINKLE: f32 = 0.018;
+pub const CRINKLES_BY: f32 = 2.4;
+
+/// How long an arm holds still between jumps, and how much of that hold it
+/// spends moving.
+///
+/// **Because they were all turning the same way at the same speed.** Jake,
+/// watching it: the arms should move erratically, not in sync with each
+/// other. Every one was a sine of the time at a rate a few hundredths off
+/// its neighbour's, which is seven things doing one thing slightly out of
+/// step rather than seven things each doing their own. And a discharge does
+/// not sweep. It stands where it is, and then it is somewhere else.
+pub const HOLDS: f32 = 0.55;
+pub const JUMPS_IN: f32 = 0.12;
+
+/// A number between nought and one from a number.
+///
+/// How an arm gets somewhere different on every jump without anything being
+/// kept: the whole globe is worked out from the time and the eye, per spec
+/// 0122, so what stands in for a dice is a function of which arm and which
+/// jump. Not a good hash and it does not need to be one. It needs to be
+/// unlike its neighbour, which the multiply and the fraction see to.
+pub fn scatter(of: f32) -> f32 {
+    let x = (of * 12.9898 + 78.233).sin() * 43758.547;
+
+    x - x.floor()
+}
+
+/// Where one arm stands on one of its jumps, as how far it leans off the line
+/// to the eye and where round that line it sits.
+///
+/// Never past the fan, whatever the dice say, which is what keeps every arm
+/// on the side the eye is on.
+pub fn aim(which: usize, step: f32) -> (f32, f32) {
+    let seed = which as f32 * 31.7 + step * 7.13;
+
+    (
+        FAN * (0.22 + 0.78 * scatter(seed)),
+        scatter(seed + 3.7) * std::f32::consts::TAU,
+    )
+}
 
 /// One filament's links, from the electrode out to the shell.
 ///
@@ -144,23 +200,39 @@ pub fn filament(reaches: f32, which: usize, eye: Vec3, since: f32) -> [Vec3; LIN
     let other = toward.cross(side);
 
     let n = which as f32;
-    // how far out it leans, which wanders between a quarter of the fan and
-    // all of it, and never past it
-    let waver = ((since * (0.37 + n * 0.07) + n * 1.7).sin() * 0.5 + 0.5) * 0.75 + 0.25;
-    let lean = FAN * waver;
-    // and where round the line it sits. The golden angle apart, so the five
-    // are spread rather than paired
-    let roll = since * (0.5 + n * 0.11) + n * 2.399_963;
+    // where it stands: held still, then struck somewhere else. Its own beat
+    // and its own offset into that beat, so no two arms ever move together.
+    let beat = HOLDS * (0.55 + 0.9 * scatter(n + 0.5));
+    let tick = since / beat + scatter(n + 11.3) * 7.0;
+    let step = tick.floor();
+    // and how far through the jump it is, leaving fast and settling
+    let frac = ((tick - step) / JUMPS_IN).min(1.0);
+    let eased = 1.0 - (1.0 - frac) * (1.0 - frac);
+
+    let (was_lean, was_roll) = aim(which, step - 1.0);
+    let (now_lean, now_roll) = aim(which, step);
+    // the short way round, or an arm at six radians crossing to one at a
+    // tenth sweeps the whole circle to get there
+    let round = std::f32::consts::TAU;
+    let turn = (now_roll - was_roll + round * 0.5).rem_euclid(round) - round * 0.5;
+    let lean = was_lean + (now_lean - was_lean) * eased;
+    let roll = was_roll + turn * eased;
     let along = toward * lean.cos() + (side * roll.cos() + other * roll.sin()) * lean.sin();
 
     let mut links = [Vec3::ZERO; LINKS + 1];
 
     for (k, link) in links.iter_mut().enumerate() {
         let t = k as f32 / LINKS as f32;
-        let bow = (t * std::f32::consts::PI).sin() * shell * BOW;
-        let swing = since * (1.7 + n * 0.3) + k as f32 * TWIST + n * 0.7;
+        let held = (t * std::f32::consts::PI).sin() * shell;
+        // the thread's own shape is re-struck with the arm, so a jump is a
+        // new discharge rather than the same one swinging
+        let struck = scatter(n * 5.1 + step) * std::f32::consts::TAU;
+        let slow = since * (1.7 + n * 0.3) + k as f32 * WANDERS_BY + struck;
+        let fast = since * (4.3 + n * 0.5) + k as f32 * CRINKLES_BY + struck * 2.0;
+        let off = (side * slow.cos() + other * slow.sin()) * (held * WANDER)
+            + (side * fast.cos() + other * fast.sin()) * (held * CRINKLE);
 
-        *link = middle + along * (t * shell) + (side * swing.cos() + other * swing.sin()) * bow;
+        *link = middle + along * (t * shell) + off;
     }
 
     links
@@ -243,11 +315,14 @@ pub fn draw(
         crate::aim::PLASMA_STEM,
     );
 
-    // the filaments, which are what the thing is
+    // the filaments, which are what the thing is. Each link is thinner and
+    // dimmer than the one before it, so a filament leaves the electrode and
+    // comes to nothing at the glass rather than arriving there as thick as
+    // it set out.
     for which in 0..FILAMENTS {
         let links = filament(reaches, which, eye, since);
 
-        for pair in links.windows(2) {
+        for (k, pair) in links.windows(2).enumerate() {
             let (from, to) = (pair[0], pair[1]);
             let span = to - from;
             let long = span.length();
@@ -256,12 +331,16 @@ pub fn draw(
                 continue;
             }
 
+            let t = (k as f32 + 0.5) / (LINKS - 1) as f32;
+            let thick = THREAD * (1.0 - (1.0 - THINS_TO) * t);
+            let lit = 1.0 - (1.0 - DIMS_TO) * t;
+
             scene.push_fitting(
                 cube,
                 &Transform::at((from + to) * 0.5)
                     .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
-                    .with_scale(vec3(THREAD, long, THREAD)),
-                crate::aim::PLASMA,
+                    .with_scale(vec3(thick, long, thick)),
+                (crate::aim::PLASMA.truncate() * lit).extend(1.0),
             );
         }
     }
@@ -405,6 +484,80 @@ mod tests {
                         least
                     );
                 }
+            }
+        }
+    }
+
+    /// Spec 0122: each arm holds still, jumps, and does not jump with its
+    /// neighbours.
+    ///
+    /// **Jake, watching the first one that moved: the arms should move
+    /// erratically, not in sync with each other.** Every arm was a sine of
+    /// the time at a rate a few hundredths off its neighbour's, so all seven
+    /// turned the same way at nearly the same speed, which is one movement
+    /// shared out rather than seven of them.
+    ///
+    /// Three claims, because "erratic" on its own cannot fail. Each arm is
+    /// still most of the time, which is what a discharge does. Each arm does
+    /// move. And no two of them are moving at once much more often than two
+    /// unrelated things would be, which is the sync itself: seven arms each
+    /// moving a eighth of the time meet by chance in about a sixtieth of
+    /// frames, and in step they would meet in every frame one of them moved.
+    #[test]
+    fn the_arms_jump_rather_than_sweep_and_never_together() {
+        let reaches = reaches();
+        let (middle, shell) = globe(reaches);
+        let eye = middle + vec3(1.2, 0.3, 0.6);
+        let frames = 2400;
+        let step = 1.0 / 60.0;
+        let moving = 0.004;
+
+        let mut budged = vec![vec![false; frames]; FILAMENTS];
+
+        for frame in 0..frames {
+            let since = frame as f32 * step;
+
+            for (which, mine) in budged.iter_mut().enumerate() {
+                let was = (filament(reaches, which, eye, since)[LINKS] - middle) / shell;
+                let now = (filament(reaches, which, eye, since + step)[LINKS] - middle) / shell;
+
+                mine[frame] = was.distance(now) > moving;
+            }
+        }
+
+        for (which, mine) in budged.iter().enumerate() {
+            let share = mine.iter().filter(|it| **it).count() as f32 / frames as f32;
+
+            assert!(
+                share > 0.02,
+                "arm {} moved in {:.3} of frames, so it is standing still",
+                which,
+                share
+            );
+            assert!(
+                share < 0.30,
+                "arm {} moved in {:.3} of frames, so it is sweeping rather than jumping",
+                which,
+                share
+            );
+        }
+
+        for (which, mine) in budged.iter().enumerate() {
+            for (other, theirs) in budged.iter().enumerate().skip(which + 1) {
+                let together = mine
+                    .iter()
+                    .zip(theirs.iter())
+                    .filter(|(one, two)| **one && **two)
+                    .count() as f32
+                    / frames as f32;
+
+                assert!(
+                    together < 0.06,
+                    "arms {} and {} are both moving in {:.3} of frames",
+                    which,
+                    other,
+                    together
+                );
             }
         }
     }
