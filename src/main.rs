@@ -35,6 +35,7 @@ mod orrery;
 mod parked;
 mod people;
 mod plan;
+mod plasma;
 mod roofing;
 mod room;
 mod says;
@@ -9995,6 +9996,19 @@ impl Game for Arcade {
                     column: self.column,
                 },
             );
+
+            // and spec 0122's globe beside the ball, drawn whether or not
+            // the ball is being traced: the two are separate things and a
+            // dark corner of the room is not a reason for the glowing one
+            // to go out.
+            plasma::draw(
+                scene,
+                self.room.reaches,
+                self.since,
+                self.looking_from(),
+                cube,
+                self.globe_mesh,
+            );
         }
         self.draw_the_people(scene);
 
@@ -13273,6 +13287,19 @@ impl Game for Arcade {
                 glass::LAMP_COLOUR,
                 glass::LAMP_LIT,
                 glass::LAMP_RANGE,
+            ));
+        }
+
+        // and spec 0122's globe, whose fitting is the globe itself.
+        {
+            let at = plasma::lamp(self.room.reaches);
+
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                plasma::LAMP_COLOUR,
+                plasma::LAMP_LIT,
+                plasma::LAMP_RANGE,
             ));
         }
 

@@ -294,6 +294,33 @@ pub const GLASS_TRIM: Vec4 = vec4(0.72, 0.66, 0.57, 1.0);
 pub const GLASS_BORDER: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
 pub const GLASS_PANEL: Vec4 = vec4(0.13, 0.14, 0.17, 1.0);
 
+/// The plasma globe standing beside that ball. Spec 0122.
+///
+/// **The shell leans on spec 0018 of the engine and the plasma on colour
+/// being unclamped.** Alpha under one on the glass, so the engine draws it
+/// after everything solid and what is inside shows through; every channel
+/// of a filament past one, so it gives off rather than takes, which is what
+/// the neon over the hall and the coals in the hearth both do.
+///
+/// **One channel stays under one, which is what keeps it violet.** The
+/// first go was past one in all three and came out white: the screen clips
+/// at one, so a colour over it everywhere is the same colour as every other
+/// colour over it everywhere, and the reflection in the ball beside it was
+/// the only place the violet survived, because there it is dimmer. Neon
+/// does the same thing one room away, at 0.70 against 3.04 and 3.2.
+///
+/// The electrode is dimmer than what comes off it. It is the one solid thing
+/// in there and a core as bright as its own filaments is a white marble with
+/// threads on it.
+pub const PLASMA_GLASS: Vec4 = vec4(0.58, 0.56, 0.72, 0.16);
+pub const PLASMA: Vec4 = vec4(3.4, 0.60, 4.2, 1.0);
+pub const PLASMA_CORE: Vec4 = vec4(1.8, 0.52, 2.1, 1.0);
+
+/// And the stem that carries the electrode, which is the piece that says the
+/// thing is a lamp and not a marble. Dark, because everything above it is
+/// not.
+pub const PLASMA_STEM: Vec4 = vec4(0.17, 0.16, 0.18, 1.0);
+
 pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
 
 /// And the sun's own disc, which is a different thing from the light it

@@ -906,6 +906,9 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     out.extend(wing_walls(reaches));
 
     out.push(plinth(reaches));
+    // and spec 0122's stand beside it, which is a thing in the way the same
+    // as the plinth is
+    out.extend(crate::plasma::solid(reaches));
 
     out.extend(treads(reaches));
     out.extend(guard(reaches));
@@ -1179,6 +1182,7 @@ pub fn named(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
                 .into_iter()
                 .map(|box_| (box_, crate::aim::GLASS_PIER)),
         )
+        .chain(crate::plasma::named(reaches))
         .collect()
 }
 
@@ -1881,31 +1885,57 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
 /// check can be pointed at it. The box in `plinth` is what a body walks into
 /// and what the ball stands on, and it is not this.
 pub fn plinth_pieces(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
-    let die = plinth(reaches);
+    plinth_courses(plinth(reaches))
+}
+
+/// The same courses on any die, which is what spec 0122's pedestal reads.
+///
+/// **Takes the box rather than the room.** There are two plinths in here now,
+/// the ball's and the globe's, and how a plinth in this room is cut is one
+/// question. Written twice they would be two lists of one thing, which is the
+/// fault under most of the others in this building.
+///
+/// **And the oversails are a share of the die, not metres.** They were 0.13,
+/// 0.08, 0.11 and 0.06, written when there was one plinth in here and it was
+/// 0.9 across. On a die of 0.52 the same metres are half again as much
+/// oversail and what they drew was a base wider than the thing standing on
+/// it. Divided by `PLINTH`, so the ball's own plinth is the course it has
+/// always been.
+pub fn plinth_courses(die: Aabb) -> Vec<(Aabb, glam::Vec4)> {
     let wide = die.size().x;
     let at = die.center();
 
     [
-        (die.min.y, die.min.y + 0.1, 0.13, crate::aim::GLASS_TRIM),
+        (
+            die.min.y,
+            die.min.y + 0.1,
+            0.13 / PLINTH,
+            crate::aim::GLASS_TRIM,
+        ),
         (
             die.min.y + 0.1,
             die.min.y + 0.16,
-            0.08,
+            0.08 / PLINTH,
             crate::aim::GLASS_TRIM,
         ),
         (die.min.y + 0.16, die.max.y - 0.14, 0.0, crate::aim::STAND),
         (
             die.max.y - 0.14,
             die.max.y - 0.05,
-            0.11,
+            0.11 / PLINTH,
             crate::aim::GLASS_TRIM,
         ),
-        (die.max.y - 0.05, die.max.y, 0.06, crate::aim::GLASS_TRIM),
+        (
+            die.max.y - 0.05,
+            die.max.y,
+            0.06 / PLINTH,
+            crate::aim::GLASS_TRIM,
+        ),
     ]
     .iter()
     .copied()
     .map(|(from, to, out, colour)| {
-        let half = (wide + out * 2.0) * 0.5;
+        let half = wide * (1.0 + out * 2.0) * 0.5;
 
         (
             Aabb::new(
@@ -1916,6 +1946,31 @@ pub fn plinth_pieces(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
         )
     })
     .collect()
+}
+
+/// The boxes of [`solid`] this room draws as something else, which the loop
+/// over `solid` has to leave alone.
+///
+/// **A list rather than a line of `&&`s, because leaving one off is
+/// invisible.** Spec 0122's pedestal went into `solid` and nobody added it
+/// here, so the room drew its box as a plain cube and `plasma::draw` drew its
+/// courses over it: the die's sides landed exactly on the cube's, which is
+/// two exposed faces in one plane and the eighth time in this building. What
+/// it looks like is a checkerboard of lit and shadowed squares, which reads
+/// like a coarse shadow map and is not one.
+///
+/// The colonnade is not in here because whether it is drawn as a lathe
+/// depends on whether the lathe has been uploaded yet, and that is the one
+/// thing on this list that is not a fact about the room.
+pub fn drawn_otherwise(reaches: f32) -> Vec<Aabb> {
+    let mut out = vec![plinth(reaches)];
+
+    out.extend(guard(reaches));
+    out.extend(level_rails(reaches));
+    out.extend(treads(reaches));
+    out.extend(crate::plasma::solid(reaches));
+
+    out
 }
 
 /// Draws the room, and the ball in it.
@@ -1945,13 +2000,11 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
     } = meshes;
     let reaches = room.reaches;
 
-    let plinth = plinth(reaches);
     // the balustrade stands in `solid` as upright boxes and is drawn as
-    // joinery; the plinth stands there as one box and is drawn as a base, a
-    // die and a cap. What is walked into here is not what is looked at.
-    let guard = guard(reaches);
-    let rail = level_rails(reaches);
-    let treads = treads(reaches);
+    // joinery; the two plinths stand there as one box each and are drawn as a
+    // base, a die and a cap. What is walked into here is not what is looked
+    // at, and `drawn_otherwise` is the list of which.
+    //
     // the colonnade stands in `solid` as boxes, for the walk and for the
     // glass, and is drawn as turned columns
     let shafts: Vec<Aabb> = column_boxes(reaches)
@@ -1959,17 +2012,12 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
         .map(|(box_, _)| box_)
         .collect();
     let named = named(reaches);
+    let otherwise = drawn_otherwise(reaches);
 
     for piece in solid(reaches)
         .into_iter()
         .chain([lid(reaches), cornice(reaches)])
-        .filter(|piece| {
-            !guard.contains(piece)
-                && !rail.contains(piece)
-                && !treads.contains(piece)
-                && *piece != plinth
-                && !(column.is_some() && shafts.contains(piece))
-        })
+        .filter(|piece| !otherwise.contains(piece) && !(column.is_some() && shafts.contains(piece)))
     {
         scene.push_material(
             cube,
@@ -2423,13 +2471,21 @@ mod tests {
             south.y
         );
 
-        // and round the plinth, four corners of it in turn
-        let out = PLINTH * 0.5 + crate::RADIUS + 0.4;
+        // and round the pair of them, four corners in turn
+        //
+        // **Round the pair and not round the plinth alone, since spec 0122
+        // stood a second stand 0.30 east of it.** This ran at `middle.x +
+        // 1.3`, which is three centimetres off that stand's east face, so
+        // the body walking it would have stood inside the thing. What the
+        // claim was ever about is getting all the way round the exhibit,
+        // and the exhibit is two things now.
+        let pair = plinth(reaches).union(&crate::plasma::pedestal(reaches));
+        let out = crate::RADIUS + 0.4;
         let ring = [
-            vec3(middle.x - out, UP + 0.2, middle.z - out),
-            vec3(middle.x + out, UP + 0.2, middle.z - out),
-            vec3(middle.x + out, UP + 0.2, middle.z + out),
-            vec3(middle.x - out, UP + 0.2, middle.z + out),
+            vec3(pair.min.x - out, UP + 0.2, pair.min.z - out),
+            vec3(pair.max.x + out, UP + 0.2, pair.min.z - out),
+            vec3(pair.max.x + out, UP + 0.2, pair.max.z + out),
+            vec3(pair.min.x - out, UP + 0.2, pair.max.z + out),
         ];
         let mut at = ring[0];
 
@@ -2443,6 +2499,57 @@ mod tests {
                 corner
             );
         }
+    }
+
+    /// Spec 0122: the stand beside the ball leaves the east lane walkable
+    /// and stands close enough to the plinth to read as a pair.
+    ///
+    /// **Two bounds and not one, because the band between them is the bad
+    /// answer.** A body is 0.9 across and wants 1.05 clear, and the room
+    /// skill's other half is that 0.6 is a gap you can see through and
+    /// cannot get to. The walk here is 5.85 between the colonnades with a
+    /// 0.9 plinth in the middle of it, so there is no room to put a second
+    /// one far enough away to walk between: it stands near enough to be one
+    /// group instead.
+    #[test]
+    fn the_pedestal_leaves_the_walk_open() {
+        let reaches = reaches();
+        let die = plinth(reaches);
+        let stands = crate::plasma::pedestal(reaches);
+        let gap = stands.min.x - die.max.x;
+
+        assert!(
+            gap > 0.0 && gap < 0.6,
+            "the two stand {:.2} apart, which is a slot rather than a pair",
+            gap
+        );
+
+        // the east colonnade, which is what the lane past it runs between
+        let column = frames(reaches)
+            .into_iter()
+            .map(|(at, size)| at.x - size.x * 0.5)
+            .filter(|west| *west > stands.max.x)
+            .fold(f32::MAX, f32::min);
+        let lane = column - stands.max.x;
+
+        assert!(
+            lane >= crate::back::CLEAR,
+            "the lane east of it is {:.2} and a body wants {:.2}",
+            lane,
+            crate::back::CLEAR
+        );
+
+        // and it walks, which is the thing a measurement cannot say
+        let down = (stands.max.x + column) * 0.5;
+        let to = vec3(down, UP, stands.max.z + 3.0);
+        let at = walked(vec3(down, UP + 0.2, stands.min.z - 3.0), to, 6.0);
+
+        assert!(
+            at.distance(to) < 0.8,
+            "walking the east lane stopped {:.2} short of {:?}",
+            at.distance(to),
+            to
+        );
     }
 
     /// The plinth has the room's length behind it from either end of the
