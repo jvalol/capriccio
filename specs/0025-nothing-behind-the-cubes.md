@@ -121,6 +121,9 @@ measure already, and nothing in this room starts a process.
   dark. — `back::tests::there_is_room_to_stand_at_the_rig`
 - Nothing in the clutter stands on the way from the door to the
   rig. — `back::tests::the_clutter_is_against_the_walls`
+- And none of it is inside the furniture, the bucket in the corner having
+  stood 14 centimetres inside the end of the
+  bench. — `back::tests::nothing_standing_about_is_inside_the_furniture`
 - Pointing at the cubes finds the rig; pointing at the workbench, which is
   the thing in here that most looks like a bench, does
   not. — `back::tests::pointing_at_the_cubes_finds_the_rig`
@@ -178,6 +181,15 @@ building's 1.05 apart, which is a diagonal, because the straight part of it is
 0.78 and no length of bench can widen that. What gives is the bench's run, its
 north end being fixed by the bucket in that corner. And the test walks both
 ways, because in this building those are two questions.
+
+**And the north end was written down as well.** A flat 0.35 off the near
+wall, beside a doc line saying the bucket in that corner is what fixes it,
+while the bucket reaches 0.49: the bucket had stood 14 centimetres inside the
+end of the bench, a third of its own depth, since the day both were placed.
+Derived off the bucket's own place now. What hid it is that the bench's north
+end is the one part of it you cannot see from the door, and that the clutter
+test had only ever asked the clutter about itself and about the walls, though
+its own doc line claimed otherwise.
 
 **And then the west side, which was the same fault one centimetre the other
 way.** Two crates stand on the strip of west wall between the bay and the

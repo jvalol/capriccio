@@ -293,14 +293,34 @@ pub const RIG: &str = "test rig";
 pub const BENCH_ACROSS: f32 = 0.72;
 pub const BENCH_TALL: f32 = 0.86;
 
-/// How far the bench stands off the wall behind it, and off the near wall at
-/// its north end.
-///
-/// The north end is the fixed one. A bucket stands in that corner, so the
-/// bench is placed from there and runs south, and the length is what answers
-/// to the bay.
+/// How far the bench stands off the wall behind it.
 pub const BENCH_OFF_THE_WALL: f32 = 0.05;
-pub const BENCH_OFF_THE_END: f32 = 0.35;
+
+/// And how far clear of the bucket its north end stops.
+///
+/// Its own number rather than [`BENCH_OFF_THE_WALL`]. That one is there
+/// because a panel's back face landing on the face behind it is two drawn
+/// faces in one plane; this one is there so a bucket and a bench read as two
+/// things rather than one. They agree today and they are not the same
+/// question.
+pub const BENCH_OFF_THE_BUCKET: f32 = 0.05;
+
+/// Where the bench's north end stops, as a distance back from the near wall.
+///
+/// **It was a flat 0.35 and that was a second account of the bucket.** The
+/// doc over it said the north end is the fixed one, a bucket standing in that
+/// corner, and the bench is placed from there: all true, and the bucket
+/// reaches 0.49 off the wall, so the bucket stood 14 centimetres inside the
+/// end of the bench. A third of its own depth, from the day both were
+/// placed. Two lists of one thing, and these two never agreed even once.
+///
+/// Derived now, off [`corner_bucket`], so moving the bucket moves the bench.
+pub fn bench_off_the_end(reaches: f32) -> f32 {
+    let (_, near) = deep(reaches);
+    let (across, _) = Thing::Bucket.size();
+
+    (near - (corner_bucket(reaches).z - across * 0.5)) + BENCH_OFF_THE_BUCKET
+}
 
 /// How far clear of everything a body wants, which is this building's rule.
 pub const CLEAR: f32 = 1.05;
@@ -364,7 +384,7 @@ pub fn bench(reaches: f32) -> Vec3 {
     vec3(
         east - BENCH_ACROSS * 0.5 - BENCH_OFF_THE_WALL,
         BENCH_TALL * 0.5,
-        near - BENCH_OFF_THE_END - bench_size(reaches).z * 0.5,
+        near - bench_off_the_end(reaches) - bench_size(reaches).z * 0.5,
     )
 }
 
@@ -374,7 +394,11 @@ pub fn bench_size(reaches: f32) -> Vec3 {
     let (far, near) = deep(reaches);
     let south = far + BAY + bench_off_the_bay();
 
-    vec3(BENCH_ACROSS, BENCH_TALL, (near - BENCH_OFF_THE_END) - south)
+    vec3(
+        BENCH_ACROSS,
+        BENCH_TALL,
+        (near - bench_off_the_end(reaches)) - south,
+    )
 }
 
 pub fn bench_box(reaches: f32) -> Aabb {
@@ -748,6 +772,19 @@ pub struct Stood {
     pub turn: f32,
 }
 
+/// Where the bucket in the north-east corner stands.
+///
+/// Its own function because the bench is placed from it: the bench's north
+/// end is where this bucket stops, so the two cannot be written down
+/// separately. Read by [`bench_off_the_end`] and by [`clutter`], which is
+/// still the list it belongs to.
+pub fn corner_bucket(reaches: f32) -> Vec3 {
+    let (_, east) = span();
+    let (_, near) = deep(reaches);
+
+    vec3(east - 0.3, 0.0, near - 0.34)
+}
+
 /// Everything standing about in the room.
 ///
 /// Placed by hand rather than scattered by a rule. A rule that drops things
@@ -755,7 +792,7 @@ pub struct Stood {
 /// what this is for is the look of a room somebody has been using, which is
 /// not the same as the look of a room somebody has shaken.
 pub fn clutter(reaches: f32) -> Vec<Stood> {
-    let (west, east) = span();
+    let (west, _) = span();
     let (far, near) = deep(reaches);
     let lip = far + BAY;
     let floor = 0.0;
@@ -840,7 +877,7 @@ pub fn clutter(reaches: f32) -> Vec<Stood> {
         },
         Stood {
             thing: Thing::Bucket,
-            at: vec3(east - 0.3, floor, near - 0.34),
+            at: corner_bucket(reaches),
             turn: 0.0,
         },
     ]
@@ -1589,6 +1626,61 @@ mod tests {
                 box_.max
             );
             assert!(box_.max.y < TALL, "something is through the ceiling");
+        }
+    }
+
+    /// Spec 0025: nothing standing about in here is inside the furniture.
+    ///
+    /// **The bucket in the north-east corner was, by 14 centimetres.** A
+    /// third of its own depth, from the day it and the bench were both
+    /// placed, because the bench's north end was written down as 0.35 off
+    /// the near wall while the bucket that fixes it reaches 0.49. It
+    /// survived every picture of this room, the bench's north end being the
+    /// one part of it you cannot see from the door. And it survived
+    /// `the_clutter_is_against_the_walls`, whose own doc line claims none of
+    /// the clutter is inside anything else and which only ever asked the
+    /// clutter about itself and about the walls.
+    ///
+    /// **Resting on something is not being inside it.** Every piece on the
+    /// floor shares the floor's top face, and the jars and the tin share the
+    /// bench's, so what this asks about is shared volume rather than
+    /// contact, the way the clutter already asks it of itself.
+    ///
+    /// The room's own solid list is what it asks against, with the clutter
+    /// taken back out of it, so a piece of furniture added in here is in
+    /// this test the day it is added. The rig is not in that list, being a
+    /// bench in the building's list instead, so it is asked for by name and
+    /// boxed by the building's own `bench_box`.
+    #[test]
+    fn nothing_standing_about_is_inside_the_furniture() {
+        let reaches = reaches();
+        let clutter = clutter_solid(reaches);
+        let mut room: Vec<Aabb> = solid(reaches)
+            .into_iter()
+            .filter(|box_| !clutter.contains(box_))
+            .collect();
+
+        assert_eq!(
+            room.len() + clutter.len(),
+            solid(reaches).len(),
+            "the room's own solid list no longer holds the clutter"
+        );
+
+        room.push(crate::room::Room::bench_box(&benched(reaches)));
+
+        for one in &clutter {
+            for other in &room {
+                let shared = (one.max.min(other.max) - one.min.max(other.min)).min_element();
+
+                assert!(
+                    shared <= 1e-3,
+                    "something standing about is {:.3} inside the room: {:?} in {:?} to {:?}",
+                    shared,
+                    one.min,
+                    other.min,
+                    other.max
+                );
+            }
         }
     }
 
