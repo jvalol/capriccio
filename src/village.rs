@@ -539,8 +539,8 @@ pub fn track(reaches: f32) -> Aabb {
     )
 }
 
-/// How wide the way there is worn, in how many pieces, and how far clear of
-/// it the field keeps its trees.
+/// How wide the way there is worn, and how far clear of it the field keeps
+/// its trees.
 ///
 /// **A footpath and not a cart track.** The street's own ruts are two lines
 /// at a wagon's wheel spacing, because a cart goes up and down it. Nothing
@@ -566,8 +566,38 @@ pub fn track(reaches: f32) -> Aabb {
 /// the view by happening to rather than by aiming, and a second keep-out
 /// along gap to middle would be two bare stripes crossing in a field.
 pub const PATH_WIDE: f32 = 1.2;
-pub const PATH_PIECES: usize = 40;
 pub const PATH_CLEAR: f32 = 4.0;
+
+/// How far the way there bows off the straight line between its ends, and in
+/// how many steps the ribbon that carries it is built.
+///
+/// **Jake, 2026-11-22: it looks like a series of rectangles and not a true
+/// curved path.** Both halves of that were true and they are separate
+/// faults. The rectangles were forty boxes laid end to end, each the run's
+/// one heading, each thrown a tenth of a metre sideways of the last: the
+/// joins notched the edges and the end faces showed. The straightness was
+/// the line itself. What it had was a wander of a seventh of a metre over
+/// fifty, which is a surveyed road with a tremor in it.
+///
+/// A bow of three and a half is a path that visibly goes somewhere other
+/// than straight, and it leans toward the village's own middle rather than
+/// away from it: `PATH_CLEAR` clears the sightline from the gap by lying
+/// near it, so a bow the other way would walk the cleared strip off the
+/// view it exists to keep open.
+///
+/// Ninety-six steps over fifty-two metres is a vertex every half metre,
+/// which carries a bow of this size with no corner you can find by walking
+/// along it.
+pub const PATH_BOW: f32 = 3.6;
+pub const PATH_STEPS: usize = 96;
+
+/// How much of the way there one tile of [`grit`] covers, in metres.
+///
+/// A little over a pace, so a chip in it is a chip and the tile's own
+/// repeat is longer than the path is wide. The path's uv is laid in these
+/// rather than nought to one over the whole run: a 52 metre ribbon with one
+/// tile stretched down it would be a chip half a metre long.
+pub const PATH_TILE: f32 = 1.1;
 
 /// How far out of the gap the way there begins.
 ///
@@ -598,60 +628,135 @@ pub fn path_runs(reaches: f32) -> (Vec3, Vec3) {
     )
 }
 
-/// The way there, as a run of short worn pieces: where each sits, how big it
-/// is, and which way it is turned.
+/// A point on the middle of the way there, from nought at the gap to one
+/// where the street's own ruts take over.
 ///
-/// **Turned, because this one runs on the diagonal.** The street's ruts are
-/// boxes along x and need no rotation; the gap is north east of the village
-/// and nothing between them is square to anything. Each piece carries the
-/// run's own heading, the way a wagon's wheels carry the cart's.
+/// **One account of the line**, which is the lesson the ruts already carry:
+/// the ribbon is built from this, the trees are kept off it by this, and
+/// the two would have come apart the first time either moved.
 ///
-/// It wanders like the ruts do and for the same reason. A worn line that is
-/// perfectly straight for fifty metres is a road somebody surveyed.
-pub fn path(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
+/// The bow leans toward the village and returns to the straight line at
+/// both ends, because both ends are fixed: the gap is a hole in a wall and
+/// the far end is where the ruts run out. The short wander on top of it is
+/// the one the pieces always had, read off the distance down the run rather
+/// than off a step number, so it is a wave in the line and not a tremor in
+/// it.
+pub fn path_at(reaches: f32, on: f32) -> Vec3 {
     let (from, to) = path_runs(reaches);
     let way = to - from;
     let long = way.length();
     let along = way / long;
     // across the run, which is the heading turned a quarter
     let across = vec3(-along.z, 0.0, along.x);
-    let piece = long / PATH_PIECES as f32;
+    // which side of the straight line the village's own middle is on, named
+    // rather than written as a sign: the run ends at the street's east end
+    // and the place itself is most of thirty degrees west of that, so
+    // "toward the village" and "to the left" are not the same claim and only
+    // one of them stays true if either end moves
+    let toward = (at(reaches) - to).dot(across).signum();
+    let down = on * long;
 
-    (0..PATH_PIECES)
-        .map(|n| {
-            let down = (n as f32 + 0.5) * piece;
-            // **Read off the distance and barely there.** The first build
-            // seeded on the piece's number with a tenth of a radian step,
-            // which is a fast wave, and threw each piece half a width
-            // sideways of the last: a line of paving slabs dealt out by
-            // hand. The ruts' own comment says what that looks like, since
-            // they were a kerb down the street for the same reason. Long
-            // waves and a tenth of a metre, so a join is a soft edge
-            // rather than a notch.
-            let wander = (down * 0.21).sin() * 0.14 + (down * 0.53).sin() * 0.07;
-            let at = from + along * down + across * wander;
+    // **One envelope over both of them.** The bow and the wander are each
+    // how far off the straight line the walk goes, and both ends of the walk
+    // are pinned: a wander that does not fade with the bow leaves the line
+    // five centimetres clear of the gap it comes out of.
+    from + along * down
+        + across
+            * (on * PI).sin()
+            * (PATH_BOW * toward + (down * 0.21).sin() * 0.14 + (down * 0.53).sin() * 0.07)
+}
 
-            (
-                // laid on the field's own ground, which sits `field::DROP`
-                // under the garden's, and only far enough proud of it to
-                // keep the two out of one plane
-                vec3(at.x, -crate::field::DROP + 0.002, at.z),
-                // a third again as long as its step, so the wander never
-                // opens a gap between one piece and the next
-                vec3(piece * 1.33, 0.005, PATH_WIDE),
-                // **Not `people::facing`'s angle**, which is the one every
-                // other turn in this file is. That one answers which way a
-                // body looks and its forward is `(sin, 0, -cos)`; this is
-                // handed to `Quat::from_rotation_y`, which sends a box's
-                // own x to `(cos, 0, -sin)`. The first build used the
-                // facing and laid every piece across the run instead of
-                // along it: a path of slabs dealt sideways, a metre out of
-                // line at each join, which read as the wander being too
-                // coarse and was nothing of the sort.
-                (-along.z).atan2(along.x),
-            )
-        })
-        .collect()
+/// Which way the way there is heading at a point on it, and which way is
+/// across it there.
+fn path_heads(reaches: f32, on: f32) -> (Vec3, Vec3) {
+    let step = 0.5 / PATH_STEPS as f32;
+    let ahead = path_at(reaches, (on + step).min(1.0)) - path_at(reaches, (on - step).max(0.0));
+    let along = ahead.normalize_or_zero();
+
+    (along, vec3(-along.z, 0.0, along.x))
+}
+
+/// How far the way there is worn out from its middle at a point on it, on
+/// the given side.
+///
+/// **A path has two edges and neither is a line.** Worn by feet that mostly
+/// go down the middle, so the band is about as wide everywhere and about is
+/// the whole of it: an edge off one number is a kerb. Read off the metres
+/// walked rather than the step, and each side off its own phase, so the two
+/// do not swell and shrink together like a throat.
+fn path_half(walked: f32, side: f32) -> f32 {
+    PATH_WIDE * 0.5
+        + (walked * 0.9 + side * 5.0).sin() * 0.09
+        + (walked * 2.3 + side * 11.0).sin() * 0.05
+}
+
+/// The way there, as one worn ribbon laid on the field.
+///
+/// **One mesh and not forty boxes.** Each box carried the run's one heading
+/// and was thrown sideways of the last, so every join notched both edges
+/// and showed an end face: Jake read it off a screenshot as a series of
+/// rectangles. A strip built from [`path_at`] turns where the line turns,
+/// has no joins to notch, and costs a tenth of the triangles the boxes did.
+///
+/// Its uv runs in [`PATH_TILE`]s along the walk and across the width, so
+/// [`grit`] tiles down it at the size a chip of gravel actually is, and the
+/// bump the engine bends by is read in the same units.
+pub fn path_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
+    use blitzkit::mesh::Vertex;
+
+    // laid on the field's own ground, which sits `field::DROP` under the
+    // garden's, and only far enough proud of it to keep the two out of one
+    // plane
+    let high = -crate::field::DROP + 0.002;
+    let up = [0.0, 1.0, 0.0];
+
+    let mut vertices = Vec::with_capacity((PATH_STEPS + 1) * 2);
+    let mut indices = Vec::with_capacity(PATH_STEPS * 6);
+    // metres walked rather than the share of the run, because the bow makes
+    // the line longer than the line between its ends and a texture laid in
+    // shares would stretch where it bends
+    let mut walked = 0.0f32;
+    let mut last = path_at(reaches, 0.0);
+
+    for n in 0..=PATH_STEPS {
+        let on = n as f32 / PATH_STEPS as f32;
+        let here = path_at(reaches, on);
+        let (_, across) = path_heads(reaches, on);
+
+        walked += here.distance(last);
+        last = here;
+
+        for side in [-1.0f32, 1.0].iter().copied() {
+            let half = path_half(walked, side);
+            let at = here + across * (half * side);
+
+            // **u in tiles and v edge to edge.** Along the walk a tile has
+            // to be a fixed size on the ground or the grit stretches where
+            // the path bends. Across it, nought and one are the two edges
+            // whatever the edge is doing there, which is what lets the tile
+            // know where its own edges are: `grit` wears itself thin at
+            // nought and one and the worn part lands on the edge of the
+            // path rather than near it. The width wobbles by a sixth, so
+            // the grit is stretched across by that much and no eye finds it
+            // on a stone.
+            vertices.push(Vertex::new(
+                [at.x, high, at.z],
+                up,
+                [walked / PATH_TILE, 0.5 + side * 0.5],
+            ));
+        }
+
+        if n < PATH_STEPS {
+            // wound so the face looks up: the two on this step, then the far
+            // side of the next, which is `across` crossed into `along` and
+            // not the other way about
+            let (near, far) = ((n * 2) as u32, (n * 2 + 2) as u32);
+
+            indices.extend_from_slice(&[near, near + 1, far + 1, near, far + 1, far]);
+        }
+    }
+
+    blitzkit::mesh::MeshData::new(vertices, indices)
 }
 
 /// Whether this is on the way there, for the field to keep its trees off it.
@@ -670,9 +775,18 @@ pub fn along_the_path(reaches: f32, at: Vec3) -> bool {
     }
 
     let part = ((at - from).dot(way) / how_far).clamp(0.0, 1.0);
-    let near = from + way * part;
 
-    vec3(at.x - near.x, 0.0, at.z - near.z).length() < PATH_CLEAR
+    // **Measured to the line that is walked and not to the line between its
+    // ends.** The bow stands three and a half metres off the straight one,
+    // which is most of `PATH_CLEAR`: measured to the straight, the keep-out
+    // would hang off the far edge of the path altogether and leave room for
+    // a tree on it. The foot of the perpendicular on the straight line is
+    // near enough the right place to look on a curve this gentle, and the
+    // two steps either side of it cover where it is not.
+    [-0.06f32, -0.03, 0.0, 0.03, 0.06]
+        .iter()
+        .map(|off| path_at(reaches, (part + off).clamp(0.0, 1.0)))
+        .any(|near| vec3(at.x - near.x, 0.0, at.z - near.z).length() < PATH_CLEAR)
 }
 
 /// How wide a wheel rut is worn.
@@ -1050,29 +1164,249 @@ pub fn bumps(reaches: f32) -> blitzkit::texture::TextureData {
     // how much world a texel is worth each way, which is what turns a
     // difference in height into a slope. The street is 72 along by 10
     // across, so they are not the same number.
+    //
+    // **The quad's own u and v, which `room::tiled_plane` lays along x and z
+    // in that order.** The shader builds its frame off those, so red leans
+    // the normal along the street and green across it. Swapped, the joints
+    // would light as if the sun were somewhere else.
     let (per_u, per_v) = (size.x / FACE_WIDE as f32, size.z / FACE_TALL as f32);
+    // laid once on the one street, so its edge is the kerb and not another
+    // copy of itself
+    let pixels = normals_of(wide, tall, &high, per_u, per_v, false);
+
+    blitzkit::texture::TextureData::from_pixels(FACE_WIDE, FACE_TALL, pixels)
+}
+
+/// A field of heights turned into the bytes of a normal map.
+///
+/// **Raw bytes and not [`encoded`].** The bump binding reads the upload
+/// through `texture::DATA`, which is the same bytes as numbers rather than
+/// as a colour. Put the sRGB curve on a direction and it is not that
+/// direction: a half encodes to 188, so a surface meant to lean a little
+/// leans a long way.
+///
+/// `per_u` and `per_v` are how much world a texel is worth each way, which
+/// is what turns a difference in height into a slope rather than into a
+/// number of texels.
+///
+/// **`wrapped` is a question about what the texture is for.** The street's
+/// face is laid on the street once and its edges are its kerbs, so a slope
+/// read there is read from the edge inward. A tile of grit is repeated down
+/// a path, so its left neighbour is its own right edge and that is where the
+/// slope at its border comes from.
+///
+/// It is a correctness worth having and not a fault anybody would see: a
+/// clamped border reads its own height twice over half the span, which on a
+/// field as smooth as this one comes out within a byte of the right answer.
+/// What actually keeps the tile seamless is that `grit_field` sows its chips
+/// across the border, and that is what the test guards.
+fn normals_of(
+    wide: usize,
+    tall: usize,
+    high: &[f32],
+    per_u: f32,
+    per_v: f32,
+    wrapped: bool,
+) -> Vec<u8> {
+    let step = |n: usize, by: isize, many: usize| {
+        if wrapped {
+            (n as isize + by).rem_euclid(many as isize) as usize
+        } else if by < 0 {
+            n.saturating_sub(1)
+        } else {
+            (n + 1).min(many - 1)
+        }
+    };
+    // how many texels apart the two samples are, which is two everywhere
+    // but at a clamped edge, where one of them is the texel itself
+    let apart = |a: usize, b: usize| if wrapped { 2.0 } else { (b - a) as f32 };
+    let byte = |n: f32| ((n * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u8;
     let mut pixels = Vec::with_capacity(wide * tall * 4);
 
     for y in 0..tall {
         for x in 0..wide {
-            // **The quad's own u and v, which `room::tiled_plane` lays along
-            // x and z in that order.** The shader builds its frame off those,
-            // so red leans the normal along the street and green across it.
-            // Swapped, the joints would light as if the sun were somewhere
-            // else.
-            let (left, right) = (x.saturating_sub(1), (x + 1).min(wide - 1));
-            let (near, far) = (y.saturating_sub(1), (y + 1).min(tall - 1));
+            let (left, right) = (step(x, -1, wide), step(x, 1, wide));
+            let (near, far) = (step(y, -1, tall), step(y, 1, tall));
             let du =
-                (high[y * wide + right] - high[y * wide + left]) / ((right - left) as f32 * per_u);
-            let dv = (high[far * wide + x] - high[near * wide + x]) / ((far - near) as f32 * per_v);
+                (high[y * wide + right] - high[y * wide + left]) / (apart(left, right) * per_u);
+            let dv = (high[far * wide + x] - high[near * wide + x]) / (apart(near, far) * per_v);
             let out = vec3(-du, -dv, 1.0).normalize();
-            let byte = |n: f32| ((n * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u8;
 
             pixels.extend_from_slice(&[byte(out.x), byte(out.y), byte(out.z), 255]);
         }
     }
 
-    blitzkit::texture::TextureData::from_pixels(FACE_WIDE, FACE_TALL, pixels)
+    pixels
+}
+
+/// How many texels across one tile of grit, how many chips are scattered
+/// into it, how big the smallest and biggest of them are across their own
+/// middle, and how far the biggest stands proud. Metres, all three of the
+/// last.
+///
+/// **Five hundred and twelve for a tile of 1.1 metres**, which is a texel
+/// every 2.1 millimetres: a chip two centimetres across is nine texels and
+/// carries a shape, where at 256 it was four and carried a smudge. One
+/// megabyte, built once.
+///
+/// Twelve hundred and fifty chips of this size cover about three fifths of
+/// the tile once they overlap. Two thousand covered four fifths and the
+/// path came out the palest thing in the frame, a ribbon of salt laid on a
+/// field: what makes it read as a track is the earth between the stones,
+/// and at four fifths there was none of it left to see. The chips are
+/// scattered into the field rather than the field asked of every chip, so
+/// the work is the area of the chips and not the area of the tile times
+/// their number.
+pub const GRIT_TEXELS: u32 = 512;
+pub const CHIPS: usize = 1250;
+pub const CHIP_SMALL: f32 = 0.008;
+pub const CHIP_BIG: f32 = 0.034;
+pub const CHIP_PROUD: f32 = 0.009;
+
+/// One tile of grit: how high it stands at each texel, and the dice of
+/// whichever chip is the one standing there.
+///
+/// **Both answers from one scattering**, so the chip the colour gives its
+/// own grey to is the chip the sun shades. The street learned this the
+/// expensive way and `proud_at` says so.
+///
+/// It wraps. A chip sown near an edge is written out of the other side as
+/// well, because the tile is repeated down the path and a chip cut off at a
+/// border is a border you can see from forty metres.
+fn grit_field() -> (Vec<f32>, Vec<f32>) {
+    let many = GRIT_TEXELS as usize;
+    let per_metre = GRIT_TEXELS as f32 / PATH_TILE;
+    let mut high = vec![0.0f32; many * many];
+    let mut whose = vec![0.0f32; many * many];
+
+    for chip in 0..CHIPS {
+        // kept small, because `speckle` is a sine of its arguments and two
+        // thousand of them unscaled is a sine of twenty-six thousand, where
+        // a float has no decimals left to tell one chip from the next
+        let seed = chip as f32 * 0.113;
+        let dice = speckle(seed, 4.1);
+        // squared, so there are many small chips and few big ones. Evenly
+        // spread, every chip is nearly the biggest and the tile reads as
+        // peas
+        let wide = CHIP_SMALL + (CHIP_BIG - CHIP_SMALL) * dice * dice;
+        let proud = CHIP_PROUD * (0.45 + 0.55 * wide / CHIP_BIG);
+        let (at_x, at_y) = (speckle(seed, 2.3), speckle(seed, 8.7));
+        let own = speckle(seed, 6.9);
+
+        let middle = |share: f32| (share * GRIT_TEXELS as f32) as isize;
+        let (mid_x, mid_y) = (middle(at_x), middle(at_y));
+        let reach = (wide * per_metre).ceil() as isize;
+
+        for down in -reach..=reach {
+            for along in -reach..=reach {
+                let far = ((along * along + down * down) as f32).sqrt() / (wide * per_metre);
+
+                if far >= 1.0 {
+                    continue;
+                }
+
+                // **Flatter than a dome.** A chip of road metal is a pebble
+                // trodden into the earth and not a ball sitting on it, and
+                // a hemisphere's edge is a cliff the mips turn into a ring.
+                let stands = proud * (1.0 - far * far);
+                let x = (mid_x + along).rem_euclid(many as isize) as usize;
+                let y = (mid_y + down).rem_euclid(many as isize) as usize;
+                let n = y * many + x;
+
+                if stands > high[n] {
+                    high[n] = stands;
+                    whose[n] = own;
+                }
+            }
+        }
+    }
+
+    // **And worn thin at the two edges.** A path is walked down its middle,
+    // so the stone at its sides is the stone that has been trodden furthest
+    // into the earth. Left alone, the band of grit stopped dead at a line
+    // and read as a carpet runner laid on a field. The tile's v is the path
+    // edge to edge, so nought and one here are exactly its two sides.
+    for (y, row) in high.chunks_exact_mut(many).enumerate() {
+        let share = (y as f32 + 0.5) / many as f32;
+        let worn = 0.30 + 0.70 * (share * PI).sin();
+
+        for at in row.iter_mut() {
+            *at *= worn;
+        }
+    }
+
+    (high, whose)
+}
+
+/// The grit of the way there, as a tile to be repeated down it. Spec 0126.
+///
+/// **A tile and not a face.** The street's own surface is one texture laid
+/// on it once, because the ruts follow a curve down the street in the
+/// world's own numbers and nothing repeating can carry that. Nothing about
+/// this path varies along it: it is the same grit at the gap as at the
+/// ruts, so a tile of it repeated is the same picture for a thousandth of
+/// the memory.
+pub fn grit() -> blitzkit::texture::TextureData {
+    let (high, whose) = grit_field();
+    let many = GRIT_TEXELS as usize;
+    let chip = crate::aim::VILLAGE_GRIT;
+    let earth = crate::aim::VILLAGE_GRIT_EARTH;
+    let mut pixels = Vec::with_capacity(many * many * 4);
+
+    for y in 0..many {
+        for x in 0..many {
+            let n = y * many + x;
+            let up = (high[n] / CHIP_PROUD).clamp(0.0, 1.0);
+
+            // the earth between, speckled fine, because a flat colour
+            // between the stones is a sheet of card with stones on it
+            let grain = speckle(x as f32 * 0.37, y as f32 * 0.71);
+            let under = earth * (0.82 + 0.36 * grain);
+
+            // **Each chip its own grey, warm or cool.** Two chips that
+            // touch share an outline and nothing else; given one colour
+            // they are a puddle of stone with dents in it. This is the
+            // street's own argument at a quarter of the size.
+            let own = whose[n];
+            let tint = vec3(1.0 + 0.07 * (own - 0.5), 1.0, 1.0 - 0.09 * (own - 0.5));
+            let mine = chip * (0.70 + 0.52 * own) * tint.extend(1.0);
+
+            // and the occlusion half of the shape, as the street's dome is:
+            // the bump says which way a chip faces, and what it cannot say
+            // is that the gap between two of them is a hole the light has
+            // to get into
+            let lit = 0.70 + 0.30 * up.sqrt();
+            // over the chip's own rim rather than its whole height, so a
+            // chip has an edge and not a halo
+            let colour = under.lerp(mine * lit, (up * 3.5).clamp(0.0, 1.0));
+
+            pixels.extend_from_slice(&[
+                encoded(colour.x),
+                encoded(colour.y),
+                encoded(colour.z),
+                255,
+            ]);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(GRIT_TEXELS, GRIT_TEXELS, pixels)
+}
+
+/// And its shape, as a normal map in register with [`grit`]. Spec 0126, on
+/// the engine's spec 0110.
+///
+/// Wrapped, which [`normals_of`] says the most about: this one is repeated
+/// and the street's is not.
+pub fn grit_bumps() -> blitzkit::texture::TextureData {
+    let (high, _) = grit_field();
+    let many = GRIT_TEXELS as usize;
+    let per = PATH_TILE / GRIT_TEXELS as f32;
+
+    blitzkit::texture::TextureData::from_pixels(
+        GRIT_TEXELS,
+        GRIT_TEXELS,
+        normals_of(many, many, &high, per, per, true),
+    )
 }
 
 /// And the common off it, where the fire stands.
@@ -2582,7 +2916,9 @@ mod tests {
         let mut stood = 0;
 
         for n in 0..=120 {
-            let on = from + (to - from) * (n as f32 / 120.0);
+            // the line that is walked and not the line between its ends,
+            // which spec 0126 bowed three and a half metres apart
+            let on = path_at(REACHES, n as f32 / 120.0);
             let (i, j) = ((on.x / cell).round() as i32, (on.z / cell).round() as i32);
 
             for about in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
@@ -2613,6 +2949,284 @@ mod tests {
 
         // and the far side of the field is not on it
         assert!(!along_the_path(REACHES, to + vec3(0.0, 0.0, -60.0)));
+    }
+
+    /// Spec 0126: the way there is a curve, and it leans toward the place
+    /// it goes to.
+    #[test]
+    fn the_way_there_bends_toward_the_village() {
+        let (from, to) = path_runs(REACHES);
+
+        // both ends are still the ends: the gap is a hole in a wall and the
+        // far end is where the ruts run out, so the bow has to come back to
+        // them
+        for (on, end) in [(0.0f32, from), (1.0, to)] {
+            let at = path_at(REACHES, on);
+
+            assert!(
+                at.distance(end) < 0.01,
+                "at {} the way there is {:?} and not {:?}",
+                on,
+                at,
+                end
+            );
+        }
+
+        // and the middle of it stands well off the line between them, which
+        // is the whole of what Jake asked for: a tenth of a metre of wander
+        // over fifty is a surveyed road
+        let straight = (from + to) * 0.5;
+        let bowed = path_at(REACHES, 0.5);
+        let off = bowed.distance(straight);
+
+        assert!(
+            off > 3.0,
+            "the middle of the way there is {:.2} off the straight line, \
+             which reads as straight",
+            off
+        );
+
+        // toward the village and not away from it, because `PATH_CLEAR`
+        // keeps the view open by lying near the sightline
+        let middle = at(REACHES);
+
+        assert!(
+            bowed.distance(middle) < straight.distance(middle),
+            "the bow leans away from the village: {:.1} against {:.1}",
+            bowed.distance(middle),
+            straight.distance(middle)
+        );
+
+        // and it goes there without a corner in it or a step back
+        let walk: Vec<Vec3> = (0..=PATH_STEPS)
+            .map(|n| path_at(REACHES, n as f32 / PATH_STEPS as f32))
+            .collect();
+
+        for (n, three) in walk.windows(3).enumerate() {
+            let (one, two) = (three[1] - three[0], three[2] - three[1]);
+            let turn = one.normalize().dot(two.normalize()).clamp(-1.0, 1.0).acos();
+
+            assert!(
+                turn < 0.09,
+                "the way there turns {:.1} degrees at step {}, which is a \
+                 corner and not a bend",
+                turn.to_degrees(),
+                n
+            );
+            assert!(
+                two.dot(to - from) > 0.0,
+                "the way there doubles back at step {}",
+                n
+            );
+        }
+    }
+
+    /// Spec 0126: and it is one ribbon rather than a row of boxes.
+    #[test]
+    fn the_ribbon_lies_face_up_with_no_notch_in_it() {
+        let mesh = path_mesh(REACHES);
+
+        assert_eq!(mesh.vertices.len(), (PATH_STEPS + 1) * 2);
+        assert_eq!(mesh.indices.len(), PATH_STEPS * 6);
+
+        // **Every triangle faces up.** Wound the other way they are culled
+        // and the path is not drawn at all, which is the one fault here
+        // that a picture would show as nothing rather than as something
+        // wrong.
+        for (n, triangle) in mesh.indices.chunks_exact(3).enumerate() {
+            let corner = |at: u32| {
+                let one = mesh.vertices[at as usize].position;
+
+                vec3(one[0], one[1], one[2])
+            };
+            let (a, b, c) = (
+                corner(triangle[0]),
+                corner(triangle[1]),
+                corner(triangle[2]),
+            );
+            let up = (b - a).cross(c - a);
+
+            assert!(
+                up.y > 0.0,
+                "triangle {} faces {:?}, which is away from the sky",
+                n,
+                up.normalize_or_zero()
+            );
+        }
+
+        // the two sides are the two sides, each about a half width off the
+        // middle of the line, and neither of them a ruled edge
+        let mut widths = Vec::new();
+        let mut walked = 0.0f32;
+        let mut last = path_at(REACHES, 0.0);
+
+        for n in 0..=PATH_STEPS {
+            let on = n as f32 / PATH_STEPS as f32;
+            let middle = path_at(REACHES, on);
+            let (left, right) = (&mesh.vertices[n * 2], &mesh.vertices[n * 2 + 1]);
+
+            walked += middle.distance(last);
+            last = middle;
+
+            // v is the path edge to edge, which is what lets the grit know
+            // where the edges of it are
+            assert_eq!((left.uv[1], right.uv[1]), (0.0, 1.0));
+            // and u is the metres walked, in tiles of them
+            assert!(
+                (left.uv[0] - walked / PATH_TILE).abs() < 0.01,
+                "at step {} the grit has run {:.2} tiles and the walk {:.2}",
+                n,
+                left.uv[0],
+                walked / PATH_TILE
+            );
+
+            let across = vec3(
+                right.position[0] - left.position[0],
+                0.0,
+                right.position[2] - left.position[2],
+            );
+
+            widths.push(across.length());
+        }
+
+        let (narrow, wide) = widths
+            .iter()
+            .fold((f32::MAX, 0.0f32), |(a, b), one| (a.min(*one), b.max(*one)));
+
+        assert!(
+            narrow > PATH_WIDE * 0.7 && wide < PATH_WIDE * 1.4,
+            "the way there runs from {:.2} to {:.2} wide",
+            narrow,
+            wide
+        );
+        assert!(
+            wide - narrow > 0.1,
+            "both edges of the way there are ruled lines: {:.2} to {:.2}",
+            narrow,
+            wide
+        );
+    }
+
+    /// Spec 0126: the grit is a direction and not a colour, and it is a tile
+    /// rather than a picture with a border.
+    #[test]
+    fn the_grit_tiles_without_a_seam_and_leans_out_of_the_earth() {
+        let map = grit_bumps();
+        let many = GRIT_TEXELS as usize;
+
+        assert_eq!((map.width(), map.height()), (GRIT_TEXELS, GRIT_TEXELS));
+
+        let texel = &map.levels[0].pixels;
+        let blue = |x: usize, y: usize| texel[(y * many + x) * 4 + 2];
+        let lean = |x: usize, y: usize| {
+            let n = (y * many + x) * 4;
+
+            (texel[n] as f32 - 128.0).hypot(texel[n + 1] as f32 - 128.0)
+        };
+
+        // nothing leans into the ground it is laid on
+        for y in 0..many {
+            for x in 0..many {
+                assert!(
+                    blue(x, y) >= 128,
+                    "the grit at {} {} leans into the earth at {}",
+                    x,
+                    y,
+                    blue(x, y)
+                );
+            }
+        }
+
+        // **And the earth between the chips lies flat**, which is also the
+        // check that this was not written as a colour: put through sRGB a
+        // flat texel is 188 rather than 128 and the whole tile tips a
+        // quarter turn off the path
+        let flattest = (0..many)
+            .flat_map(|y| (0..many).map(move |x| (x, y)))
+            .map(|(x, y)| lean(x, y))
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            flattest < 8.0,
+            "the flattest texel in the grit leans {:.0} out of 128, so none \
+             of it is lying down",
+            flattest
+        );
+
+        // and the chips themselves have sides on them
+        let keenest = (0..many)
+            .flat_map(|y| (0..many).map(move |x| (x, y)))
+            .map(|(x, y)| lean(x, y))
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            keenest > 25.0,
+            "the keenest slope in the grit is {:.0} out of 128, which is not \
+             a stone",
+            keenest
+        );
+
+        // **And the chips cross the border.** The tile is repeated down the
+        // path, so a chip sown near one edge has to come in at the other
+        // one. Dropped instead, each border loses the chips sown on the far
+        // side of it and the way there wears a bare line across it every
+        // 1.1 metres.
+        //
+        // Read off the two outermost columns, which hold 0.76 of the tile's
+        // own mean as this is written and 0.53 with the wrap taken out. The
+        // first of those is not 1.0 because twelve hundred chips thrown at
+        // a tile clump, and a single column of it runs from 0.72 to 1.36 of
+        // the mean wherever you read it: this separates the two cases and
+        // is not a measure of anything on its own.
+        //
+        // The two borders the wear above does not touch, since it thins the
+        // other two on purpose and one mean cannot tell the two reasons
+        // apart.
+        let (high, _) = grit_field();
+        let mean = |of: Vec<f32>| of.iter().sum::<f32>() / of.len() as f32;
+        let all = mean(high.clone());
+        let border = mean(
+            (0..many)
+                .flat_map(|y| [0usize, 1, many - 2, many - 1].map(|x| high[y * many + x]))
+                .collect(),
+        );
+
+        assert!(
+            border > all * 0.65,
+            "the grit stands {:.4} high at the tile's two side borders and \
+             {:.4} across the whole of it, so its chips stop at the edge",
+            border,
+            all
+        );
+    }
+
+    /// Spec 0126: and what the field keeps clear is the line that is
+    /// walked.
+    #[test]
+    fn the_keep_out_follows_the_curve() {
+        let (from, to) = path_runs(REACHES);
+        let straight = (from + to) * 0.5;
+        let bowed = path_at(REACHES, 0.5);
+
+        assert!(
+            along_the_path(REACHES, bowed),
+            "the middle of the way there is not on the way there"
+        );
+
+        // **The far side of the straight line.** It is as far from the line
+        // between the ends as the path itself is, and nearly seven metres
+        // from the path: measured to the straight one, as this was until
+        // spec 0126 bowed the line, a tree could stand here.
+        let other = straight + (straight - bowed);
+
+        assert!(
+            !along_the_path(REACHES, other),
+            "a tree may not grow at {:?}, which is {:.1} metres off the way \
+             there and {:.1} off the line between its ends",
+            other,
+            other.distance(bowed),
+            other.distance(straight)
+        );
     }
 
     #[test]

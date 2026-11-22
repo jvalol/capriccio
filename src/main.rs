@@ -868,6 +868,11 @@ struct Arcade {
     /// And the shape of the setts in it, which the sun shades rather than
     /// the colour pretending to. Spec 0125.
     track_bump: Option<TextureId>,
+    /// The way there out of the gap, as one ribbon that turns where the
+    /// line turns, and the grit it is surfaced with. Spec 0126.
+    path_mesh: Option<MeshId>,
+    grit: Option<TextureId>,
+    grit_bump: Option<TextureId>,
     /// The worn track in it at the foot of the near wall, which is the one
     /// thing in the hall that says the way through is there. Spec 0020.
     worn: Option<TextureId>,
@@ -1602,6 +1607,9 @@ impl Arcade {
             carpet: None,
             track_face: None,
             track_bump: None,
+            path_mesh: None,
+            grit: None,
+            grit_bump: None,
             worn: None,
             flat_quad: None,
             thundered: None,
@@ -4136,15 +4144,21 @@ impl Arcade {
         }
 
         // and the way there, worn across the field from the gap. Spec
-        // 0086. Laid before the ruts and after the track for the same
-        // reason they are: it is the surface, and they go on it.
-        for (at, size, turn) in village::path(reaches) {
-            scene.push_material(
-                cube,
-                &Transform::at(at)
-                    .with_rotation(glam::Quat::from_rotation_y(turn))
-                    .with_scale(size),
-                aim::VILLAGE_EARTH,
+        // 0086, surfaced by spec 0126. Laid before the ruts and after the
+        // track for the same reason they are: it is the surface, and they
+        // go on it.
+        //
+        // **One ribbon drawn once**, where it was forty boxes. It carries
+        // its own grit and the bump the sun shades that by, so there is
+        // nothing to scale or turn: the mesh is already in the world's own
+        // numbers.
+        if let (Some(path), Some(grit), Some(bump)) = (self.path_mesh, self.grit, self.grit_bump) {
+            scene.push_bumped(
+                path,
+                grit,
+                bump,
+                &Transform::new(),
+                glam::Vec4::ONE,
                 aim::MATTE,
             );
         }
@@ -8346,6 +8360,9 @@ impl Game for Arcade {
         // slabs it replaces. Spec 0096.
         self.track_face = Some(renderer.add_texture(&village::face(self.room.reaches)));
         self.track_bump = Some(renderer.add_texture(&village::bumps(self.room.reaches)));
+        self.path_mesh = Some(renderer.add_mesh(&village::path_mesh(self.room.reaches)));
+        self.grit = Some(renderer.add_texture(&village::grit()));
+        self.grit_bump = Some(renderer.add_texture(&village::grit_bumps()));
         {
             // and the wear in it at the foot of the near wall, per spec 0020
             let track = behind::track(self.room.reaches);

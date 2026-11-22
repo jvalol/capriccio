@@ -1448,6 +1448,18 @@ pub const VILLAGE_JOINT: Vec4 = vec4(0.085, 0.080, 0.075, 1.0);
 /// along it: the same stone, darker and smoother, where the wheels run.
 pub const VILLAGE_RUT: Vec4 = vec4(0.25, 0.24, 0.23, 1.0);
 
+/// The grit of the way there out of the gap: the chips themselves, and the
+/// earth they are trodden into.
+///
+/// **Not the setts and not the earth either.** The street is dressed stone
+/// laid by somebody; this is what a track across a field is surfaced with
+/// when it is surfaced at all, which is whatever stone was going, broken
+/// small. Paler and browner than the setts, because it is unwashed and
+/// never cut, and the earth between it is `VILLAGE_EARTH` a shade darker:
+/// ground that is walked on is ground that nothing grows in.
+pub const VILLAGE_GRIT: Vec4 = vec4(0.33, 0.305, 0.265, 1.0);
+pub const VILLAGE_GRIT_EARTH: Vec4 = vec4(0.205, 0.170, 0.125, 1.0);
+
 /// And a cabin's door, a shade darker than the boards round it so it reads
 /// as an opening rather than as a panel.
 pub const VILLAGE_DOOR: Vec4 = vec4(0.235, 0.175, 0.125, 1.0);
