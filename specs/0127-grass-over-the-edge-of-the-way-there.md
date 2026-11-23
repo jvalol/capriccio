@@ -50,7 +50,7 @@ line coming apart is exactly the fault this would have.
 
 ### Verified by hand
 
-- The near field at the gap, where the verge was: `./target/release/capriccio --done --pose "-18.85 0 15.15 1.55 309.4 -22.0 130"`.
+- The near field at the gap, where the verge was: `./target/release/xanadu --done --pose "-18.85 0 15.15 1.55 309.4 -22.0 130"`.
 
 ## Out of scope
 

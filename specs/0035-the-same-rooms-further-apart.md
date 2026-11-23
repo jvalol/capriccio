@@ -195,7 +195,7 @@ no arrivals. Spec 0033's people stay next door.
 ## 2026-11-10: parked by spec 0063
 
 **Jake, having played it: the code and logic are good, the composition in
-capriccio does not land.** This room is out of the building and under
+xanadu does not land.** This room is out of the building and under
 `src/parked/`, compiling and tested, until there is a way to make it feel
 right for a user.
 

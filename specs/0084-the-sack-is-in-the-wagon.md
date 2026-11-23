@@ -63,7 +63,7 @@ from the horses. It watches the step the load leaves his hands instead.
 
 ### Verified by hand
 
-- The man at the east wagon has the sack in his hands partway through the heave rather than conjuring it as he walks. — `./target/release/capriccio --screenshot=village --picture-to /tmp/v.png` and look at the right of the frame.
+- The man at the east wagon has the sack in his hands partway through the heave rather than conjuring it as he walks. — `./target/release/xanadu --screenshot=village --picture-to /tmp/v.png` and look at the right of the frame.
 
 ## Out of scope
 

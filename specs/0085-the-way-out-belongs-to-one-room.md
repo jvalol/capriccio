@@ -53,7 +53,7 @@ it did before.
 
 ### Verified by hand
 
-- From Jake's own pose there is no portal on the exterior wall and the wall is one piece: `./target/release/capriccio --fly --pose "5.85 1.99 24.93 3.54 310.0 -13.0 209.9" --picture-to /tmp/a.png`.
+- From Jake's own pose there is no portal on the exterior wall and the wall is one piece: `./target/release/xanadu --fly --pose "5.85 1.99 24.93 3.54 310.0 -13.0 209.9" --picture-to /tmp/a.png`.
 - From inside the room the portal and the EXIT sign are still there: the same pose without `--fly`, which falls to the floor and puts the eye back under the lid.
 
 ## Out of scope

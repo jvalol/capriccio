@@ -11,7 +11,7 @@
 //!
 //! Jake played it and said so twice, the second time after spec 0062 had
 //! rebuilt the hotel round the complaint: the code and logic are good, the
-//! composition in capriccio does not land, and until there is a way to make
+//! composition in xanadu does not land, and until there is a way to make
 //! them feel right for a user, keep them out.
 //!
 //! **Parked and not deleted, which here means still compiled and still

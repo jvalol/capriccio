@@ -59,7 +59,7 @@ which is how it was found.
 At Jake's own position, nine seconds apart, before and after:
 
 ```
-./target/release/capriccio --pose "1.61 0.00 -12.76 1.55 59.1 -45.8 2288.7" \
+./target/release/xanadu --pose "1.61 0.00 -12.76 1.55 59.1 -45.8 2288.7" \
   --picture-for <t> --picture-to /tmp/a.png
 ```
 

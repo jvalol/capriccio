@@ -151,7 +151,7 @@ imaginarium. The mark says
 where you are and the nose says which way you face, and neither of them says
 what anything is.
 
-**The words are the building's own.** Every one is what capriccio's specs
+**The words are the building's own.** Every one is what xanadu's specs
 call that room and have called it throughout: the nook 216 times, the cellar
 82, the gallery 68, the baths 66, the imaginarium 61, the hall 43. The sign over the aisle says NOOK and these
 do not follow it: a sign shouts across a room and a plan is read at arm's

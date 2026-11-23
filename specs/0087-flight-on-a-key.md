@@ -54,7 +54,7 @@ The engine plays a key log, so this was driven rather than pressed:
 
 ```
 printf '1.0000 down G\n1.0333 up G\n1.5000 down G\n1.5333 up G\n' > /tmp/midair.log
-./target/release/capriccio --fly --pose "0 20 -2 21.55 0.0 -10.0 120.0" \
+./target/release/xanadu --fly --pose "0 20 -2 21.55 0.0 -10.0 120.0" \
   --play /tmp/midair.log --picture-for 4 --picture-to /tmp/a.png --where
 ```
 

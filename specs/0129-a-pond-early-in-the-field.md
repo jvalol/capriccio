@@ -200,7 +200,7 @@ beside it, not a finding.
   There is no staged shot of it: `--pose` is how it was looked at, and the
   numbers are the room's own, so they move with `room::Room::of`. From the
   south bank, with the room as it stands:
-  `./target/release/capriccio --at 0.28 --sky fair --pose "-42 0 26.2 1.5 170 -11 70"`.
+  `./target/release/xanadu --at 0.28 --sky fair --pose "-42 0 26.2 1.5 170 -11 70"`.
 - Whether the ducks look like ducks and move like them, which a still picture
   cannot say. Walk out of the gap and watch one.
 - Whether the reflection holds together as you walk round the water, which is

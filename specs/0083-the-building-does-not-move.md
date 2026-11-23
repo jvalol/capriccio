@@ -5,7 +5,7 @@
 
 ## What this is for
 
-Engine spec 0101 took capriccio's suite from 62 seconds to 13.3 by
+Engine spec 0101 took xanadu's suite from 62 seconds to 13.3 by
 noticing that one test built a render mesh once a frame to read one number
 off it. The same shape was still here, in the next test along.
 

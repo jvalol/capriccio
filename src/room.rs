@@ -2327,7 +2327,7 @@ impl Room {
                     // column, not one from the lowest opening to the top.**
                     // This face knew walls and not openings, so a slot cut
                     // right through a wall was plastered straight over:
-                    // capriccio's spec 0064 had to stand its glazing proud
+                    // xanadu's spec 0064 had to stand its glazing proud
                     // of the skin, and spec 0038's ways out want the same
                     // cut. The spans are what the wall actually is.
                     for (floor, ceiling) in walls[n].iter().copied() {

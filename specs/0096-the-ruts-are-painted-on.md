@@ -64,7 +64,7 @@ colour without the sRGB gives the fault exactly: in at 0.235, back at 0.045.
 ### Verified by hand
 
 ```
-./target/release/capriccio --screenshot=village --day 20 \
+./target/release/xanadu --screenshot=village --day 20 \
   --picture-for 2 --picture-to /tmp/a.png
 ```
 

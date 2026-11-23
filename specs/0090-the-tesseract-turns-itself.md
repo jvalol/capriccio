@@ -65,7 +65,7 @@ would be a test of addition.
 No keys at all, which is the whole point:
 
 ```
-./target/release/capriccio --pose "4.295 0 -13.0 1.55 0.0 -5.7 120.0" \
+./target/release/xanadu --pose "4.295 0 -13.0 1.55 0.0 -5.7 120.0" \
   --picture-for <t> --picture-to /tmp/a.png
 ```
 

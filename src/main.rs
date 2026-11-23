@@ -15353,7 +15353,7 @@ fn main() {
         }
     }
 
-    start("capriccio", Box::new(arcade));
+    start("xanadu", Box::new(arcade));
 }
 
 #[cfg(test)]
@@ -18004,7 +18004,7 @@ mod tests {
     #[test]
     fn the_file_is_written_when_a_room_answers() {
         let at = std::env::temp_dir()
-            .join("capriccio-writes-test")
+            .join("xanadu-writes-test")
             .join("trail");
         let mut one = Arcade::new();
         let mut geometry = Geometry::new();

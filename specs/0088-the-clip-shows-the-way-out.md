@@ -73,7 +73,7 @@ number was a restatement of it.
 
 ### Verified by hand
 
-- The beat shows the path leaving the gap: `./target/release/capriccio --film=clip --done --picture-for 12.7 --picture-to /tmp/a.png`.
+- The beat shows the path leaving the gap: `./target/release/xanadu --film=clip --done --picture-for 12.7 --picture-to /tmp/a.png`.
 - The still is still the hall: the same with `--picture-for 31.5`.
 
 ## Out of scope

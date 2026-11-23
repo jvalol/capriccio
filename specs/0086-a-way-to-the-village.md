@@ -78,7 +78,7 @@ ruts' own comment already describes.
 
 ### Verified by hand
 
-- From the gap there is a path leading off and lit cabins at the end of it, where before there was a wall of trees: `./target/release/capriccio --done --pose "-18.85 0 15.15 1.55 309.4 -3.0 120.0" --picture-to /tmp/a.png`.
+- From the gap there is a path leading off and lit cabins at the end of it, where before there was a wall of trees: `./target/release/xanadu --done --pose "-18.85 0 15.15 1.55 309.4 -3.0 120.0" --picture-to /tmp/a.png`.
 - Looking down the run itself, bearing 338.6, it reads as a worn path rather than a line of slabs.
 
 ## Out of scope

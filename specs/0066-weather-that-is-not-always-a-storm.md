@@ -165,7 +165,7 @@ the 19: a number that is near the right one is not the right one.
 
 The hour lost to it is worth writing down. The first screenshot taken of the
 running game still showed the atlas, and it was a stale binary: `cargo test`
-does not rebuild `target/release/capriccio`, so what was photographed was the
+does not rebuild `target/release/xanadu`, so what was photographed was the
 engine from before the fix. That is the same trap as the restored backup with
 an old mtime, and the tell is the same, a result that disagrees with a
 measurement.

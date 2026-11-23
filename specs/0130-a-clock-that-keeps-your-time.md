@@ -162,7 +162,7 @@ teeth to the minute. Its length is the length a seconds pendulum has, which
 is very nearly a metre, and that is a fact about this planet rather than a
 number chosen to fit the room.
 
-**Where the time comes from.** `chrono`, which is capriccio's first
+**Where the time comes from.** `chrono`, which is xanadu's first
 dependency outside the engine and its own shapes. The machine's local time
 needs the machine's time zone, and there is no way to ask for that from the
 standard library: the engine's `web_time` gives the same answer as

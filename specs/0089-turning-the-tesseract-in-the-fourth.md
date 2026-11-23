@@ -68,7 +68,7 @@ Driven with a played key log rather than pressed:
 
 ```
 printf '0.5000 down Right\n9.0000 up Right\n' > /tmp/turn.log
-./target/release/capriccio --pose "4.295 0 -13.0 1.55 0.0 -5.7 120.0" \
+./target/release/xanadu --pose "4.295 0 -13.0 1.55 0.0 -5.7 120.0" \
   --play /tmp/turn.log --picture-for 4 --picture-to /tmp/a.png
 ```
 

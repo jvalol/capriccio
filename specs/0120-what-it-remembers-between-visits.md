@@ -184,7 +184,7 @@ building forgets there, which is what it does everywhere today.
 
 **Putting this in the engine.** Where a game keeps its state is an engine-shaped
 question and the platform arithmetic would be written once instead of once per
-game. It is here because capriccio is the only one of fifteen that has any
+game. It is here because xanadu is the only one of fifteen that has any
 state worth keeping, and a shared answer built for one caller is a guess about
 the other fourteen. **The trigger is the second game that wants it**, and then
 this moves rather than being copied.

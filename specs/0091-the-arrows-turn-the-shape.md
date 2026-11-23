@@ -53,7 +53,7 @@ plinth:
 
 ```
 printf '0.500 press Left\n1.000 down Return\n1.033 up Return\n1.500 down Right\n2.300 up Right\n' > /tmp/arrow.log
-./target/release/capriccio --pose "3.345 0 -13.0 1.55 0.0 -5.7 120.0" \
+./target/release/xanadu --pose "3.345 0 -13.0 1.55 0.0 -5.7 120.0" \
   --play /tmp/arrow.log --picture-for 3 --picture-to /tmp/a.png
 ```
 

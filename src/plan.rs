@@ -362,7 +362,7 @@ fn laid_out(room: &Room, reaches: f32) -> (f32, f32, Vec3) {
 /// What a place in the building is called, in the building's own words.
 ///
 /// **Taken off the specs rather than written.** Every one of these is what
-/// capriccio calls that room and has called it for as long as it has had
+/// xanadu calls that room and has called it for as long as it has had
 /// one: the nook 216 times, the cellar 82, the gallery 68, the baths 66,
 /// the imaginarium 61, the hall 43, and that is the form they take here,
 /// article and all. The sign over the aisle says NOOK and these do not

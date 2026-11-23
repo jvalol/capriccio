@@ -93,7 +93,7 @@ a measure of anything on its own.
 
 ### Verified by hand
 
-- From the gap the way there bends off to the village instead of ruling a line at it, and up close it is stone: `./target/release/capriccio --done --pose "-18.85 0 15.15 1.55 309.4 -3.0 130"`, and the same pose at a pitch of -22 for the near field.
+- From the gap the way there bends off to the village instead of ruling a line at it, and up close it is stone: `./target/release/xanadu --done --pose "-18.85 0 15.15 1.55 309.4 -3.0 130"`, and the same pose at a pitch of -22 for the near field.
 - The whole run from above, where the bow is the thing you can see: `--fly --pose "-30 48 -18 1.55 0 -89.0 130"`.
 - Colour, and whether a gravel track is what it reads as. The night pose spec 0086 was written at is still the one the references carry; every picture named here is daylight, which is where grit shows.
 

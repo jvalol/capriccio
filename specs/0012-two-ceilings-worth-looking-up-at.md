@@ -307,7 +307,7 @@ garden's, which is the sky.
 
 ## 2026-11-09: nothing shines here unless it says so
 
-**Jake: fix the shininess default in the engine. Then: just do capriccio.**
+**Jake: fix the shininess default in the engine. Then: just do xanadu.**
 
 The paragraph above used to say the default was a decision nobody made. That
 was wrong and it is corrected in place. Engine spec 0012 says outright that

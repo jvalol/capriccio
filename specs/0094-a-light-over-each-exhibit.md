@@ -58,7 +58,7 @@ is worth chasing and it is not this spec.
 ### Verified by hand
 
 - The row from the doorway: six fittings, in two groups of three with the panel between.
-- The sponge's shadow lands square under it: `./target/release/capriccio --pose "2.395 0 -12.6 1.55 0.0 -12.0 120.0" --picture-for 2 --picture-to /tmp/a.png`.
+- The sponge's shadow lands square under it: `./target/release/xanadu --pose "2.395 0 -12.6 1.55 0.0 -12.0 120.0" --picture-for 2 --picture-to /tmp/a.png`.
 - The casting pair no longer changes under a sidestep, which was checked by rendering the same four moments of `down D` before and after.
 
 ## Out of scope

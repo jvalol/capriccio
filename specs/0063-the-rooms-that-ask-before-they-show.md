@@ -14,7 +14,7 @@ is there when there is a way to make it land.
 **Jake, 2026-11-10, having played it.** First: the hotel is arguably the
 least interesting room or feature in the building. Then, after spec 0062 cut
 it down to its desk: the hotel and the imaginarium aren't worth throwing
-away, the code and logic are good, the composition in capriccio doesn't
+away, the code and logic are good, the composition in xanadu doesn't
 land, and until there's a way to make them feel right for a user, keep them
 out.
 

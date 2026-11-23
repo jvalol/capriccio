@@ -19,7 +19,7 @@ seconds of round trip across it, on a route that is 54.2 seconds long. That
 is the same arithmetic that cut the solarium's sun and the imaginarium off
 this route, both of them Jake's call with the take in front of him.
 
-So the picture goes where the pictures already are. capriccio's entry on the
+So the picture goes where the pictures already are. xanadu's entry on the
 engine's games page carries four stills and all four are the solar system
 behind one wall. Jake, 2026-11-14, picking it off three: stills on the games
 page.
@@ -78,4 +78,4 @@ questions that happen to have the same answer.
 ### Verified by hand
 
 - The picture shows a street rather than a cabin. — `./refresh-screenshots
-  capriccio` and look at `capriccio/media/village.png`.
+  xanadu` and look at `xanadu/media/village.png`.

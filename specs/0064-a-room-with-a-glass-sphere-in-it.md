@@ -660,7 +660,7 @@ to do with this one. Its own spec if it is wanted.
 
 ## 2026-11-11: the spike, and the three things it was wrong about
 
-`capriccio::tests::zz_spike` traces the arcade's own boxes on one CPU core
+`xanadu::tests::zz_spike` traces the arcade's own boxes on one CPU core
 and writes pictures. It answered blitzkit's spec 0098's question first, which
 was whether a box-only arcade reads as the arcade, and it does. Then it was
 pointed at this room, and the first version of this spec did not survive it.

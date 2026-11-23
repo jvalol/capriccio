@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 pub const KEPT: &str = "trail";
 
 /// The folder the arcade keeps its own things in.
-pub const UNDER: &str = "capriccio";
+pub const UNDER: &str = "xanadu";
 
 /// Where this machine puts a program's data, with the arcade's folder on
 /// the end of it, or nothing if it cannot be worked out.
@@ -86,9 +86,7 @@ mod tests {
     /// thing on the disk is the thing that comes off it.
     #[test]
     fn what_goes_to_the_file_comes_back_off_it() {
-        let at = std::env::temp_dir()
-            .join("capriccio-kept-test")
-            .join("trail");
+        let at = std::env::temp_dir().join("xanadu-kept-test").join("trail");
         let mut trail = Trail::new();
 
         trail.gave(Asked::ReachedTheSun);
@@ -108,7 +106,7 @@ mod tests {
     /// Spec 0120: nothing to read is somebody who has not been here.
     #[test]
     fn nothing_to_read_is_a_first_visit() {
-        let nowhere = std::env::temp_dir().join("capriccio-kept-no-such-file");
+        let nowhere = std::env::temp_dir().join("xanadu-kept-no-such-file");
 
         let _ = std::fs::remove_file(&nowhere);
 
@@ -120,7 +118,7 @@ mod tests {
         // and a folder where a file should be, which is the unreadable
         // case that can actually happen: `read_to_string` of a directory
         // is an error on every platform this builds for
-        let folder = std::env::temp_dir().join("capriccio-kept-a-folder");
+        let folder = std::env::temp_dir().join("xanadu-kept-a-folder");
         let _ = std::fs::create_dir_all(&folder);
 
         assert!(
