@@ -5452,53 +5452,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn probe3() {
-        let reaches = room().reaches;
-        let (water, size, _) = pond(reaches);
-        let half = size * 0.5;
-        let angle = 3.93f32;
-        let out = vec2(angle.cos(), angle.sin());
-        let want = half + Vec2::splat(KERB + crate::RADIUS + 1.2);
-        let gone = (want.x / out.x.abs()).min(want.y / out.y.abs());
-        let from = vec3(water.x + out.x * gone, 0.0, water.z + out.y * gone);
-        let to = vec3(water.x, 0.0, water.z);
-        let solid = room().solid();
-        let step = 1.0 / 60.0;
-        let mut at = from;
-        let mut falling = 0.0;
-        println!("from {:.3} {:.3} {:.3}", from.x, from.y, from.z);
-        let mut was = 0.0f32;
-        for n in 0..180 {
-            let way = vec3(to.x - at.x, 0.0, to.z - at.z);
-            let wish = if way.length_squared() > 1e-4 {
-                way.normalize() * crate::SPEED
-            } else {
-                Vec3::ZERO
-            };
-            let (next, fell) =
-                crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
-            at = next;
-            falling = fell;
-            if (at.y - was).abs() > 1e-3 {
-                println!(
-                    "{n:3} {:.3} {:.3} {:.3}  rose {:.3}",
-                    at.x,
-                    at.y,
-                    at.z,
-                    at.y - was
-                );
-                was = at.y;
-            }
-        }
-        println!("end {:.3} {:.3} {:.3}", at.x, at.y, at.z);
-        println!(
-            "bank outer corner at {:.3},{:.3}",
-            water.x - half.x - KERB,
-            water.z - half.y - KERB
-        );
-    }
-
     /// Spec 0010: you cannot walk into the pond.
     ///
     /// Walked and not measured. The lip used to be one run of coping, and the
