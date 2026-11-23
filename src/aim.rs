@@ -303,8 +303,8 @@ pub const CANVAS: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
 /// overlay sits over a room without becoming a grey box; the floor on it is
 /// opaque, because a map you read the neon through is not a map.
 pub const MAP_EDGE: Vec4 = vec4(0.62, 0.56, 0.44, 0.85);
-pub const MAP_PLATE: Vec4 = vec4(0.02, 0.025, 0.04, 0.82);
-pub const MAP_ROOM: Vec4 = vec4(0.52, 0.50, 0.46, 1.0);
+pub const MAP_PLATE: Vec4 = vec4(0.03, 0.035, 0.05, 0.96);
+pub const MAP_ROOM: Vec4 = vec4(0.74, 0.71, 0.63, 1.0);
 pub const MAP_MARK: Vec4 = vec4(1.40, 1.05, 0.40, 1.0);
 pub const GILT: Vec4 = vec4(0.52, 0.40, 0.19, 1.0);
 

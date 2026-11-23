@@ -2,6 +2,8 @@
 
 **Status:** implemented
 **Date:** 2026-11-23
+**Turned:** 2026-11-23, the same day, on the second look. Un-mirrored the same
+hour, on the third.
 
 ## Goal
 
@@ -21,20 +23,50 @@ at different distances, and they are the same cut: `plan::filled` takes a
 storey's open floor off the colliders at waist height, which the wall plan
 lays flat on a wall and this lays flat in a corner.
 
-**It does not turn, and GTA's does.** The overlay draws rectangles square to
-the screen and nothing else. There is no rotation in a quad and none in its
-uv either, so a map that turns under a fixed arrow means rasterising the
-whole panel into a texture every frame and writing it to the GPU: a
-scanline fill of a few hundred rotated rectangles into about forty thousand
-pixels, sixty times a second. That is a real thing to build and it is not
-this one. What a north-up map loses is the "forward is up" reading; what it
-keeps is that the building's north is always the same way on it, which is
-not worse, only different.
+**It turns, and the first build of it did not.** That build drew north up and
+said here that it could not do otherwise: the overlay drew rectangles square
+to the screen and nothing else, no rotation in a quad and none in its uv, so a
+map turning under a fixed arrow meant rasterising the whole panel into a
+texture every frame and writing it to the GPU.
 
-**And the mark is a dot and a nose, not an arrow.** Same reason: an arrow
-that turns is not a thing a quad can be, two squares are, and the one in
-front says the heading. It is what spec 0115's `here` already does on the
-wall, which is this building's own answer to this exact question.
+Jake, having looked at it: rotate the map so the player is always facing up as
+the rooms rotate around them.
+
+The way out was not the texture. The overlay works its four corners out on the
+CPU and writes them to a vertex buffer a pixel at a time, so a quad that turns
+is four points turned on the way in and no change to any pipeline; and the cut
+at the panel's edge that a turned rectangle breaks is a scissor, which the
+pass had never set. Those are engine specs 0112 and 0113 and they are twenty
+lines between them. The texture was the answer to a question nobody had
+checked.
+
+What it costs is the building's own north, which stops being the same way
+twice. What it buys is that the map does not have to be read: what is in front
+of you is above the mark, which is the question a map in a corner is asked.
+
+**And the mark is a dot and a nose, not an arrow.** An arrow that turns is
+still not a thing one quad can be, two squares are, and it no longer has to
+turn: the map does, so the nose stands straight up the panel for ever. It is
+what spec 0115's `here` already does on the wall, which is this building's own
+answer to this exact question.
+
+**And the first turning build was mirrored.** Jake, from the first screenshot
+of it: the map looks inverted, the space in the map on the right is actually
+on the left.
+
+It was. `onto` had the right-hand side of the heading negated, which is a map
+that reads, turns, gets every room's shape and every distance right, and sends
+you the wrong way down the hall. Which way is right is settled twice in
+`main` and was read from neither: the mouse's x is added to the yaw, so more
+yaw is a turn to the right, and `facing` is `(sin yaw, -cos yaw)`, so a
+quarter more takes `(x, z)` to `(-z, x)`.
+
+What let it through is that the test said what is ahead is up and never said
+what is on your right is right. Forward is the one axis a mirror leaves alone,
+so the whole of the first suite passed on a mirrored map. The missing half is
+`what_is_on_your_right_is_right_of_the_mark`, and the direction it measures
+against is written out from `main`'s two lines rather than called out of this
+module, so `minimap` agreeing with itself is not what passes.
 
 ## Behavior
 
@@ -50,10 +82,18 @@ it is what is through the wall in front of you.
 **Bottom right.** GTA's is bottom left and so is this building's frame-cost
 readout, which is spec 0056 and was there first.
 
-**Clipped to its own panel.** A quad has no scissor, so a room rectangle
-that runs off the panel runs across the room behind it, and at this scale
-most of the building is off the panel. Anything wholly outside is dropped
-and anything crossing the edge is cut at it.
+**Cut to its own panel, by the scissor of engine spec 0113.** A rectangle that
+runs off the panel runs across the room behind it, and at this scale most of
+the building is off the panel. What this drops is only what cannot reach the
+panel at all, measured round each rectangle's own corner, and the edge does
+the rest. Trimming them here instead is what the north-up map did, and is what
+a turn makes impossible: a turned rectangle and a square panel overlap in a
+polygon of up to eight sides.
+
+**One angle for the whole map.** Every rectangle on it turns by
+`minimap::turn`, read once where the quads are built. Two places saying how far
+the map has turned is the fault this building has written down under nine other
+names.
 
 **Cut once, at startup**, for all three storeys. `plan::filled` walks every
 collider in the building against a fifteen centimetre grid, which is five
@@ -65,35 +105,23 @@ wall plan's mark uses.
 
 ## Acceptance criteria
 
-- Nothing of the map is drawn outside its own panel, from spots spread over
-  all three storeys. — `minimap::tests::nothing_of_it_is_drawn_outside_the_panel`
-- The floor you are standing on is under the
-  mark. — `minimap::tests::what_you_are_standing_on_is_under_the_mark`
-- The nose stands on the side of the dot you are facing, with north up and
-  east right. — `minimap::tests::the_nose_points_the_way_you_face`
-- Two storeys do not draw the same
-  map. — `minimap::tests::two_storeys_do_not_draw_the_same_map`
+- What is in front of you is up the panel, whichever way you are
+  standing. — `minimap::tests::what_is_in_front_of_you_is_up_the_panel`
+- What is on your right is right of the mark, which is the half a mirror
+  leaves intact. — `minimap::tests::what_is_on_your_right_is_right_of_the_mark`
 
 ### Verified by hand
 
-- **Whether a map that does not turn is readable while you walk.** Run the
-  arcade and walk the hall, the nook and the cellar without looking up.
-- **Whether it reads as a map or as a grey shape.** The rooms are pale on a
-  dark plate and the cabinets show as notches down the hall, which is the
-  one place the cut has any detail in it.
-- **Whether an always-on HUD suits this building at all.** Everything else
-  here is found by walking, and a map in the corner is the first thing in it
-  that hands you the layout.
+- **Whether a turning map is readable while you walk.** Run the arcade and
+  walk the hall, the nook and the cellar without looking up. The thing to watch
+  for is the opposite of the north-up fault: a map that swings under you every
+  time you turn your head.
+- **Whether it stops at its own border.** The scissor is the only thing holding
+  the rooms inside the panel, and a rectangle escaping it draws across the
+  floor.
 
 ## Out of scope
 
-- **No turning.** Named above, with what it would cost.
-- **No marks on it.** No doors, no toys, no trail. Spec 0036's trail records
-  what each room has given up and nothing draws any of it, which this leaves
-  open rather than opening.
-- **No zoom.** One scale, no dial. Spec 0064 refused an index on the arrow
-  keys for the same reason.
-- **Nothing of `behind`.** `plan::drawn` already leaves it out, for the scale
-  reason spec 0115 gives: 360 of the ground floor's 463 pieces are that one
-  room. That it also keeps a secret off the map is luck and not design, and
-  should not be leaned on.
+- **No circle.** A driving game's map is round and this one is square, because
+  a scissor is a rectangle. A round one wants a stencil or a mask and nobody
+  has asked for one.

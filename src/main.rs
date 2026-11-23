@@ -7329,6 +7329,9 @@ impl Arcade {
             return;
         };
         let (middle, size) = minimap::panel(self.window);
+        let (least, most) = minimap::inside(self.window);
+        let facing = self.facing();
+        let turn = minimap::turn(facing);
 
         geometry.push_quad(&Quad::colored(middle, size, aim::MAP_EDGE));
         geometry.push_quad(&Quad::colored(
@@ -7337,11 +7340,20 @@ impl Arcade {
             aim::MAP_PLATE,
         ));
 
-        for (spot, size) in minimap::rooms(self.window, at, floor) {
-            geometry.push_quad(&Quad::colored(spot, size, aim::MAP_ROOM));
+        // **Every room turned, and every room cut to the panel.** The turn
+        // is the map's one angle and the window is its one edge, so both are
+        // read here rather than worked out per rectangle. Engine specs 0112
+        // and 0113.
+        for (spot, size) in minimap::rooms(self.window, at, facing, floor) {
+            geometry.push_quad(
+                &Quad::colored(spot, size, aim::MAP_ROOM)
+                    .turned(turn)
+                    .clipped_to(least, most),
+            );
         }
 
-        for (spot, size) in minimap::mark(self.window, self.facing()) {
+        // The mark does not turn, because everything under it does.
+        for (spot, size) in minimap::mark(self.window) {
             geometry.push_quad(&Quad::colored(spot, size, aim::MAP_MARK));
         }
     }
