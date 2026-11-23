@@ -29,6 +29,7 @@ mod keys;
 mod kociemba;
 mod mandel;
 mod metronome;
+mod minimap;
 mod mirrors;
 mod moon;
 mod neon;
@@ -826,6 +827,13 @@ struct Arcade {
     /// The bank the bridge comes out of, per spec 0117, rebuilt with the
     /// deck when a span lands.
     bank: Option<MeshId>,
+    /// The open floor of each storey, lowest first, for the map in the
+    /// corner. Spec 0132. Cut once for the same reason the relief is: it
+    /// walks every collider in the building against a grid.
+    floors: Vec<Vec<Aabb>>,
+    /// Whether that map is up. On, because it is a HUD and the point of one
+    /// is that it is there; N puts it away.
+    showing_map: bool,
     /// The sheet each of that plan's three storeys is cut on, per spec
     /// 0115. Kept for the same reason as the plan: it goes through the
     /// same mapping and so walks the same colliders.
@@ -1516,8 +1524,12 @@ impl Arcade {
             .map(|(bar, _)| bar)
             .collect();
         let plan_sheet = plan::sheet(&room, room.reaches);
-        let plan_lips = plan::lips(&room, room.reaches);
         let pictures = art::hung(room.reaches);
+        let plan_lips = plan::lips(&room, room.reaches);
+        let floors = plan::floors()
+            .iter()
+            .map(|floor| plan::filled(&room, *floor))
+            .collect();
         let spin = display::Spin::of(room.displays.len());
         let (cradle, ropes) = cradle::strung();
 
@@ -1621,10 +1633,12 @@ impl Arcade {
             eye: 0.0,
             room,
             plan,
-            plan_sheet,
-            plan_lips,
             pictures,
             picture_scans: Vec::new(),
+            plan_sheet,
+            plan_lips,
+            floors,
+            showing_map: true,
             plan_says: Vec::new(),
             bank: None,
             spin,
@@ -7297,6 +7311,41 @@ impl Arcade {
     /// gives at length: on this machine a window is redrawn when the display
     /// says so, so the gap between frames is 8.33 in every room that fits
     /// inside a frame and tells you nothing about which room is dear.
+    /// The map in the corner: the storey you are on, centred on you, with a
+    /// dot and a nose for where you are and which way you look. Spec 0132.
+    ///
+    /// **The floor is drawn and the walls are the gaps**, which is spec
+    /// 0115's reading and is the one that works at this size: a wall at
+    /// this scale is a line a pixel wide and a room is a shape.
+    fn draw_the_map(&self, geometry: &mut Geometry) {
+        use blitzkit::geometry::quad::Quad;
+
+        if !self.showing_map {
+            return;
+        }
+
+        let at = self.looking_from();
+        let Some(floor) = self.floors.get(plan::storey_at(at.y)) else {
+            return;
+        };
+        let (middle, size) = minimap::panel(self.window);
+
+        geometry.push_quad(&Quad::colored(middle, size, aim::MAP_EDGE));
+        geometry.push_quad(&Quad::colored(
+            middle,
+            size - Vec2::splat(minimap::EDGE * 2.0),
+            aim::MAP_PLATE,
+        ));
+
+        for (spot, size) in minimap::rooms(self.window, at, floor) {
+            geometry.push_quad(&Quad::colored(spot, size, aim::MAP_ROOM));
+        }
+
+        for (spot, size) in minimap::mark(self.window, self.facing()) {
+            geometry.push_quad(&Quad::colored(spot, size, aim::MAP_MARK));
+        }
+    }
+
     fn draw_the_cost(&self, geometry: &mut Geometry, text: &mut TextRenderer) {
         if !self.showing_cost {
             return;
@@ -10455,6 +10504,9 @@ impl Game for Arcade {
 
         // and what this frame cost, if it was asked for. Spec 0056.
         self.draw_the_cost(geometry, text);
+
+        // and the map in the corner, per spec 0132.
+        self.draw_the_map(geometry);
 
         // the sight, per spec 0003. Not while a game is up, since there is
         // nothing in this room to point at then.
@@ -14495,6 +14547,11 @@ impl Game for Arcade {
             // and the patches it found stay outlined until you ask again.
             KeyboardKey::P if held && !input.repeat => {
                 self.wants_planes = true;
+            }
+            // and the map in the corner, per spec 0132. Next to M, which
+            // is the same question answered as six numbers.
+            KeyboardKey::N if held && !input.repeat => {
+                self.showing_map = !self.showing_map;
             }
             // and where you are standing, for a picture somebody else has to
             // find. Spec 0045. On the screen, because the point of it is that

@@ -294,6 +294,18 @@ pub const GLASS_TRIM: Vec4 = vec4(0.72, 0.66, 0.57, 1.0);
 /// room rather than glow out of it is the lighting, which is the nook's
 /// two lamps and nothing of the picture's own.
 pub const CANVAS: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+
+/// The map in the corner: its border, its ground, the floor it draws and
+/// the mark on it. Spec 0132.
+///
+/// **A ground you can see through and a floor you cannot.** The plate is
+/// the help text's own, which this building already decided is how an
+/// overlay sits over a room without becoming a grey box; the floor on it is
+/// opaque, because a map you read the neon through is not a map.
+pub const MAP_EDGE: Vec4 = vec4(0.62, 0.56, 0.44, 0.85);
+pub const MAP_PLATE: Vec4 = vec4(0.02, 0.025, 0.04, 0.82);
+pub const MAP_ROOM: Vec4 = vec4(0.52, 0.50, 0.46, 1.0);
+pub const MAP_MARK: Vec4 = vec4(1.40, 1.05, 0.40, 1.0);
 pub const GILT: Vec4 = vec4(0.52, 0.40, 0.19, 1.0);
 
 /// The sheet the building's plan is cut on, behind the rooms. Spec 0115.

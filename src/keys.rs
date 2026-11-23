@@ -142,6 +142,12 @@ pub const BOUND: &[Bound] = &[
         group: Looking,
     },
     Bound {
+        shown: "N",
+        keys: &[K::N],
+        does: "show or hide the map in the corner",
+        group: Looking,
+    },
+    Bound {
         shown: "G",
         keys: &[K::G],
         does: "fly, and walk again",
