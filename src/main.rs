@@ -1050,6 +1050,8 @@ struct Arcade {
     wall_clock: Option<f32>,
     wheels: Vec<MeshId>,
     chapter: Option<MeshId>,
+    pillar: Option<MeshId>,
+    hands: Vec<MeshId>,
     bob: Option<MeshId>,
     pond_bank: Option<MeshId>,
     pond_verge: Option<MeshId>,
@@ -1725,6 +1727,8 @@ impl Arcade {
             wall_clock: None,
             wheels: Vec::new(),
             chapter: None,
+            pillar: None,
+            hands: Vec::new(),
             bob: None,
             pond_bank: None,
             pond_verge: None,
@@ -3487,41 +3491,80 @@ impl Arcade {
             scene.push_material(
                 ring,
                 &Transform::at(stood(glam::Vec2::ZERO, 0.0)).with_rotation(facing),
-                aim::DIAL_RING,
+                aim::dial_ring(),
                 aim::MATTE,
             );
         }
 
-        // the twelve hour marks, the hours themselves longer than the rest
-        for (n, turn) in clock::hours().into_iter().enumerate() {
-            let out = clock::RING * 0.5 - clock::RING_BAND * 0.55;
-            let long = if n % 3 == 0 { 0.095 } else { 0.055 };
+        // the minute track, sixty marks with every fifth of them longer,
+        // which is the hour marks as well: one ring measured once
+        for (turn, long, wide) in clock::track() {
+            let out = clock::track_at() - long * 0.5;
 
             scene.push_material(
                 cube,
-                &Transform::at(stood(clock::along(turn) * out, 0.018))
-                    .with_rotation(facing * clock::turned_to(turn))
-                    .with_scale(vec3(0.014, long, 0.018)),
+                &Transform::at(stood(
+                    clock::along(turn) * out,
+                    clock::chapter_face() + 0.004,
+                ))
+                .with_rotation(facing * clock::turned_to(turn))
+                .with_scale(vec3(0.010, long, wide)),
                 aim::HAND,
                 aim::MATTE,
             );
         }
 
-        // the two bars the movement hangs between, at the sides where a
+        // and the twelve numerals inside it, each standing on its own
+        // radius: a numeral at four o'clock is lying on its side as far as
+        // the dial is concerned and upright as far as the room is
+        for (hour, turn) in clock::hours().into_iter().enumerate() {
+            let at = clock::along(turn) * clock::numeral_at();
+
+            for (from, to) in clock::numeral(hour) {
+                let tall = clock::numeral_tall();
+                let stroke = (to - from) * tall;
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(stood(
+                        clock::placed(turn, at, (from + to) * 0.5 * tall),
+                        clock::chapter_face() + 0.004,
+                    ))
+                    .with_rotation(
+                        facing * clock::turned_to(clock::laid_along(clock::aimed(turn, to - from))),
+                    )
+                    .with_scale(vec3(
+                        0.010,
+                        stroke.length() + clock::NUMERAL_THICK * tall,
+                        clock::NUMERAL_THICK * tall,
+                    )),
+                    aim::HAND,
+                    aim::MATTE,
+                );
+            }
+        }
+
+        // the two pillars the movement hangs between, at the sides where a
         // skeleton clock's plates are: down the middle they cross the dial,
         // which is the one place a clock may not have anything
-        for side in [-1.0f32, 1.0] {
-            scene.push_material(
-                cube,
-                &Transform::at(stood(
-                    glam::vec2(side * clock::RING * 0.33, -0.1),
-                    -clock::PLATES * 0.9,
-                ))
-                .with_rotation(facing)
-                .with_scale(vec3(clock::PLATES * 1.5, 1.05, 0.028)),
-                aim::ARBOR,
-                aim::DULL,
-            );
+        if let Some(pillar) = self.pillar {
+            for side in [-1.0f32, 1.0] {
+                scene.push_material(
+                    pillar,
+                    &Transform::at(stood(
+                        glam::vec2(side * clock::RING * 0.33, -0.1),
+                        -clock::PLATES * 0.9,
+                    ))
+                    .with_rotation(facing)
+                    .with_scale(vec3(
+                        clock::PLATES * 1.9,
+                        1.05,
+                        clock::PLATES * 1.9,
+                    )),
+                    aim::WHEEL,
+                    aim::DULL,
+                );
+            }
         }
 
         // the train, wheel by wheel, each turned at the rate the wheel
@@ -3557,47 +3600,26 @@ impl Arcade {
             );
         }
 
-        // the hands, each on the arbor that turns at its own rate: the
-        // minute on the centre, the hour on the motion work's last wheel,
-        // the seconds out on the escape
+        // the hands. Each sits on its own arbor rather than being slid
+        // along itself: the mesh runs from its tail to its point with the
+        // arbor at nothing, so there is no offset to keep in step with the
+        // turn. Spec 0130.
         let escape = clock::pendulum_at();
 
-        for (turns, at, long, thick, colour) in [
-            (
-                clock::MINUTE_HAND,
-                glam::Vec2::ZERO,
-                clock::MINUTE_LONG,
-                1.0,
-                aim::HAND,
-            ),
-            (
-                clock::HOUR_HAND,
-                glam::Vec2::ZERO,
-                clock::HOUR_LONG,
-                1.7,
-                aim::HAND,
-            ),
-            (
-                clock::SECOND_HAND,
-                escape,
-                clock::SECOND_LONG,
-                0.6,
-                aim::SECOND_HAND,
-            ),
-        ] {
-            let arm = clock::RING * 0.5 * long;
-            let turn = clock::turned(turns, hours);
+        for (hand, mesh) in clock::hands().into_iter().zip(&self.hands) {
+            let arm = clock::RING * 0.5 * hand.long;
+            let turn = clock::turned(hand.turns, hours);
 
             scene.push_material(
-                cube,
-                &Transform::at(stood(at + clock::along(turn) * arm * 0.5, 0.055))
+                *mesh,
+                &Transform::at(stood(hand.at, 0.062))
                     .with_rotation(facing * clock::turned_to(turn))
-                    .with_scale(vec3(
-                        clock::HAND_THICK * thick,
-                        arm,
-                        clock::HAND_THICK * thick,
-                    )),
-                colour,
+                    .with_scale(vec3(clock::HAND_THICK, arm, arm)),
+                if hand.beats {
+                    aim::SECOND_HAND
+                } else {
+                    aim::HAND
+                },
                 aim::MATTE,
             );
         }
@@ -9069,13 +9091,17 @@ impl Game for Arcade {
             .into_iter()
             .map(|teeth| renderer.add_mesh(&clock::wheel_mesh(teeth)))
             .collect();
-        self.chapter = Some(renderer.add_mesh(&clock::ring_mesh(
+        self.chapter = Some(renderer.add_mesh(&clock::bezel_mesh(
             clock::RING * 0.5 - clock::RING_BAND,
             clock::RING * 0.5,
-            0.03,
+            clock::BEZEL_THICK,
         )));
-        self.bob =
-            Some(renderer.add_mesh(&clock::ring_mesh(0.0, clock::BOB * 0.5, clock::BOB_THICK)));
+        self.pillar = Some(renderer.add_mesh(&clock::pillar_mesh()));
+        self.hands = clock::hands()
+            .into_iter()
+            .map(|hand| renderer.add_mesh(&clock::hand_mesh(hand.cut)))
+            .collect();
+        self.bob = Some(renderer.add_mesh(&clock::lens_mesh(clock::BOB, clock::BOB_THICK)));
         self.pond_bank = Some(renderer.add_mesh(&pond::bank_mesh(self.room.reaches)));
         self.pond_verge = Some(renderer.add_mesh(&pond::verge_mesh(self.room.reaches)));
         self.pond_bed = Some(renderer.add_mesh(&pond::bed_mesh(self.room.reaches)));

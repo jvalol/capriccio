@@ -821,9 +821,15 @@ pub fn clutter(reaches: f32) -> Vec<Stood> {
             at: vec3(west + 2.0, floor, near - 0.26),
             turn: 0.0,
         },
+        // past the clock, rather than under its pendulum: this stood at
+        // west + 2.36 from the day the room was built, which is where the
+        // bob came down when spec 0130 hung a clock on the wall above it.
+        // `clock::tests::nothing_stands_where_the_pendulum_swings` holds
+        // the pair apart now, the bucket's place and the swing being two
+        // questions rather than one number.
         Stood {
             thing: Thing::Bucket,
-            at: vec3(west + 2.36, floor, near - 0.34),
+            at: vec3(west + 3.12, floor, near - 0.34),
             turn: 0.6,
         },
         Stood {

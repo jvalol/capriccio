@@ -8,6 +8,7 @@
 //! sight is the same kind of thing as a gauge that says what a frame costs,
 //! and it was a utility room of its own for an hour before that was said.
 
+use blitzkit::collision::Aabb;
 use glam::{vec2, vec3, Quat, Vec2, Vec3};
 
 /// How big a tooth is: the pitch diameter of a wheel is this times its
@@ -33,7 +34,7 @@ pub const WHEEL_THICK: f32 = 0.016;
 /// would carry a grander one, and that is a step down through the doorway
 /// and its own spec.
 pub const RING: f32 = 1.84;
-pub const RING_BAND: f32 = 0.125;
+pub const RING_BAND: f32 = 0.21;
 
 /// How high the middle of the dial stands off the floor.
 /// **Higher and larger than the first one**, because the back room is 2.8
@@ -227,6 +228,34 @@ pub fn along(turn: f32) -> Vec2 {
     vec2(sin, cos)
 }
 
+/// And the turn that lies a given way, which is the same answer read
+/// backwards: `along(laid_along(d))` is `d` with its length taken off.
+///
+/// Wanted because the ornament is written as lines rather than as angles. A
+/// stroke of a numeral is two corners, and what it needs to be drawn is the
+/// turn that lays a bar between them.
+pub fn laid_along(d: Vec2) -> f32 {
+    d.x.atan2(d.y)
+}
+
+/// Where a point in a numeral's own frame falls in the face of the clock,
+/// and which way a line in that frame runs.
+///
+/// **Upright means out from the middle, and left to right means the room's
+/// left to right.** A chapter ring's numerals each stand on their own
+/// radius, so a numeral at four o'clock is lying on its side as far as the
+/// dial is concerned. Its own x is the way somebody in the room reads,
+/// which is the dial's own x backwards, east being on their left.
+pub fn aimed(turn: f32, d: Vec2) -> Vec2 {
+    let up = along(turn);
+
+    vec2(-up.y, up.x) * d.x + up * d.y
+}
+
+pub fn placed(turn: f32, at: Vec2, p: Vec2) -> Vec2 {
+    at + aimed(turn, p)
+}
+
 /// The same turn as a rotation, to be applied after `facing`.
 pub fn turned_to(turn: f32) -> Quat {
     Quat::from_rotation_x(turn)
@@ -242,6 +271,43 @@ pub fn facing() -> Quat {
 /// dial, up it, and out of the wall toward the floor you stand on.
 pub fn stood(face: Vec3, at: Vec2, out: f32) -> Vec3 {
     face + facing() * vec3(out, at.y, at.x)
+}
+
+/// The room the pendulum needs: everything the rod and the bob pass
+/// through at the ends of their swing, with a hand's breadth round it.
+///
+/// **Because the floor under a clock is not the clock's.** The back room's
+/// clutter was placed by hand along this wall long before anything hung on
+/// it, and the bob came down into a bucket. A rule that scatters things
+/// puts one in the doorway; a list placed by hand puts one wherever the
+/// next thing to arrive wants to be. So the clock says what floor it needs
+/// and a test asks the room.
+///
+/// Nothing drawn asks this: the pendulum is drawn from where it hangs and
+/// the clutter from where it stands, and what this is for is the test that
+/// those two never meet.
+#[allow(dead_code)]
+pub const SWINGS_CLEAR: f32 = 0.1;
+
+#[allow(dead_code)]
+pub fn swings_over(reaches: f32) -> Aabb {
+    let face = dial_at(reaches);
+    let hangs = stood(face, pendulum_at(), -PLATES * 0.5);
+    let long = rod_long();
+    let out = SWING.sin() * long + BOB * 0.5 + SWINGS_CLEAR;
+
+    Aabb::new(
+        vec3(
+            hangs.x - out,
+            hangs.y - long - BOB * 0.5 - SWINGS_CLEAR,
+            hangs.z - BOB_THICK * 0.5 - SWINGS_CLEAR,
+        ),
+        vec3(
+            hangs.x + out,
+            hangs.y,
+            hangs.z + BOB_THICK * 0.5 + SWINGS_CLEAR,
+        ),
+    )
 }
 
 /// How many spokes a wheel is crossed out with, how far the hub runs and
@@ -339,45 +405,363 @@ pub fn counts() -> Vec<u32> {
     out
 }
 
-/// A flat ring facing east, which is what the chapter ring is and what a
-/// bob's rim wants.
-pub fn ring_mesh(inner: f32, outer: f32, thick: f32) -> blitzkit::mesh::MeshData {
+/// The chapter ring, as a moulding rather than a flat band.
+///
+/// **Because a flat band is a washer.** The ring is the one part of this
+/// anybody looks straight at, and a section with a step, a bead and a
+/// hollow in it catches the light in three places instead of one. The
+/// numbers are shares of the band's own width, so widening the ring widens
+/// the moulding with it.
+/// How thick the ring is, and how far forward of its back the flat part of
+/// it stands, as a share of that.
+///
+/// **The marks are laid on this and not at a depth of their own.** Written
+/// separately, the minute track and all twelve numerals sat nine
+/// millimetres inside a moulding that rose over them, and what a chapter
+/// ring carrying its own numbers came out as was a ring with a few extra
+/// ticks on it.
+pub const BEZEL_THICK: f32 = 0.045;
+pub const BEZEL_FACE: f32 = 0.55;
+
+pub fn chapter_face() -> f32 {
+    BEZEL_THICK * BEZEL_FACE
+}
+
+const BEZEL: [(f32, f32); 9] = [
+    // how far out along the band, and how far forward of the back face
+    (0.00, 0.00),
+    (0.00, 0.42),
+    (0.05, 0.68),
+    (0.10, BEZEL_FACE),
+    (0.86, BEZEL_FACE),
+    (0.90, 0.94),
+    (0.96, 0.62),
+    (1.00, 0.78),
+    (1.00, 0.00),
+];
+
+/// Where the flat runs, as shares of the band: nothing may be laid on the
+/// moulding at either end of it.
+pub const CHAPTER_IN: f32 = 0.10;
+pub const CHAPTER_OUT: f32 = 0.86;
+
+/// Where a table of (out, up) pairs has got to a share of the way along
+/// itself, which is how every moulding and outline in here is written.
+fn stepped(table: &[(f32, f32)], on: f32) -> (f32, f32) {
+    let step = on * (table.len() - 1) as f32;
+    let n = (step.floor() as usize).min(table.len() - 2);
+    let at = step - n as f32;
+    let (out_a, up_a) = table[n];
+    let (out_b, up_b) = table[n + 1];
+
+    (out_a + (out_b - out_a) * at, up_a + (up_b - up_a) * at)
+}
+
+pub fn bezel_mesh(inner: f32, outer: f32, thick: f32) -> blitzkit::mesh::MeshData {
     use std::f32::consts::TAU;
 
-    let mut mesh = blitzkit::mesh::MeshData::surface(96, 8, |round, across| {
-        let turn = -round * TAU;
-        let half = thick * 0.5;
-        // the face, the outer rim, the back, and the inner rim
-        let (along, far) = if across < 0.25 {
-            (half, inner + (outer - inner) * (across / 0.25))
-        } else if across < 0.5 {
-            (half - thick * ((across - 0.25) / 0.25), outer)
-        } else if across < 0.75 {
-            (-half, outer - (outer - inner) * ((across - 0.5) / 0.25))
-        } else {
-            (-half + thick * ((across - 0.75) / 0.25), inner)
-        };
+    let band = outer - inner;
+    let mut mesh =
+        blitzkit::mesh::MeshData::surface(128, (BEZEL.len() * 3) as u32, |round, across| {
+            let turn = -round * TAU;
+            let (out, up) = stepped(&BEZEL, across);
 
-        vec3(along, turn.cos() * far, turn.sin() * far)
+            vec3(
+                up * thick,
+                turn.cos() * (inner + band * out),
+                turn.sin() * (inner + band * out),
+            )
+        });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// A hand's outline: half its width at points along its own length, both
+/// as shares of its reach.
+///
+/// **One shape, three hands.** What differs between an hour hand and a
+/// minute hand on a clock like this is how far each reaches and how
+/// heavily each is cut, which are two numbers, and not what the shape of a
+/// hand is. It runs from behind the arbor, because a hand has a tail: the
+/// counterweight is most of what stops a pair of hands reading as two
+/// sticks laid on a plate.
+const OUTLINE: [(f32, f32); 11] = [
+    (-0.20, 0.000),
+    (-0.17, 0.024),
+    (-0.13, 0.032),
+    (-0.08, 0.017),
+    (0.00, 0.030),
+    (0.05, 0.013),
+    (0.56, 0.011),
+    (0.64, 0.036),
+    (0.72, 0.029),
+    (0.90, 0.008),
+    (1.00, 0.000),
+];
+
+/// A hand, as a mesh: that outline, a hair thick, lying along its own up
+/// with its arbor at nothing and its point one away.
+///
+/// **It is placed at the arbor and not slid half its length along it**,
+/// which is how the first pair of these were drawn and how each came apart
+/// from its own rotation. A mesh that already knows where its arbor is has
+/// nothing left to keep in step.
+pub fn hand_mesh(cut: f32) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    let from = OUTLINE[0].0;
+    let to = OUTLINE[OUTLINE.len() - 1].0;
+    let mut mesh = blitzkit::mesh::MeshData::surface(96, 16, |along, round| {
+        let up = from + (to - from) * along;
+        let mut wide = 0.0;
+
+        for pair in OUTLINE.windows(2) {
+            let ((a, wa), (b, wb)) = (pair[0], pair[1]);
+
+            if up >= a && up <= b {
+                wide = wa + (wb - wa) * ((up - a) / (b - a));
+            }
+        }
+
+        let turn = -round * TAU;
+
+        vec3(turn.sin() * 0.5, up, turn.cos() * wide * cut)
     });
     mesh.compute_normals();
 
     mesh
 }
 
-/// Where the twelve hour marks stand on the ring, as the angle of each from
-/// upright.
+/// The two pillars the movement hangs between, turned rather than sawn.
+///
+/// Foot, torus, shaft, swell, cap and a finial on top, which is what holds
+/// a skeleton clock's plates apart and is the one part of it that is there
+/// to be looked at rather than to do something.
+const PILLAR: [(f32, f32); 15] = [
+    (0.00, 0.00),
+    (0.01, 0.88),
+    (0.05, 0.88),
+    (0.07, 0.60),
+    (0.11, 0.78),
+    (0.15, 0.48),
+    (0.45, 0.40),
+    (0.51, 0.68),
+    (0.57, 0.42),
+    (0.85, 0.38),
+    (0.88, 0.70),
+    (0.91, 0.46),
+    (0.95, 0.78),
+    (0.99, 0.34),
+    (1.00, 0.00),
+];
+
+pub fn pillar_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(20, (PILLAR.len() * 3) as u32, |v| {
+        let (up, wide) = stepped(&PILLAR, v);
+
+        (up - 0.5, wide)
+    })
+}
+
+/// The bob, as a lens rather than a disc.
+///
+/// A pendulum bob is a lens because it has to be heavy and thin, and the
+/// dome is the whole of why one reads as a weight hanging rather than as a
+/// coin stuck to the wall.
+pub fn lens_mesh(across: f32, thick: f32) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    let mut mesh = blitzkit::mesh::MeshData::surface(48, 24, |round, section| {
+        let turn = -round * TAU;
+        // out to the rim on the front half of it and back in on the other
+        let (face, share) = if section < 0.5 {
+            (1.0, section * 2.0)
+        } else {
+            (-1.0, (1.0 - section) * 2.0)
+        };
+        let far = across * 0.5 * share;
+        let dome = thick * 0.5 * (1.0 - share * share).max(0.0).sqrt();
+
+        vec3(dome * face, turn.cos() * far, turn.sin() * far)
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// Where the twelve hour marks stand on the ring: each one is where the
+/// hour hand points at that hour, which is what an hour mark is.
+///
+/// **Written as `n` twelfths of a turn it was the ring backwards**, and
+/// nothing said so for as long as the marks were twelve identical bars: a
+/// dial mirrored about noon has a bar at every place a dial has a bar.
+/// The numerals are what made it visible, I standing where XI belongs.
 pub fn hours() -> Vec<f32> {
-    (0..12)
-        .map(|n| n as f32 / 12.0 * std::f32::consts::TAU)
+    (0..12).map(|n| turned(HOUR_HAND, n as f32)).collect()
+}
+
+/// The minute track: where every one of the sixty stands and how long its
+/// mark is.
+///
+/// **One list, not two.** The hours were twelve bars of their own and the
+/// minutes would have been sixty more, which is the same ring measured
+/// twice: a mark at the hour is a mark on this track that is longer, and
+/// nothing can put the two out of step because there is only one of them.
+pub const TICK: f32 = 0.022;
+pub const TICK_HOUR: f32 = 0.036;
+pub const TICK_WIDE: f32 = 0.006;
+pub const TICK_HOUR_WIDE: f32 = 0.013;
+pub const TRACK_IN: f32 = 0.004;
+
+pub fn track() -> Vec<(f32, f32, f32)> {
+    (0..60)
+        .map(|n| {
+            let turn = turned(MINUTE_HAND, n as f32 / 60.0);
+
+            if n % 5 == 0 {
+                (turn, TICK_HOUR, TICK_HOUR_WIDE)
+            } else {
+                (turn, TICK, TICK_WIDE)
+            }
+        })
         .collect()
 }
 
-/// How long each hand is, as a share of the ring's own radius, and how thick.
+/// How far out the track's marks hang from, and where a numeral's middle
+/// stands.
+///
+/// Both off the ring's own band, so widening the ring moves them together
+/// and a numeral cannot end up on the track or off the inside edge.
+pub fn track_at() -> f32 {
+    RING * 0.5 - RING_BAND * (1.0 - CHAPTER_OUT) - TRACK_IN
+}
+
+pub fn numeral_at() -> f32 {
+    (chapter_in() + track_at() - TICK_HOUR) * 0.5
+}
+
+/// Where the flat part of the ring starts, which is as far in as anything
+/// written on it may go.
+pub fn chapter_in() -> f32 {
+    RING * 0.5 - RING_BAND * (1.0 - CHAPTER_IN)
+}
+
+/// How tall a numeral stands, which is the room left between the inside of
+/// the band and the ends of the hour marks.
+///
+/// **Not a number of its own.** Written as one it was a third of the room
+/// it had, and twelve numerals too small to read are twelve smudges: the
+/// one thing a chapter ring is for is being read from across a room.
+pub fn numeral_tall() -> f32 {
+    (track_at() - TICK_HOUR - chapter_in()) * 0.84
+}
+
+/// How thick its strokes are cut, and the gap between two letters, both as
+/// shares of that.
+pub const NUMERAL_THICK: f32 = 0.13;
+pub const NUMERAL_GAP: f32 = 0.1;
+
+/// A letter of a Roman numeral, as the lines it is drawn with and how much
+/// room it takes, in a box one tall about its own middle.
+///
+/// Three letters is the whole alphabet a clock needs, and every one of them
+/// is straight lines. Four is `IIII` and not `IX`, which is what a clock
+/// dial does and has done since clocks had dials: the four and the eight
+/// stand opposite each other and `IIII` balances `VIII`.
+fn letter(of: char) -> (f32, Vec<(Vec2, Vec2)>) {
+    let half = 0.5;
+
+    match of {
+        'V' => (
+            0.62,
+            vec![
+                (vec2(-0.31, half), vec2(0.0, -half)),
+                (vec2(0.0, -half), vec2(0.31, half)),
+            ],
+        ),
+        'X' => (
+            0.62,
+            vec![
+                (vec2(-0.31, -half), vec2(0.31, half)),
+                (vec2(-0.31, half), vec2(0.31, -half)),
+            ],
+        ),
+        _ => (0.16, vec![(vec2(0.0, -half), vec2(0.0, half))]),
+    }
+}
+
+/// An hour's numeral, as lines in its own frame: one tall, centred on
+/// nothing, and as wide as its letters make it.
+pub fn numeral(hour: usize) -> Vec<(Vec2, Vec2)> {
+    const SAID: [&str; 12] = [
+        "XII", "I", "II", "III", "IIII", "V", "VI", "VII", "VIII", "IX", "X", "XI",
+    ];
+
+    let said = SAID[hour % 12];
+    let letters: Vec<(f32, Vec<(Vec2, Vec2)>)> = said.chars().map(letter).collect();
+    let wide: f32 =
+        letters.iter().map(|(w, _)| w).sum::<f32>() + NUMERAL_GAP * (letters.len() - 1) as f32;
+    let mut at = -wide * 0.5;
+    let mut out = Vec::new();
+
+    for (w, lines) in letters {
+        let middle = vec2(at + w * 0.5, 0.0);
+
+        out.extend(lines.into_iter().map(|(a, b)| (a + middle, b + middle)));
+        at += w + NUMERAL_GAP;
+    }
+
+    out
+}
+
+/// How long each hand is, as a share of the ring's own radius, and how
+/// thick a hand is cut.
 pub const HOUR_LONG: f32 = 0.56;
 pub const MINUTE_LONG: f32 = 0.84;
 pub const SECOND_LONG: f32 = 0.3;
-pub const HAND_THICK: f32 = 0.022;
+pub const HAND_THICK: f32 = 0.014;
+
+/// One hand: the arbor it is on, how fast that turns, how far it reaches
+/// and how heavily it is cut.
+pub struct Hand {
+    pub turns: f32,
+    pub at: Vec2,
+    pub long: f32,
+    pub cut: f32,
+    /// Whether this is the one that visibly moves, which is the one that
+    /// has to be seen first and is therefore the one that is red.
+    pub beats: bool,
+}
+
+/// The three of them, each on the arbor that turns at its own rate: the
+/// hour on the motion work's last wheel, the minute on the centre, the
+/// seconds out on the escape.
+pub fn hands() -> Vec<Hand> {
+    vec![
+        Hand {
+            turns: HOUR_HAND,
+            at: Vec2::ZERO,
+            long: HOUR_LONG,
+            cut: 1.4,
+            beats: false,
+        },
+        Hand {
+            turns: MINUTE_HAND,
+            at: Vec2::ZERO,
+            long: MINUTE_LONG,
+            cut: 1.0,
+            beats: false,
+        },
+        Hand {
+            turns: SECOND_HAND,
+            at: pendulum_at(),
+            long: SECOND_LONG,
+            cut: 0.55,
+            beats: true,
+        },
+    ]
+}
 
 /// How long the pendulum's rod is from the arbor it hangs on, and how big
 /// its bob.
@@ -670,6 +1054,74 @@ mod tests {
             half.y < -0.99 && half.x.abs() < 0.01,
             "at half past the minute hand runs {}, which is not downward",
             half
+        );
+    }
+    /// Spec 0130: nothing in the room stands where the pendulum swings.
+    ///
+    /// **Jake, on the first picture of it in the load room: the pendulum
+    /// intersects an object.** A bucket against the near wall, put there
+    /// when the room was built and the wall was bare. The bob comes down
+    /// to a quarter of a metre off the floor, which is bucket height, and
+    /// the clutter runs the length of the one wall a clock wants.
+    #[test]
+    fn nothing_stands_where_the_pendulum_swings() {
+        const REACHES: f32 = 9.5;
+
+        let swings = swings_over(REACHES);
+
+        for stood in crate::back::clutter(REACHES) {
+            let (across, tall) = stood.thing.size();
+            let box_of = Aabb::new(
+                stood.at - vec3(across * 0.5, 0.0, across * 0.5),
+                stood.at + vec3(across * 0.5, tall, across * 0.5),
+            );
+
+            assert!(
+                !swings.intersects(&box_of),
+                "a {:?} at {} stands in the {} the pendulum swings through",
+                stood.thing,
+                stood.at,
+                swings.min
+            );
+        }
+    }
+    /// Spec 0130: the numeral at an hour stands where the hour hand points
+    /// at that hour.
+    ///
+    /// **Which is what an hour mark is, and the ring had it mirrored.**
+    /// The marks were written as twelfths of a turn and the hands as a
+    /// rate times an hour, with the signs opposite, so the dial ran one way
+    /// and the hands the other. Twelve identical bars cannot show that: a
+    /// dial mirrored about noon has a bar wherever a dial has a bar, and it
+    /// took putting numbers on them for I to turn up where XI belongs.
+    #[test]
+    fn an_hour_mark_stands_where_the_hour_hand_points() {
+        let marks = hours();
+
+        assert_eq!(marks.len(), 12);
+
+        for (hour, mark) in marks.iter().enumerate() {
+            let hand = turned(HOUR_HAND, hour as f32);
+            let apart = (along(*mark) - along(hand)).length();
+
+            assert!(
+                apart < 1e-5,
+                "the mark for {} o'clock lies {} and the hour hand at {} o'clock points {}",
+                hour,
+                along(*mark),
+                hour,
+                along(hand)
+            );
+        }
+
+        // and three o'clock is on the room's right, which is where the
+        // minute hand stands at quarter past
+        let three = along(marks[3]);
+
+        assert!(
+            three.x < -0.99,
+            "three o'clock lies {}, which is not to the west",
+            three
         );
     }
 }

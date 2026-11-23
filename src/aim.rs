@@ -611,12 +611,27 @@ pub const PORT: Vec4 = vec4(0.30, 0.05, 0.07, 1.0);
 ///
 /// The wheels are brass and the arbors and hands are blued steel, which is
 /// what a movement is made of and what makes a wheel read as a wheel
-/// against the wall behind it. The ring is bone, a shade over one in every
-/// channel like the nook's own dial, because the one part of a clock that
-/// has to be readable is the part you read.
+/// against the wall behind it.
+///
+/// **And the ring is the cubes' own white, burning.** Jake: it would be
+/// fitting if the white glowed with the brightness of the cubes in the
+/// load, same room after all. It was a warm bone, which is a second white
+/// in a room that already had one, so the hue is `BACK_CUBE` now and there
+/// is one white in here.
+///
+/// **The push over one is the part that is not simply the cubes' number.**
+/// Nothing in that bay glows: the block is 0.88 and what makes it read as
+/// bright is a bulb over it and a near-black lining behind it. A ring on a
+/// grey wall with neither of those, given 0.88, is a grey ring. So it
+/// carries the colour and burns the way the gauge bars beside it do, which
+/// is what the cubes look like rather than what they are.
 pub const WHEEL: Vec4 = vec4(0.66, 0.50, 0.21, 1.0);
 pub const ARBOR: Vec4 = vec4(0.26, 0.28, 0.33, 1.0);
-pub const DIAL_RING: Vec4 = vec4(1.12, 1.08, 0.96, 1.0);
+pub const DIAL_GLOW: f32 = 1.45;
+
+pub fn dial_ring() -> Vec4 {
+    BACK_CUBE * DIAL_GLOW
+}
 pub const HAND: Vec4 = vec4(0.14, 0.15, 0.19, 1.0);
 
 /// And the seconds hand, which is the one hand on a clock that visibly

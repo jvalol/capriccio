@@ -55,6 +55,43 @@ behind them, so the whole movement stands inside the ring in plain sight: the
 train below the hands, the escapement at the bottom of it, and the pendulum
 hanging below the ring and swinging in front of the wall.
 
+**And it is ornate, which took a second pass.** Jake, on the first build of
+it: the clock could be ornate. What it was then was a flat white band with
+twelve bars on it, two sawn posts and three tapered sticks, which is a
+clock drawn as its own diagram. Five things changed, and every one of them
+is a shape written as a profile rather than a box:
+
+- *The ring is a moulding.* Its section steps up from the inside, runs flat
+  across the chapter, and falls over a bead at the outer edge, so it catches
+  the light in three places rather than one.
+- *The chapter carries a minute track of sixty*, every fifth of them longer,
+  which is the hour marks as well: one ring measured once rather than two
+  lists of one thing.
+- *And Roman numerals*, each standing on its own radius, so the twelve is
+  upright and the six is upside down the way a chapter ring's are. Three
+  letters is the whole alphabet a clock needs and all three are straight
+  lines, so a numeral is a handful of strokes worked out from its letters.
+  Four is `IIII` and not `IX`, which is what a clock dial does and has done
+  since dials, so that the four balances the eight across from it.
+- *The hands are shaped*: a tail behind the arbor, a boss, a slim shaft, a
+  spade near the end and a point. One outline, three hands, what differs
+  being how far each reaches and how heavily it is cut.
+- *And the ring is the load room's own white, burning.* Jake: it would be
+  fitting if the white glowed with the brightness of the cubes in the load,
+  same room after all. The ring was a warm bone, which is a second white in
+  a room that already had one. The hue is the block's now. The push over
+  one is the part that is not simply the cubes' number: nothing in that bay
+  glows, the block being 0.88 and reading as bright because a bulb stands
+  over it and the lining behind it is near black. A ring on a grey wall
+  with neither of those, given 0.88, is a grey ring. So it carries the
+  colour and burns the way the gauge bars beside it do, which is what the
+  cubes look like rather than what they are.
+- *The pillars are turned and the bob is a lens.* A pillar has a foot, a
+  torus, a shaft, a swell, a cap and a finial, which is the one part of a
+  skeleton clock that is there to be looked at rather than to do something.
+  A bob is a lens because it has to be heavy and thin, and the dome is the
+  whole of why one hangs rather than sticking to the wall.
+
 **The train is a real train, and the ratios come out of the teeth.**
 
 | wheel | teeth | drives | one turn in |
@@ -129,6 +166,33 @@ whatever either bar is actually attached to. Same lesson as the engine's
 spec 0110, two days apart: a reference says what it looked like when
 somebody was happy with it.
 
+## What the ornament found
+
+**Everything written on the ring was laid at a depth of its own, and the
+moulding rose over it.** The marks stood twenty-two millimetres off the
+dial and the bezel's crest thirty-one, so the minute track and all twelve
+numerals were buried: what a chapter ring carrying its own numbers came out
+as was a ring with a few faint extra ticks on it. The ring says where its
+own face is now, the flat part of its section is named rather than drawn in
+passing, and the marks are laid a few millimetres over that.
+
+**And the dial ran backwards.** The hour marks were written as `n` twelfths
+of a turn and the hands as a rate times an hour, with the signs opposite,
+so the ring and the hands went round opposite ways. Nothing could say so
+for as long as the marks were twelve identical bars, because a dial
+mirrored about noon has a bar wherever a dial has a bar. It took putting
+numbers on them, and then it was obvious in one frame: the hour hand stood
+at eleven, pointing at a numeral reading I. An hour mark is now defined as
+where the hour hand points at that hour, which is also what one is.
+
+**And the bob came down into a bucket.** Jake: the pendulum intersects an
+object. The back room's clutter was placed by hand along this wall when the
+wall was bare, and the bob hangs a quarter of a metre off the floor, which
+is bucket height. The clock says what floor its pendulum needs and the test
+asks the room; the bucket moved three quarters of a metre along the wall.
+Two questions rather than one number, so neither has to know about the
+other.
+
 ## Acceptance criteria
 
 - Every meshing pair's arbors stand the distance their tooth counts put them
@@ -148,6 +212,11 @@ somebody was happy with it.
   different claim: it is the one that knows the clock is on the north wall
   and that a player at it has east on their
   left. — `clock::tests::the_face_runs_the_way_the_room_sees_a_clock_run`
+- The numeral at an hour stands where the hour hand points at that hour,
+  which twelve identical bars could not have
+  told. — `clock::tests::an_hour_mark_stands_where_the_hour_hand_points`
+- Nothing in the room stands where the pendulum
+  swings. — `clock::tests::nothing_stands_where_the_pendulum_swings`
 - The clock is drawn as the blessed reference has it, stopped at ten past
   ten: a picture of a thing whose point is the time cannot be taken from the
   machine's own. — `tests::the_clock_is_drawn`
