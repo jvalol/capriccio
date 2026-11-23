@@ -1,5 +1,13 @@
 //! A relief plan of the building, cut from the building. Spec 0115.
 //!
+//! **On the cellar's south wall**, between the wine racks. It hung in the
+//! nook first and Jake took that wall back for pictures: ten metres is a
+//! mural's wall and a plan is a diagram, which is most of why it never sat
+//! right there. Down here it is the same panelled mahogany, the stretch
+//! between the racks is clear because the pool table stands against it, and
+//! the two wall lamps are at either end of that stretch rather than over
+//! the middle of it, which is the raking light a relief wants.
+//!
 //! **Nothing here draws a plan. It cuts one.** `Room::solid` is every box a
 //! body walks into, which is the building's own account of where its walls
 //! are, and a plan is a horizontal cut through walls at about waist height.
@@ -12,7 +20,7 @@
 //! thing that would ever notice is a person in the nook comparing a carving
 //! against a memory of a room.
 
-use crate::room::{Room, TALL};
+use crate::room::Room;
 use blitzkit::collision::Aabb;
 use glam::{vec3, Vec3};
 
@@ -33,6 +41,36 @@ pub const RELIEF: f32 = 0.012;
 /// The gap between one storey's plan and the next, as a share of a plan's
 /// own width.
 pub const BETWEEN: f32 = 0.22;
+
+/// Which of the cellar's long walls it is cut into, which way that wall
+/// faces, and which way the drawing's east runs along it.
+///
+/// **Three signs that are one fact, so they are written as one.** Stood in
+/// the cellar facing this wall you are facing south, where in the nook you
+/// faced north, and both of those decide the same two things: the relief
+/// stands out of the face toward the room rather than into the plaster, and
+/// a page is read with east to the reader's right. Facing south your right
+/// hand points east, so east is the wall's own plus x here where it was the
+/// minus x there. Moving the plan flipped both at once, and getting one and
+/// not the other is a drawing with its back to you or a mirrored one.
+pub const SIDE: f32 = -1.0;
+pub const OUT: f32 = 1.0;
+pub const EAST: f32 = 1.0;
+
+/// How high the middle of the drawing hangs over the cellar's floor, how
+/// much of the wall's own height is left clear at each end of the band, and
+/// how much of the clear run is left as margin at either end of it.
+///
+/// **Hung rather than fitted.** In the nook the band between a dado and a
+/// cornice was the whole of what the wall offered and the scale came off
+/// the height. Here the wall is clear from the skirting to the cornice,
+/// which is two metres, and what binds is the width between the racks. So
+/// the band is still everything the wall offers, but centred where a
+/// drawing hangs rather than halfway up the plaster: a hand under eye
+/// height, which is where a thing you read standing goes.
+pub const HANGS: f32 = 1.45;
+pub const OFF_THE_TRIM: f32 = 0.06;
+pub const CLEAR: f32 = 0.20;
 
 /// The floor each of the three storeys stands on, lowest first.
 ///
@@ -237,21 +275,62 @@ fn merged(runs: Vec<Aabb>) -> Vec<Aabb> {
     out
 }
 
-/// The band of the nook's north wall the relief is allowed, as a box with no
-/// thickness: the wall's inner face, between the dado rail and the cornice.
-pub fn board(reaches: f32) -> Aabb {
-    let (at, size) = crate::room::nook_end(reaches);
-    let face = at.z - size.z * 0.5;
-    // **Off the rail and off the cornice by a finger, and no more.** The
-    // band between them is what sets the scale for all three, since the
-    // building is longer north to south than the wall is tall, so every
-    // centimetre given away here is given away three times over.
-    let clear = 0.06;
-    let low = crate::study::DADO + crate::study::RAIL * 0.5 + clear;
-    let high = TALL - crate::study::CORNICE - clear;
-    let half = size.x * 0.5 - 0.3;
+/// The clear stretch of that wall: the panelling between the wine racks.
+///
+/// **Asked of the racks rather than measured.** They are skipped where the
+/// pool table stands, which is what leaves the stretch clear in the first
+/// place, so the gap is theirs to report. Written down instead, moving the
+/// table would move the racks and leave the plan half behind a rack.
+pub fn clear_run(reaches: f32) -> (f32, f32) {
+    let mut edges: Vec<f32> = crate::cellar::racks(reaches)
+        .into_iter()
+        .filter(|(_, side)| *side == SIDE)
+        .map(|(at, _)| at.x)
+        .collect();
 
-    Aabb::new(vec3(at.x - half, low, face), vec3(at.x + half, high, face))
+    edges.sort_by(|a, b| a.partial_cmp(b).expect("a rack somewhere"));
+
+    let half = crate::cellar::RACK.z * 0.5;
+    let mut run = (0.0, 0.0);
+
+    for pair in edges.windows(2) {
+        let (west, east) = (pair[0] + half, pair[1] - half);
+
+        if east - west > run.1 - run.0 {
+            run = (west, east);
+        }
+    }
+
+    run
+}
+
+/// The face the plan is cut into: the panelling's, not the wall's.
+///
+/// **The boards stand five centimetres off the structural wall**, which is
+/// a lot more than the relief does, so a plan laid on the wall is a plan
+/// inside the panelling. Cut once, it was there: faint lines showing
+/// through the timber and nothing else. What a thing hung on a panelled
+/// wall is hung on is the panelling.
+pub fn face(reaches: f32) -> f32 {
+    crate::cellar::long_wall(reaches, SIDE) + OUT * crate::cellar::BOARD_OUT
+}
+
+/// The band of that wall the relief is allowed, as a box with no thickness.
+pub fn board(reaches: f32) -> Aabb {
+    let face = face(reaches);
+    let (west, east) = clear_run(reaches);
+    let floor = -crate::cellar::DOWN;
+    let low = floor + crate::cellar::SKIRTING + OFF_THE_TRIM;
+    let high = floor + crate::cellar::TALL - crate::cellar::CORNICE - OFF_THE_TRIM;
+    // centred on where it hangs, which is nearer the skirting than the
+    // cornice, so the half that reaches the cornice first is the one that
+    // sets how tall the band can be
+    let half = (floor + HANGS - low).min(high - (floor + HANGS));
+
+    Aabb::new(
+        vec3(west + CLEAR, floor + HANGS - half, face),
+        vec3(east - CLEAR, floor + HANGS + half, face),
+    )
 }
 
 /// How big one storey's plan is on that board, and where the first one
@@ -270,12 +349,11 @@ fn laid_out(room: &Room, reaches: f32) -> (f32, f32, Vec3) {
     // three plans and two gaps between them
     let room_for_one = wide / (3.0 + BETWEEN * 2.0);
     let scale = (band / along).min(room_for_one / across);
-    // **Lowest storey first as it is read, which is the wall's own minus
-    // x.** Facing this wall you are facing north and your right hand points
-    // west, so the three were laid out east to west and read upper, ground,
-    // cellar. The bars inside each plan were turned round for the same
-    // reason and the slots were not.
-    let step = -across * scale * (1.0 + BETWEEN);
+    // **Lowest storey leftmost as it is read**, which is whichever way round
+    // `EAST` says: the three run the way the page does, so the stride and
+    // the bars inside each plan turn together and there is one fact to get
+    // wrong rather than two.
+    let step = EAST * across * scale * (1.0 + BETWEEN);
     let first = board.center().x - step;
 
     (scale, step, vec3(first, board.center().y, board.min.z))
@@ -386,7 +464,7 @@ pub fn onto(room: &Room, reaches: f32, storey: usize, at: Vec3) -> Vec3 {
     let middle = footprint(room).center();
 
     vec3(
-        first.x + step * storey as f32 - (at.x - middle.x) * scale,
+        first.x + step * storey as f32 + EAST * (at.x - middle.x) * scale,
         first.y + (at.z - middle.z) * scale,
         first.z,
     )
@@ -418,12 +496,112 @@ pub fn here(room: &Room, reaches: f32, at: Vec3, facing: Vec3) -> Vec<Aabb> {
     let nose = vec3(on.x - way.x * MARK * 2.2, on.y + way.y * MARK * 2.2, on.z);
     let square = |middle: Vec3, half: f32| {
         Aabb::new(
-            vec3(middle.x - half, middle.y - half, middle.z - RELIEF * 2.0),
-            vec3(middle.x + half, middle.y + half, middle.z),
+            vec3(
+                middle.x - half,
+                middle.y - half,
+                middle.z.min(middle.z + OUT * RELIEF * 2.0),
+            ),
+            vec3(
+                middle.x + half,
+                middle.y + half,
+                middle.z.max(middle.z + OUT * RELIEF * 2.0),
+            ),
         )
     };
 
     vec![square(on, MARK), square(nose, MARK * 0.55)]
+}
+
+/// How deep the sheet a storey is drawn on stands off the wall, as a share
+/// of the relief.
+///
+/// **Under one, so the rooms stand proud of their own sheet** and nothing
+/// of the sheet is in a plane with anything: its face is nearer the wall
+/// than theirs, and wherever a room stands the sheet is buried inside it.
+pub const SHEET: f32 = 0.45;
+
+/// The sheet each storey is drawn on: the whole building's footprint at the
+/// plan's own scale, whatever that storey happens to fill of it.
+///
+/// **The same rectangle three times, which is the whole of it.** Jake,
+/// looking at the wall: the map doesn't quite land and it's hard to read.
+/// Every storey was cut at one scale and then left floating wherever its
+/// own rooms sat, so the upper floor hung high and small, the cellar low
+/// and small, and the ground floor filled the middle: three pale shapes at
+/// three heights with bare panelling between them and nothing saying they
+/// were of one building. A sheet apiece puts them on one line and keeps
+/// each storey in its own true place inside it, which is also the thing a
+/// reader learns from it, that the floor above covers a corner of what is
+/// under it.
+///
+/// And it gives the drawing a ground. A cut plan is pale stone, the wall
+/// behind it is lit timber of much the same brightness, and a shape only
+/// reads where its edge does.
+pub fn sheet(room: &Room, reaches: f32) -> Vec<Aabb> {
+    let whole = footprint(room);
+
+    (0..floors().len())
+        .map(|storey| {
+            let one = onto(room, reaches, storey, whole.min);
+            let two = onto(room, reaches, storey, whole.max);
+
+            Aabb::new(
+                vec3(
+                    one.x.min(two.x),
+                    one.y.min(two.y),
+                    one.z.min(one.z + OUT * RELIEF * SHEET),
+                ),
+                vec3(
+                    one.x.max(two.x),
+                    one.y.max(two.y),
+                    one.z.max(one.z + OUT * RELIEF * SHEET),
+                ),
+            )
+        })
+        .collect()
+}
+
+/// How wide the lip round a sheet is, and how far off the wall it stands as
+/// a share of the relief.
+///
+/// **A sheet with no lip is a hole in the panelling.** Three grey
+/// rectangles cut into a timber wall read as three rectangles; what says
+/// a drawing is hung there is a rim catching the light off the lamps either
+/// side of it.
+///
+/// It lies on the sheet's own border rather than outside it, because the
+/// band between the dado and the cornice is what set the scale and there is
+/// no room over the top of it. A centimetre is about the building's own
+/// outer wall at this scale, so what it covers is the wall it is standing
+/// for.
+pub const LIP: f32 = 0.011;
+pub const LIP_OUT: f32 = 1.5;
+
+/// That lip: four bars round each sheet.
+pub fn lips(room: &Room, reaches: f32) -> Vec<Aabb> {
+    sheet(room, reaches)
+        .into_iter()
+        .flat_map(|sheet| {
+            let (low, high) = (sheet.min, sheet.max);
+            // the face it is cut into, whichever end of the sheet's own
+            // depth that is, and the lip standing out of it
+            let face = if OUT > 0.0 { low.z } else { high.z };
+            let front = face + OUT * RELIEF * LIP_OUT;
+            let bar = |a: Vec3, b: Vec3| {
+                Aabb::new(
+                    vec3(a.x, a.y, face.min(front)),
+                    vec3(b.x, b.y, face.max(front)),
+                )
+            };
+
+            [
+                bar(low, vec3(high.x, low.y + LIP, 0.0)),
+                bar(vec3(low.x, high.y - LIP, 0.0), high),
+                bar(low, vec3(low.x + LIP, high.y, 0.0)),
+                bar(vec3(high.x - LIP, low.y, 0.0), high),
+            ]
+        })
+        .collect()
 }
 
 /// The whole relief, as boxes in the world, with the storey each came from.
@@ -482,8 +660,16 @@ pub fn relief(room: &Room, reaches: f32) -> Vec<(Aabb, usize)> {
             // relief inside the plaster, where it was drawn and invisible.
             let one = onto(room, reaches, n, box_.min);
             let two = onto(room, reaches, n, box_.max);
-            let low = vec3(one.x.min(two.x), one.y.min(two.y), one.z - RELIEF);
-            let high = vec3(one.x.max(two.x), one.y.max(two.y), one.z);
+            let low = vec3(
+                one.x.min(two.x),
+                one.y.min(two.y),
+                one.z.min(one.z + OUT * RELIEF),
+            );
+            let high = vec3(
+                one.x.max(two.x),
+                one.y.max(two.y),
+                one.z.max(one.z + OUT * RELIEF),
+            );
 
             out.push((Aabb::new(low, high), n));
         }
@@ -610,16 +796,35 @@ mod tests {
     fn it_fits_the_wall_it_is_on() {
         let room = building();
         let board = board(room.reaches);
-        let (at, size) = crate::room::nook_end(room.reaches);
-        let face = at.z - size.z * 0.5;
+        let face = face(room.reaches);
+        let floor = -crate::cellar::DOWN;
 
         assert!(
-            board.min.y > crate::study::DADO + crate::study::RAIL * 0.5
-                && board.max.y < TALL - crate::study::CORNICE,
-            "the board runs {:.2} to {:.2}, which is into the rail or the cornice",
+            board.min.y > floor + crate::cellar::SKIRTING
+                && board.max.y < floor + crate::cellar::TALL - crate::cellar::CORNICE,
+            "the board runs {:.2} to {:.2}, which is into the skirting or the cornice",
             board.min.y,
             board.max.y
         );
+
+        // and clear of the racks either side of it, which is the whole of
+        // why this stretch of wall is free
+        for (at, side) in crate::cellar::racks(room.reaches) {
+            if side != SIDE {
+                continue;
+            }
+
+            let half = crate::cellar::RACK.z * 0.5;
+
+            assert!(
+                at.x + half <= board.min.x + 1e-4 || at.x - half >= board.max.x - 1e-4,
+                "a rack runs {:.2}..{:.2} and the board is {:.2}..{:.2}",
+                at.x - half,
+                at.x + half,
+                board.min.x,
+                board.max.x
+            );
+        }
 
         for (bar, _) in relief(&room, room.reaches) {
             assert!(
@@ -641,8 +846,14 @@ mod tests {
             // **On the room's side of the plaster.** The first build put the
             // relief from the face northwards, which is inside the wall, and
             // it was drawn every frame where nobody could see it.
+            let (back, front) = if OUT > 0.0 {
+                (bar.min.z, bar.max.z)
+            } else {
+                (bar.max.z, bar.min.z)
+            };
+
             assert!(
-                bar.max.z <= face + 1e-4 && bar.min.z >= face - RELIEF - 1e-4,
+                (back - face).abs() < 1e-4 && (front - face).abs() <= RELIEF + 1e-4,
                 "a bar at z {:.3}..{:.3} is not standing on the face at {:.3}",
                 bar.min.z,
                 bar.max.z,
@@ -651,44 +862,174 @@ mod tests {
         }
     }
 
-    /// Spec 0115: the drawing fills the board it is given.
+    /// Spec 0115: each storey is drawn on a sheet of its own, and the three
+    /// sheets are one rectangle three times.
+    ///
+    /// **What this holds is that they are the same.** Cut at one scale and
+    /// then left to float wherever its own rooms sat, each storey hung at
+    /// its own height and its own size and the wall read as three unrelated
+    /// shapes. Three equal sheets in a row put every storey in its true
+    /// place inside the building's own footprint, which is the thing a
+    /// reader learns from a set of plans.
+    #[test]
+    fn each_storey_is_drawn_on_a_sheet_the_size_of_the_building() {
+        let room = building();
+        let board = board(room.reaches);
+        let sheets = sheet(&room, room.reaches);
+        let face = face(room.reaches);
+        let front = |box_: &Aabb| if OUT > 0.0 { box_.max.z } else { box_.min.z };
+
+        assert_eq!(sheets.len(), floors().len());
+
+        for (n, sheet) in sheets.iter().enumerate() {
+            assert!(
+                (sheet.size().x - sheets[0].size().x).abs() < 1e-4
+                    && (sheet.size().y - sheets[0].size().y).abs() < 1e-4,
+                "sheet {} is {:?} and the first is {:?}",
+                n,
+                sheet.size(),
+                sheets[0].size()
+            );
+            assert!(
+                sheet.min.x >= board.min.x - 1e-3
+                    && sheet.max.x <= board.max.x + 1e-3
+                    && sheet.min.y >= board.min.y - 1e-3
+                    && sheet.max.y <= board.max.y + 1e-3,
+                "sheet {} runs {:?}..{:?} and the board is {:?}..{:?}",
+                n,
+                sheet.min,
+                sheet.max,
+                board.min,
+                board.max
+            );
+
+            for other in sheets.iter().skip(n + 1) {
+                assert!(
+                    sheet.max.x <= other.min.x + 1e-4 || other.max.x <= sheet.min.x + 1e-4,
+                    "two sheets overlap"
+                );
+            }
+        }
+
+        // **Behind the rooms and in a plane with nothing.** The sheet's own
+        // face has to stand nearer the wall than anything drawn on it, or
+        // the two fight where they are flush, which this building has paid
+        // for seven times under other names.
+        for (bar, n) in relief(&room, room.reaches) {
+            let sheet = &sheets[n];
+
+            assert!(
+                bar.min.x >= sheet.min.x - 1e-3
+                    && bar.max.x <= sheet.max.x + 1e-3
+                    && bar.min.y >= sheet.min.y - 1e-3
+                    && bar.max.y <= sheet.max.y + 1e-3,
+                "a bar of storey {} runs {:?}..{:?} off a sheet of {:?}..{:?}",
+                n,
+                bar.min,
+                bar.max,
+                sheet.min,
+                sheet.max
+            );
+            assert!(
+                OUT * (front(&bar) - front(sheet)) > 1e-5,
+                "storey {}'s sheet faces {:.4} and a room on it faces {:.4}",
+                n,
+                front(sheet),
+                front(&bar)
+            );
+        }
+
+        // and the lip lies on its own sheet's border, standing proud of
+        // everything drawn inside it
+        for (n, lip) in lips(&room, room.reaches).iter().enumerate() {
+            let sheet = &sheets[n / 4];
+
+            assert!(
+                lip.min.x >= sheet.min.x - 1e-4
+                    && lip.max.x <= sheet.max.x + 1e-4
+                    && lip.min.y >= sheet.min.y - 1e-4
+                    && lip.max.y <= sheet.max.y + 1e-4,
+                "lip {} runs {:?}..{:?} off its sheet {:?}..{:?}",
+                n,
+                lip.min,
+                lip.max,
+                sheet.min,
+                sheet.max
+            );
+            assert!(
+                OUT * (front(lip) - face) > RELIEF + 1e-5
+                    && ((if OUT > 0.0 { lip.min.z } else { lip.max.z }) - face).abs() < 1e-4,
+                "lip {} runs {:.4}..{:.4} and the rooms reach {:.4}",
+                n,
+                lip.min.z,
+                lip.max.z,
+                face + OUT * RELIEF
+            );
+        }
+    }
+
+    /// Spec 0115: the three fill the wall they are given, and the building
+    /// fills the sheet it is drawn on.
     ///
     /// **This is the one that holds the bound.** Without something saying
     /// where the building stops, `room_at` calls the long way out to the
     /// village and the bridge the hall, the footprint comes out 194 metres
-    /// along, and the whole building is drawn at 1:115 as a smudge in the
-    /// middle of the wall with every wall of it two and a half millimetres
-    /// wide. Every other test here passed in that state, which is what this
-    /// one is for.
+    /// along, and the whole building is drawn at 1:115 as a smudge with
+    /// every wall of it two and a half millimetres wide. Every other test
+    /// here passed in that state, which is what this one is for.
+    ///
+    /// **Of the sheet and not of the board, which is what the sheets
+    /// changed.** Three sheets tile the board by construction now, so a
+    /// claim about how much of the board they cover is one the layout
+    /// cannot break. What a blown footprint does is shrink the building
+    /// inside its own sheet, so that is the thing to ask about.
+    ///
+    /// **And of the three together.** The footprint is the union of what is
+    /// drawn, so the union has to fill the sheet; one storey need not, and
+    /// the floor above fills a fifth of its width, which is the true thing
+    /// the shared sheet is there to say.
     #[test]
-    fn the_drawing_fills_the_board() {
+    fn the_building_fills_its_sheet_and_the_three_fill_the_wall() {
         let room = building();
         let board = board(room.reaches);
-        let bars = relief(&room, room.reaches);
-        let (mut low, mut high) = (f32::MAX, f32::MIN);
+        let sheets = sheet(&room, room.reaches);
+        let wide = board.max.x - board.min.x;
         let (mut west, mut east) = (f32::MAX, f32::MIN);
 
-        for (bar, _) in bars.iter() {
-            low = low.min(bar.min.y);
-            high = high.max(bar.max.y);
-            west = west.min(bar.min.x);
-            east = east.max(bar.max.x);
+        for sheet in sheets.iter() {
+            west = west.min(sheet.min.x);
+            east = east.max(sheet.max.x);
         }
 
-        let band = board.max.y - board.min.y;
-        let wide = board.max.x - board.min.x;
-
         assert!(
-            high - low > band * 0.8,
-            "the three fill {:.2} of a band {:.2} tall, so the building is a smudge",
-            high - low,
-            band
-        );
-        assert!(
-            east - west > wide * 0.5,
-            "the three fill {:.2} of a board {:.2} wide",
+            east - west > wide * 0.95,
+            "the three fill {:.2} of a wall {:.2} wide",
             east - west,
             wide
+        );
+
+        let (mut low, mut high) = (f32::MAX, f32::MIN);
+        let (mut left, mut right) = (f32::MAX, f32::MIN);
+
+        for (bar, storey) in relief(&room, room.reaches) {
+            let sheet = &sheets[storey];
+
+            low = low.min(bar.min.y - sheet.min.y);
+            high = high.max(bar.max.y - sheet.min.y);
+            left = left.min(bar.min.x - sheet.min.x);
+            right = right.max(bar.max.x - sheet.min.x);
+        }
+
+        let (across, along) = (sheets[0].size().x, sheets[0].size().y);
+
+        assert!(
+            high - low > along * 0.8 && right - left > across * 0.8,
+            "the building fills {:.2} by {:.2} of a sheet {:.2} by {:.2}, \
+             so it is a smudge on it",
+            right - left,
+            high - low,
+            across,
+            along
         );
     }
 
@@ -701,14 +1042,17 @@ mod tests {
     /// is the one thing none of those ask, which is whether the drawing
     /// agrees with the building it is in.
     ///
-    /// Facing this wall you are facing north, so your right hand points
-    /// west, and the right-hand side of anything hung on it is the wall's
-    /// own smaller x. A plan is read east on the right, so east belongs
+    /// Facing this wall you are facing south, so your right hand points
+    /// east, and the right-hand side of anything hung on it is the wall's
+    /// own larger x. A plan is read east on the right, so east belongs
     /// there.
     ///
-    /// **Written backwards first.** The assertion said west, on the thought
-    /// that west is what is physically to your right, which is a map held
-    /// up to the room rather than a drawing read as a page.
+    /// **Written backwards first, in the nook, and it turned round when the
+    /// plan moved.** The assertion there said west, on the thought that west
+    /// is what is physically to your right, which is a map held up to the
+    /// room rather than a drawing read as a page. That wall faced the other
+    /// way, so the right answer there is the wrong one here, and `EAST` is
+    /// where the two meet.
     #[test]
     fn east_is_on_the_right_as_it_is_read() {
         let room = building();
@@ -717,10 +1061,10 @@ mod tests {
         let east = onto(&room, room.reaches, 1, vec3(middle.x + 10.0, 0.0, middle.z));
 
         assert!(
-            east.x < west.x,
+            east.x > west.x,
             "east draws at {:.2} and west at {:.2}, so the plan is mirrored: \
-             facing north your right hand points west, so the side of this \
-             wall a reader calls the right is its smaller x",
+             facing south your right hand points east, so the side of this \
+             wall a reader calls the right is its larger x",
             east.x,
             west.x
         );

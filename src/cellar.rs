@@ -541,6 +541,17 @@ pub const LID: f32 = 0.9;
 pub const LID_DOWN: f32 = 0.035;
 pub const HOOP_THICK: f32 = 0.05;
 
+/// The inner face of one of the cellar's long walls.
+///
+/// **Named here because three things want it**: the racks stand against it,
+/// the lamps hang on it, and spec 0115's plan is cut into it. The span is
+/// measured wall middle to wall middle, so the face is half a wall in from
+/// that, and every place that worked it out for itself was another account
+/// of one wall.
+pub fn long_wall(reaches: f32, side: f32) -> f32 {
+    opening(reaches) + side * (SPAN * 0.5 - THICK * 0.5)
+}
+
 /// Where the wine racks stand: along both long walls, facing in.
 ///
 /// Not along the end the stair comes through, which is where you arrive and
@@ -566,7 +577,7 @@ pub fn racks(reaches: f32) -> Vec<(Vec3, f32)> {
                 vec3(
                     at,
                     -DOWN,
-                    opening(reaches) + side * (SPAN * 0.5 - THICK * 0.5 - AGAINST - RACK.x * 0.5),
+                    long_wall(reaches, side) - side * (AGAINST + RACK.x * 0.5),
                 ),
                 side,
             ));

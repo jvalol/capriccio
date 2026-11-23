@@ -825,6 +825,12 @@ struct Arcade {
     /// The bank the bridge comes out of, per spec 0117, rebuilt with the
     /// deck when a span lands.
     bank: Option<MeshId>,
+    /// The sheet each of that plan's three storeys is cut on, per spec
+    /// 0115. Kept for the same reason as the plan: it goes through the
+    /// same mapping and so walks the same colliders.
+    plan_sheet: Vec<Aabb>,
+    /// And the lip round each of those sheets.
+    plan_lips: Vec<Aabb>,
     /// The relief plan on the nook's north wall, per spec 0115. Cut once:
     /// it walks every collider in the building against a grid, which is
     /// five milliseconds at startup and is not a thing to do per frame.
@@ -1503,6 +1509,8 @@ impl Arcade {
             .into_iter()
             .map(|(bar, _)| bar)
             .collect();
+        let plan_sheet = plan::sheet(&room, room.reaches);
+        let plan_lips = plan::lips(&room, room.reaches);
         let spin = display::Spin::of(room.displays.len());
         let (cradle, ropes) = cradle::strung();
 
@@ -1606,6 +1614,8 @@ impl Arcade {
             eye: 0.0,
             room,
             plan,
+            plan_sheet,
+            plan_lips,
             plan_says: Vec::new(),
             bank: None,
             spin,
@@ -9396,7 +9406,15 @@ impl Game for Arcade {
             .into_iter()
             .map(|(says, at)| {
                 (
-                    Some(renderer.add_texture(&blitzkit::text::drawn(says, sign::TEXELS))),
+                    // **Cut out and not plated.** `drawn` keeps the
+                    // letter's black ground, which is a plate at no cost on
+                    // a dark panel and is the wrong thing here: on a pale
+                    // room it is a black sticker, and lit at a broad shine
+                    // the ground took so much specular that the plate came
+                    // out brighter than the letters on it. A name belongs
+                    // on the room, so the ground goes and the letters are
+                    // cut into it.
+                    Some(renderer.add_texture(&blitzkit::text::stencilled(says, sign::TEXELS))),
                     at,
                     // **Sized by the word's own length**, a letter being
                     // about three fifths as wide as it is tall, so a long
@@ -13070,13 +13088,10 @@ impl Game for Arcade {
             let Some(texture) = texture else {
                 continue;
             };
-            let letters = Transform::at(*at - Vec3::Z * plan::RELIEF * 3.0).with_scale(vec3(
-                *wide,
-                plan::LETTERS,
-                0.004,
-            ));
+            let letters = Transform::at(*at + Vec3::Z * (plan::OUT * plan::RELIEF * 3.0))
+                .with_scale(vec3(*wide, plan::LETTERS, 0.004));
 
-            scene.push_textured(cube, *texture, &letters, aim::TRIM, 8.0);
+            scene.push_textured(cube, *texture, &letters, aim::TRIM, aim::DULL);
         }
 
         // and the mark that says where you are standing and which way you
@@ -13096,6 +13111,25 @@ impl Game for Arcade {
                 // own: this wall is a dim one and a mark the room has to
                 // light is a mark you hunt for.
                 aim::BRASS * 2.2,
+            );
+        }
+
+        // the sheet under each storey, which is what makes the three one
+        // drawing: the same rectangle three times, with each storey sitting
+        // where it really does inside the building's own footprint.
+        for sheet in self.plan_sheet.iter() {
+            scene.push_plain(
+                cube,
+                &Transform::at(sheet.center()).with_scale(sheet.size().max(Vec3::splat(0.004))),
+                aim::PLAN_SHEET,
+            );
+        }
+
+        for lip in self.plan_lips.iter() {
+            scene.push_plain(
+                cube,
+                &Transform::at(lip.center()).with_scale(lip.size().max(Vec3::splat(0.004))),
+                aim::BRASS,
             );
         }
 

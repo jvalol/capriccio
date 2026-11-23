@@ -286,6 +286,15 @@ pub const GLASS_SCONCE: Vec4 = vec4(2.4, 2.1, 1.6, 1.0);
 /// colour as the thing it is on is a line drawn on it.
 pub const GLASS_TRIM: Vec4 = vec4(0.72, 0.66, 0.57, 1.0);
 
+/// The sheet the building's plan is cut on, behind the rooms. Spec 0115.
+///
+/// **Cold, and darker than everything on it.** The rooms are `GLASS_TRIM`,
+/// a pale stone, and the panelling behind is a warm brown lit to about the
+/// same brightness, so the drawing had no edge anywhere. A grey ground
+/// reads as another material against timber and gives the stone something
+/// to be pale against.
+pub const PLAN_SHEET: Vec4 = vec4(0.16, 0.16, 0.19, 1.0);
+
 /// And the floor it all stands on, which was one flat slab.
 ///
 /// A border and a panel, laid on the floor rather than in it: two faces in

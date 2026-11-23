@@ -1,4 +1,4 @@
-# 0115 The plan on the nook wall
+# 0115 A plan cut from the building
 
 **Status:** implemented
 **Date:** 2026-11-17
@@ -54,11 +54,60 @@ barrels and the colonnade are in it as a scatter of dots. That is a thing to
 look at and judge rather than to argue about, and the first build is where it
 gets judged.
 
+## Where it hangs
+
+**On the cellar's south wall**, between the wine racks, over the pool table.
+It had the nook's north wall and Jake took that back for pictures, which is
+spec 0131: ten metres is a mural's wall and a plan is a diagram, which is
+most of why it never sat right there however it was dressed. The stretch down
+here is clear because the racks are skipped where the table stands, so
+`board` asks `racks()` for the gap rather than measuring it again, and
+moving the table moves the plan.
+
+The same panelled mahogany, so nothing about the drawing changes. Two things
+do, and they are one fact: facing this wall you are facing south where in the
+nook you faced north, so the relief stands out of the face the other way and
+a page read with east to the reader's right now puts east on the wall's plus
+x. Getting one and not the other is a drawing with its back to you or a
+mirrored one, so they are one constant each, `OUT` and `EAST`, and the stride
+from storey to storey turns with them.
+
+**And it hangs on the panelling, not on the wall.** The cellar's boards stand
+five centimetres off the structural face, which is a great deal more than the
+relief does. Cut on the wall, the whole thing was inside the timber: faint
+lines showing through and nothing else.
+
+**The two lamps are at either end of the stretch rather than over the middle
+of it**, which is the raking light a relief wants and which the nook's pair
+never gave it.
+
 ## Behavior
 
 **Three plans, left to right, in the order you would walk them**: the cellar,
 the ground floor, the floor above. Each is the same scale, so the building's
 own proportions read across all three and a room over a room lines up.
+
+**And each on a sheet of its own, the size of the whole building.** Not the
+size of that storey: the same rectangle three times, with the storey sitting
+where it really does inside it, so the floor above reads as a corner of what
+is under it and the cellar as the north end. Cut at one scale and then left
+to float wherever its own rooms happened to sit, the three hung at three
+heights and three apparent sizes with bare panelling between them, and Jake
+read the wall as a set of unrelated shapes: the map doesn't quite land and
+it's hard to read.
+
+The sheet is also the drawing's ground. A cut plan is pale stone and the
+panelling behind it is lit timber of much the same brightness, so a room only
+read where its edge fell on a shadow. A grey sheet darker than everything on
+it gives the stone something to be pale against.
+
+**With a lip round it.** Three grey rectangles cut into a timber wall read as
+three rectangles; a rim catching the light off the lamps either side is what
+says a drawing is hung there. It lies on the sheet's own border rather than
+outside it, because the band between the dado and the cornice is what set the
+scale and there is nothing spare over the top. A centimetre of it is about
+the building's own outer wall at this scale, so what it covers is the wall it
+stands for.
 
 **The rooms are raised and the walls are the grooves between them.** The
 first build raised the walls instead, which is a plan drawn as its own
@@ -74,10 +123,10 @@ nothing in the way either, and a roof without a floor filled the earth under
 the hall, drawing the cellar 45 metres across where the cellar is 18.
 
 **Read lowest first, left to right**, which on this wall is the wall's own
-minus x: facing it you are facing north and facing north your right hand
-points west. The bars inside each plan are turned round for the same reason.
-Getting one of those and not the other put the three in reverse order for a
-build.
+plus x: facing it you are facing south and facing south your right hand
+points east. The bars inside each plan turn with the stride rather than
+separately, because they are the same fact. Getting one of those and not the
+other put the three in reverse order for a build.
 
 **The cut height is a storey's floor plus a body's waist**, which is what a
 plan is, and what puts a doorway in it as a gap rather than as a line.
@@ -88,6 +137,13 @@ so the hall is a handful of boxes however fine the grid: 178 bars at fifteen
 centimetres against 298 at fifty, and 31 milliseconds to cut. Cut once at
 startup, because this walks every collider in the building and the first
 build did it every frame.
+
+**The names are cut into the rooms, not plated onto them.** The engine's
+`text::drawn` keeps a letter's black ground, which is a plate at no cost on a
+dark panel and the wrong thing on a pale room; lit at a broad shine that
+ground took so much specular that the plate came out brighter than the
+letters on it, and every name read as a smear. `text::stencilled` drops the
+ground and the letters sit on the room itself, dark on stone.
 
 **Each room carries its own name**, on the largest single piece of itself:
 the hall, the nook, the gallery, the cellar, the baths, the glass room, the
@@ -142,11 +198,19 @@ and someone who never finds the trail sees an ornament either way.
   mirrored plan breaks: the drawing and the mark go through one mapping, so
   turning it round turns both and everything else still agrees. —
   `plan::tests::east_is_on_the_right_as_it_is_read`
-- And the drawing fills the board rather than sitting in the middle of it as
-  a smudge, which is what holds the bound: without one, `room_at` calls the
-  long way out to the village the hall and the whole building draws at
+- Each storey is drawn on a sheet the size of the whole building, the three
+  sheets are one rectangle three times, they sit side by side inside the
+  board, every storey's bars land on its own sheet, and the sheet and its lip
+  are in a plane with
+  nothing. — `plan::tests::each_storey_is_drawn_on_a_sheet_the_size_of_the_building`
+- The three fill the wall they are given, and the building fills the sheet it
+  is drawn on, which is what holds the bound: without one, `room_at` calls
+  the long way out to the village the hall and the whole building draws at
   1:115. Every other test here passed in that state. —
-  `plan::tests::the_drawing_fills_the_board`
+  `plan::tests::the_building_fills_its_sheet_and_the_three_fill_the_wall`
+- The board is clear of the wine racks either side of it and of the skirting
+  and cornice, and every bar stands on the panelling's face rather than in
+  it. — `plan::tests::it_fits_the_wall_it_is_on`
 
 ### Verified by hand
 
@@ -156,8 +220,14 @@ and someone who never finds the trail sees an ornament either way.
   building is the open one.
 - **The baths' pool is a hole in the cellar**, being water rather than
   floor, which is honest and may read as a mistake.
-- **Whether the two lamps light it.** They are hung for a blank wall. A
-  relief wants them raking across it rather than flat on.
+- **Whether the cellar's two lamps light it.** They stand at either end of
+  the stretch, which is the raking light a relief wants, but the cellar is
+  deliberately dark at the edges and the middle sheet is the furthest from
+  both.
+- **Whether two mostly empty sheets read as informative or as unfinished.**
+  The cellar fills the top-left of its sheet and the floor above the
+  bottom-right, which is true of the building and is the reason for the
+  shared rectangle, but it is a lot of grey.
 
 ## Out of scope
 
