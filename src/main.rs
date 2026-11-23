@@ -8643,6 +8643,23 @@ impl Game for Arcade {
         says::OPTIONS
     }
 
+    /// **The whole display.** Jake, 2026-11-23: running should open a full
+    /// screen window, right now it's smallish but no reason not to go all
+    /// the way. This building is 46 metres along with a field past it and a
+    /// bridge over that, and a window a few hundred pixels wide is a
+    /// postcard of it.
+    ///
+    /// `WholeScreen` and not `Filled`: the two are different and the engine
+    /// offers both, one being a window grown to the screen with the menu bar
+    /// still on it and the other being the display handed over. Nothing of
+    /// this building wants a menu bar across the top of it.
+    ///
+    /// The engine opens an ordinary window unless a game says otherwise,
+    /// because pong is a rectangle and does not want one.
+    fn opening(&self) -> blitzkit::Opening {
+        blitzkit::Opening::WholeScreen
+    }
+
     /// Takes the cursor so the mouse can look, and gives it back when the
     /// window loses focus or a game is started in front of this one.
     ///
