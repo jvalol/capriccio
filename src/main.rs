@@ -1,6 +1,7 @@
 //! arcade: a room of cabinets, one per game. See `specs/`.
 
 mod aim;
+mod art;
 mod back;
 mod behind;
 mod bridge;
@@ -828,6 +829,11 @@ struct Arcade {
     /// The sheet each of that plan's three storeys is cut on, per spec
     /// 0115. Kept for the same reason as the plan: it goes through the
     /// same mapping and so walks the same colliders.
+    /// The eight paintings on the nook's north wall, per spec 0131: where
+    /// each hangs, and the scan drawn into a texture once the renderer is
+    /// there to take it.
+    pictures: Vec<art::Hung>,
+    picture_scans: Vec<Option<TextureId>>,
     plan_sheet: Vec<Aabb>,
     /// And the lip round each of those sheets.
     plan_lips: Vec<Aabb>,
@@ -1511,6 +1517,7 @@ impl Arcade {
             .collect();
         let plan_sheet = plan::sheet(&room, room.reaches);
         let plan_lips = plan::lips(&room, room.reaches);
+        let pictures = art::hung(room.reaches);
         let spin = display::Spin::of(room.displays.len());
         let (cradle, ropes) = cradle::strung();
 
@@ -1616,6 +1623,8 @@ impl Arcade {
             plan,
             plan_sheet,
             plan_lips,
+            pictures,
+            picture_scans: Vec::new(),
             plan_says: Vec::new(),
             bank: None,
             spin,
@@ -9423,6 +9432,18 @@ impl Game for Arcade {
                 )
             })
             .collect();
+        // the eight paintings, spec 0131. A scan that will not decode is
+        // left out rather than drawn as a white rectangle, which is what a
+        // missing texture otherwise is.
+        self.picture_scans = self
+            .pictures
+            .iter()
+            .map(|one| {
+                blitzkit::texture::TextureData::from_bytes(one.bytes)
+                    .ok()
+                    .map(|scan| renderer.add_texture(&scan))
+            })
+            .collect();
         self.says = sign::planks(self.room.reaches)
             .into_iter()
             .map(|plank| {
@@ -13080,8 +13101,32 @@ impl Game for Arcade {
             }
         }
 
-        // the plan of the building, cut from the building, on the one wall
-        // of this room with nothing on it. Spec 0115.
+        // the eight paintings on the north wall, in their frames. Spec 0131.
+        for (one, scan) in self.pictures.iter().zip(self.picture_scans.iter()) {
+            for bar in one.frame.iter() {
+                scene.push_plain(
+                    cube,
+                    &Transform::at(bar.center()).with_scale(bar.size().max(Vec3::splat(0.004))),
+                    aim::GILT,
+                );
+            }
+
+            let Some(scan) = scan else {
+                continue;
+            };
+
+            scene.push_textured(
+                cube,
+                *scan,
+                &Transform::at(one.canvas.center())
+                    .with_scale(one.canvas.size().max(Vec3::splat(0.004))),
+                aim::CANVAS,
+                aim::MATTE,
+            );
+        }
+
+        // the plan of the building, cut from the building, which used to be
+        // on this wall and is in the cellar now. Spec 0115.
         // the room names, each on the middle of what is drawn of that room,
         // read off the list rather than worked out again: see `plan_says`.
         for (texture, at, wide) in self.plan_says.iter() {

@@ -286,6 +286,16 @@ pub const GLASS_SCONCE: Vec4 = vec4(2.4, 2.1, 1.6, 1.0);
 /// colour as the thing it is on is a line drawn on it.
 pub const GLASS_TRIM: Vec4 = vec4(0.72, 0.66, 0.57, 1.0);
 
+/// A painting's own surface, and the gilt of the frame round it. Spec 0131.
+///
+/// **One, flat, in every channel.** Colour here is a multiplier, so any
+/// tint at all is a reproduction somebody has put a filter over, and a
+/// Bosch wants to be the colour Bosch painted it. What makes it sit in the
+/// room rather than glow out of it is the lighting, which is the nook's
+/// two lamps and nothing of the picture's own.
+pub const CANVAS: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+pub const GILT: Vec4 = vec4(0.52, 0.40, 0.19, 1.0);
+
 /// The sheet the building's plan is cut on, behind the rooms. Spec 0115.
 ///
 /// **Cold, and darker than everything on it.** The rooms are `GLASS_TRIM`,
