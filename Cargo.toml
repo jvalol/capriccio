@@ -14,6 +14,16 @@ glam = "0.33"
 # games' own binaries, so a path here is not the exception it would be in a game.
 blitzkit-shapes = { path = "../blitzkit/shapes" }
 
+# What spec 0130's clock reads to know what time it is where you are.
+#
+# **The first dependency this game has outside the engine and its shapes**,
+# and it is here because the standard library has no time zone. A machine's
+# clock is UTC through `std::time` and through the engine's `web_time`
+# alike, and the room wants the hour on the player's own wall. Default
+# features off: `clock` is the native half and `wasmbind` is the browser's,
+# where it reads the same `Date` the page would.
+chrono = { version = "0.4", default-features = false, features = ["clock", "wasmbind"] }
+
 # Everything the arcade depends on is optimised even in a debug build, and the
 # arcade itself is not.
 #

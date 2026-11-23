@@ -8,6 +8,7 @@ mod cabinet;
 mod carpet;
 mod cascada;
 mod cellar;
+mod clock;
 mod cradle;
 mod display;
 mod field;
@@ -1041,6 +1042,15 @@ struct Arcade {
     isles: Vec<MeshId>,
     /// The bowl the water lies in: the bank it rises through, the verge of
     /// grass round that, and the silt at the bottom.
+    /// Spec 0130's clock: a wheel for every tooth count it has, the
+    /// chapter ring, and the bob on the end of the pendulum.
+    /// What the clock says, when something other than the machine is
+    /// saying it: a picture of a room whose point is the time has to be
+    /// taken at one. Spec 0130.
+    wall_clock: Option<f32>,
+    wheels: Vec<MeshId>,
+    chapter: Option<MeshId>,
+    bob: Option<MeshId>,
     pond_bank: Option<MeshId>,
     pond_verge: Option<MeshId>,
     pond_bed: Option<MeshId>,
@@ -1712,6 +1722,10 @@ impl Arcade {
             pond_field_mesh: None,
             duck: None,
             isles: Vec::new(),
+            wall_clock: None,
+            wheels: Vec::new(),
+            chapter: None,
+            bob: None,
             pond_bank: None,
             pond_verge: None,
             pond_bed: None,
@@ -3441,6 +3455,179 @@ impl Arcade {
     /// It is one fixed place of twenty boxes and six birds, where the field
     /// round it is thousands of things worked out from where you stand: a
     /// reach of its own would be a number to keep in step with nothing.
+    /// The clock on the back room's north wall: the ring, the movement
+    /// inside it, the hands on the arbors they belong to, and the pendulum.
+    ///
+    /// **Built facing east and turned once.** Every mesh in it has its arbor
+    /// along x, which is what makes turning a wheel a turn about x, and the
+    /// wall it hangs on faces south. One quarter turn carries the whole
+    /// clock, so nothing below has to know which way the room is pointing:
+    /// turning the pieces one at a time instead left the wheels edge on and
+    /// the hour marks scattered round the wall.
+    fn draw_the_clock(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+        let face = clock::dial_at(reaches);
+        let hours = self.wall_clock.unwrap_or_else(clock::now);
+        let counts = clock::counts();
+        let wheel_of = |teeth: u32| {
+            counts
+                .iter()
+                .position(|one| *one == teeth)
+                .and_then(|n| self.wheels.get(n))
+                .copied()
+        };
+        // the turn that takes the clock's own face to the wall it hangs on,
+        // and where that puts a thing in the face of it. Both live in the
+        // clock, because everything drawn here asks them and a hand asks the
+        // same question twice: where it sits and which way it lies.
+        let facing = clock::facing();
+        let stood = |at: glam::Vec2, out: f32| clock::stood(face, at, out);
+
+        if let Some(ring) = self.chapter {
+            scene.push_material(
+                ring,
+                &Transform::at(stood(glam::Vec2::ZERO, 0.0)).with_rotation(facing),
+                aim::DIAL_RING,
+                aim::MATTE,
+            );
+        }
+
+        // the twelve hour marks, the hours themselves longer than the rest
+        for (n, turn) in clock::hours().into_iter().enumerate() {
+            let out = clock::RING * 0.5 - clock::RING_BAND * 0.55;
+            let long = if n % 3 == 0 { 0.095 } else { 0.055 };
+
+            scene.push_material(
+                cube,
+                &Transform::at(stood(clock::along(turn) * out, 0.018))
+                    .with_rotation(facing * clock::turned_to(turn))
+                    .with_scale(vec3(0.014, long, 0.018)),
+                aim::HAND,
+                aim::MATTE,
+            );
+        }
+
+        // the two bars the movement hangs between, at the sides where a
+        // skeleton clock's plates are: down the middle they cross the dial,
+        // which is the one place a clock may not have anything
+        for side in [-1.0f32, 1.0] {
+            scene.push_material(
+                cube,
+                &Transform::at(stood(
+                    glam::vec2(side * clock::RING * 0.33, -0.1),
+                    -clock::PLATES * 0.9,
+                ))
+                .with_rotation(facing)
+                .with_scale(vec3(clock::PLATES * 1.5, 1.05, 0.028)),
+                aim::ARBOR,
+                aim::DULL,
+            );
+        }
+
+        // the train, wheel by wheel, each turned at the rate the wheel
+        // before it gives it
+        for wheel in clock::going().iter().chain(clock::motion().iter()) {
+            let turn = facing * clock::turned_to(clock::turned(wheel.turns, hours));
+
+            for (teeth, out) in [
+                (wheel.teeth, 0.0),
+                (wheel.pinion, -clock::WHEEL_THICK * 2.2),
+            ] {
+                let Some(mesh) = wheel_of(teeth) else {
+                    continue;
+                };
+
+                scene.push_material(
+                    mesh,
+                    &Transform::at(stood(wheel.at, out)).with_rotation(turn),
+                    aim::WHEEL,
+                    aim::DULL,
+                );
+            }
+
+            scene.push_material(
+                cube,
+                &Transform::at(stood(wheel.at, -clock::PLATES * 0.5))
+                    .with_rotation(
+                        facing * glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                    )
+                    .with_scale(vec3(0.014, clock::PLATES * 1.4, 0.014)),
+                aim::ARBOR,
+                aim::DULL,
+            );
+        }
+
+        // the hands, each on the arbor that turns at its own rate: the
+        // minute on the centre, the hour on the motion work's last wheel,
+        // the seconds out on the escape
+        let escape = clock::pendulum_at();
+
+        for (turns, at, long, thick, colour) in [
+            (
+                clock::MINUTE_HAND,
+                glam::Vec2::ZERO,
+                clock::MINUTE_LONG,
+                1.0,
+                aim::HAND,
+            ),
+            (
+                clock::HOUR_HAND,
+                glam::Vec2::ZERO,
+                clock::HOUR_LONG,
+                1.7,
+                aim::HAND,
+            ),
+            (
+                clock::SECOND_HAND,
+                escape,
+                clock::SECOND_LONG,
+                0.6,
+                aim::SECOND_HAND,
+            ),
+        ] {
+            let arm = clock::RING * 0.5 * long;
+            let turn = clock::turned(turns, hours);
+
+            scene.push_material(
+                cube,
+                &Transform::at(stood(at + clock::along(turn) * arm * 0.5, 0.055))
+                    .with_rotation(facing * clock::turned_to(turn))
+                    .with_scale(vec3(
+                        clock::HAND_THICK * thick,
+                        arm,
+                        clock::HAND_THICK * thick,
+                    )),
+                colour,
+                aim::MATTE,
+            );
+        }
+
+        // and the pendulum, hanging off the escape wheel's own arbor and
+        // beating seconds
+        let swing = clock::swung(hours);
+        let long = clock::rod_long();
+        let hangs = stood(escape, -clock::PLATES * 0.5);
+        let way = facing * vec3(0.0, -swing.cos(), swing.sin());
+
+        scene.push_material(
+            cube,
+            &Transform::at(hangs + way * long * 0.5)
+                .with_rotation(glam::Quat::from_rotation_arc(Vec3::NEG_Y, way))
+                .with_scale(vec3(0.012, long, 0.012)),
+            aim::ARBOR,
+            aim::DULL,
+        );
+
+        if let Some(bob) = self.bob {
+            scene.push_material(
+                bob,
+                &Transform::at(hangs + way * long).with_rotation(facing),
+                aim::BOB,
+                aim::DULL,
+            );
+        }
+    }
+
     fn draw_the_pond(&self, scene: &mut Scene) {
         let reaches = self.room.reaches;
 
@@ -6462,6 +6649,10 @@ impl Arcade {
     }
 
     fn draw_the_back_room(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
+        // the clock on the north wall, per spec 0130: an instrument about
+        // the building, in the room the building keeps its instruments in
+        self.draw_the_clock(scene, cube);
+
         let reaches = self.room.reaches;
         let (west, east) = back::span();
         let (_, near) = back::deep(reaches);
@@ -8874,6 +9065,17 @@ impl Game for Arcade {
             .iter()
             .map(|seed| renderer.add_mesh(&pond::isle_mesh(*seed)))
             .collect();
+        self.wheels = clock::counts()
+            .into_iter()
+            .map(|teeth| renderer.add_mesh(&clock::wheel_mesh(teeth)))
+            .collect();
+        self.chapter = Some(renderer.add_mesh(&clock::ring_mesh(
+            clock::RING * 0.5 - clock::RING_BAND,
+            clock::RING * 0.5,
+            0.03,
+        )));
+        self.bob =
+            Some(renderer.add_mesh(&clock::ring_mesh(0.0, clock::BOB * 0.5, clock::BOB_THICK)));
         self.pond_bank = Some(renderer.add_mesh(&pond::bank_mesh(self.room.reaches)));
         self.pond_verge = Some(renderer.add_mesh(&pond::verge_mesh(self.room.reaches)));
         self.pond_bed = Some(renderer.add_mesh(&pond::bed_mesh(self.room.reaches)));
@@ -15041,6 +15243,11 @@ mod tests {
         // room with the lights off: the cellar came out black the first
         // time. `dt` of nought is what keeps the pool's surface, the neon
         // and the metronome where they started.
+        // **And the clock is stopped**, per spec 0130: it reads the
+        // machine's own hour, and a reference drawn from that is a
+        // different picture every minute.
+        arcade.wall_clock = Some(clock::SHOWN);
+
         arcade.update(0.0, geometry, text, sound);
 
         // **And it checks it got there**, because the one thing this
@@ -18218,6 +18425,23 @@ mod tests {
         let isle = pond::islands(reaches)[1].0;
 
         looks_right("pond", at, vec3(isle.x, EYE - 0.35, isle.z));
+    }
+
+    /// Spec 0130: the clock on the back room's north wall.
+    ///
+    /// **At a fixed hour**, because the one thing this is for is saying
+    /// what time it is and a picture taken from the machine's own clock is
+    /// a different picture every time it is taken.
+    #[test]
+    fn the_clock_is_drawn() {
+        let reaches = reaches();
+        let dial = clock::dial_at(reaches);
+
+        looks_right(
+            "clock",
+            vec3(dial.x, 0.0, dial.z - 2.3),
+            vec3(dial.x, dial.y, dial.z),
+        );
     }
 
     /// Spec 0040: the field's horizon, from the top of the bridge.

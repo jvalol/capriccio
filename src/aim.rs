@@ -607,6 +607,29 @@ pub const CLOCK_FACE: Vec4 = vec4(1.22, 1.14, 0.94, 1.0);
 pub const CRYSTAL: Vec4 = vec4(0.54, 0.46, 0.40, 1.0);
 pub const PORT: Vec4 = vec4(0.30, 0.05, 0.07, 1.0);
 
+/// The clock in the back room, per spec 0130.
+///
+/// The wheels are brass and the arbors and hands are blued steel, which is
+/// what a movement is made of and what makes a wheel read as a wheel
+/// against the wall behind it. The ring is bone, a shade over one in every
+/// channel like the nook's own dial, because the one part of a clock that
+/// has to be readable is the part you read.
+pub const WHEEL: Vec4 = vec4(0.66, 0.50, 0.21, 1.0);
+pub const ARBOR: Vec4 = vec4(0.26, 0.28, 0.33, 1.0);
+pub const DIAL_RING: Vec4 = vec4(1.12, 1.08, 0.96, 1.0);
+pub const HAND: Vec4 = vec4(0.14, 0.15, 0.19, 1.0);
+
+/// And the seconds hand, which is the one hand on a clock that visibly
+/// moves.
+///
+/// **Red, because the question it answers is whether the thing is
+/// running.** The hour and the minute hands turn at half a degree and six
+/// degrees a minute, so a clock read for ten seconds says nothing about
+/// itself with those two: what says it is this one going round once a
+/// minute, and it has to be the thing you see first.
+pub const SECOND_HAND: Vec4 = vec4(0.62, 0.12, 0.09, 1.0);
+pub const BOB: Vec4 = vec4(0.72, 0.56, 0.24, 1.0);
+
 /// The way down and the room at the bottom of it. Spec 0007.
 ///
 /// Stone, because a cellar is the one room in the building that is not finished.
