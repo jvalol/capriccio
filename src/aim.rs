@@ -2139,6 +2139,52 @@ pub fn leaf_of(tint: glam::Vec3, which: u32, broad: bool) -> Vec4 {
 pub const FIELD_GROUND: Vec4 = vec4(0.47, 0.455, 0.235, 1.0);
 pub const FIELD_TUFT: Vec4 = vec4(0.40, 0.375, 0.180, 1.0);
 
+/// The pond out in the field, per spec 0129: its water, the silt under it,
+/// the stone that holds it and the soil its islands carry.
+///
+/// **Its own colours and not the garden's.** The koi pond is a pond you look
+/// into, lit by a sky over a walled garden and dark so that a fish reads
+/// against it. This one is a pond you look across, and most of what you see
+/// of it is whatever is above it: the two happen to agree about being grey
+/// and would stop agreeing the moment either was tuned for what it is for.
+///
+/// See-through, but less than the garden's. A metre of open water over silt
+/// is not glass, and what is under this one is worth nothing to look at.
+pub const FIELD_WATER: Vec4 = vec4(0.105, 0.125, 0.135, 0.86);
+pub const FIELD_SILT: Vec4 = vec4(0.085, 0.075, 0.060, 1.0);
+
+/// The bank the water rises through, which is wet ground with cobbles set
+/// in it, and the soil an island holds.
+///
+/// Darker and browner than the grass above it: what is under the stones at
+/// a pond's edge has been wet all year.
+pub const FIELD_BANK: Vec4 = vec4(0.225, 0.205, 0.165, 1.0);
+
+/// And the stones set in the face of it, which are river cobbles and not
+/// the quarried edge of the garden's pond.
+///
+/// Warmer and darker than the band they are set in, because what reads as a
+/// stone set in mortar is the mortar being the paler of the two.
+pub const FIELD_SET: Vec4 = vec4(0.255, 0.245, 0.228, 1.0);
+pub const FIELD_ISLE: Vec4 = vec4(0.165, 0.125, 0.082, 1.0);
+
+/// A duck: the drake's head, the grey he carries behind it, the hen's whole
+/// brown self, and the two bills.
+///
+/// **What tells a mallard from a shape on the water is the head.** At the
+/// far side of a pond a duck is forty centimetres of silhouette, and the one
+/// thing that reads at that size is a dark head over a pale body.
+///
+/// Two colours a bird and not three. A drake's breast is a chestnut band
+/// between the two, and the body is one mesh in one colour: a third colour
+/// would have to be a texture or a second mesh, for a band that is four
+/// pixels across the water.
+pub const DUCK_HEAD: Vec4 = vec4(0.075, 0.165, 0.105, 1.0);
+pub const DUCK_BACK: Vec4 = vec4(0.545, 0.535, 0.505, 1.0);
+pub const DUCK_HEN: Vec4 = vec4(0.385, 0.305, 0.215, 1.0);
+pub const DUCK_BILL: Vec4 = vec4(0.72, 0.625, 0.235, 1.0);
+pub const DUCK_HEN_BILL: Vec4 = vec4(0.285, 0.245, 0.185, 1.0);
+
 /// And the flowers, as inks rather than lights: a flower is a picture of
 /// stalks with a head on each, so what says which flower it is is what the
 /// picture is painted with. They were a light on a box and the box was the

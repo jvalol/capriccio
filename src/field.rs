@@ -629,9 +629,15 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // gap and decide to go, and a stand of birch had grown straight
         // across that line, so what you saw from the gap was trees. A
         // keep-out along the run is what makes the promise true again.
+        //
+        // **And not over spec 0129's pond**, which is asked of the crown
+        // here rather than inside `pond`, because the crown is what this
+        // loop already works out and a second reckoning of it is a second
+        // number for one thing.
         if crate::bridge::shades(reaches, at)
             || crate::village::shades(reaches, at)
             || crate::village::along_the_path(reaches, at)
+            || crate::pond::crowds(reaches, at, reach)
         {
             continue;
         }
@@ -679,10 +685,16 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // line with nothing growing near enough to break it. `on_the_way`
         // is the ribbon less a hand's breadth at each side, and a tuft
         // standing on that comes over the edge the way grass does.
+        //
+        // **Nor on spec 0129's pond**, which is the same footprint rule
+        // again: its own stone and water, not the margin that keeps trees
+        // from leaning over it. What is on its islands is the islands' own
+        // leaf fall.
         if crate::village::shades(reaches, at)
             || crate::village::on_the_way(reaches, at)
             || crate::bridge::banked(reaches, at)
             || crate::bridge::on_the_ledger(reaches, at)
+            || crate::pond::holds(reaches, at)
         {
             continue;
         }

@@ -36,6 +36,7 @@ mod parked;
 mod people;
 mod plan;
 mod plasma;
+mod pond;
 mod roofing;
 mod room;
 mod says;
@@ -1028,6 +1029,21 @@ struct Arcade {
     /// The garden's water, its trees and its lanterns, per spec 0010.
     pool_in_the_garden: blitzkit::water::Water,
     pond_mesh: Option<MeshId>,
+    /// And spec 0129's pond out in the field, which is four times the water
+    /// and holds ducks rather than fish.
+    pond_in_the_field: blitzkit::water::Water,
+    pond_field_mesh: Option<MeshId>,
+    /// A duck's body. Its head is the ball every room with a ball uses and
+    /// its bill is a cube.
+    duck: Option<MeshId>,
+    /// An island apiece, because the outline is the island and two islands
+    /// are two outlines.
+    isles: Vec<MeshId>,
+    /// The bowl the water lies in: the bank it rises through, the verge of
+    /// grass round that, and the silt at the bottom.
+    pond_bank: Option<MeshId>,
+    pond_verge: Option<MeshId>,
+    pond_bed: Option<MeshId>,
     trunks: Vec<MeshId>,
     /// The field's ground, the grass on it, and a trunk per kind of tree it
     /// stands. Spec 0040.
@@ -1692,6 +1708,13 @@ impl Arcade {
                 water
             },
             pond_mesh: None,
+            pond_in_the_field: pond::water(reaches),
+            pond_field_mesh: None,
+            duck: None,
+            isles: Vec::new(),
+            pond_bank: None,
+            pond_verge: None,
+            pond_bed: None,
             trunks: Vec::new(),
             sward: None,
             turf: None,
@@ -3367,6 +3390,266 @@ impl Arcade {
     /// or is not. Out here the ground and the sky are centred on where you
     /// stand, because a field whose ground ends is a stage and a field whose
     /// sky ends is a tent, and what the room is about is that neither does.
+    /// One tree of the field's three, stood where it stands.
+    ///
+    /// **Shared, because the pond's islands grow the same trees.** Spec
+    /// 0129 stands five of them on soil out in the water, and a second copy
+    /// of this loop would be the one thing certain to come apart: a change
+    /// to how a crown is pushed that reached the field and not the islands
+    /// is a pond full of trees drawn the way they used to be.
+    /// A patch of what has come off the trees, lying flat where it fell.
+    ///
+    /// Shared with the pond's islands for the same reason `draw_a_tree` is:
+    /// what is on an island in November came off the trees standing on it.
+    fn draw_litter(&self, scene: &mut Scene, stood: &field::Stood) {
+        let turned = glam::Quat::from_rotation_y(stood.turn);
+
+        let (Some(mesh), Some(leaves)) = (
+            self.ground,
+            self.litter
+                .get((stood.turn * 59.0) as usize % self.litter.len().max(1))
+                .copied(),
+        ) else {
+            return;
+        };
+        let wide = field::LITTER_WIDE * stood.size;
+
+        scene.push_textured(
+            mesh,
+            leaves,
+            // **The flat plane and not the crown.** A
+            // sprig is three crossed uprights, because
+            // what it is for is a spray of leaves on a
+            // tree seen from any side. Turned on its back
+            // it laid one quad on the ground and left two
+            // standing, so the field grew little brown
+            // tokens on their edges. This wants the one
+            // flat quad the garden's beds are laid with.
+            &Transform::at(stood.at + Vec3::Y * field::LITTER_LAID)
+                .with_rotation(turned)
+                .with_scale(vec3(wide, 1.0, wide)),
+            aim::litter_of(field::which(stood)),
+            aim::VOID,
+        );
+    }
+
+    /// The pond early in the field: its bed, the stone that holds the water,
+    /// the islands standing in it, the ducks on it, and the water last of
+    /// all. Spec 0129.
+    ///
+    /// **Drawn whenever the field is**, rather than when you are near it.
+    /// It is one fixed place of twenty boxes and six birds, where the field
+    /// round it is thousands of things worked out from where you stand: a
+    /// reach of its own would be a number to keep in step with nothing.
+    fn draw_the_pond(&self, scene: &mut Scene) {
+        let reaches = self.room.reaches;
+
+        // the verge first, which is the field's own grass carried up to the
+        // lip: the same texture and the same colour, tiled off the world, so
+        // that where it meets the flat ground there is nothing to see
+        if let (Some(verge), Some(turf)) = (self.pond_verge, self.turf) {
+            scene.push_textured(
+                verge,
+                turf,
+                &Transform::at(Vec3::ZERO),
+                aim::FIELD_GROUND,
+                aim::VOID,
+            );
+        }
+
+        // the bank under it, which is the wet ground the stones are set in
+        if let Some(bank) = self.pond_bank {
+            scene.push_material(bank, &Transform::at(Vec3::ZERO), aim::FIELD_BANK, aim::VOID);
+        }
+
+        // and the silt at the bottom of the bowl, so that what is under the
+        // water is a bed and not the field's own grass
+        if let Some(bed) = self.pond_bed {
+            scene.push_material(bed, &Transform::at(Vec3::ZERO), aim::FIELD_SILT, aim::VOID);
+        }
+
+        // the islands, each its own lump with its own wandering outline
+        for ((middle, size), mesh) in pond::islands(reaches).into_iter().zip(&self.isles) {
+            scene.push_material(
+                *mesh,
+                &Transform::at(vec3(middle.x, 0.0, middle.z)).with_scale(vec3(
+                    size.x,
+                    pond::isle_up(),
+                    size.y,
+                )),
+                aim::FIELD_ISLE,
+                aim::VOID,
+            );
+        }
+
+        // and the stones set round both, which are what the eye reads as the
+        // edge of water: a run of coping is a swimming bath whatever shape
+        // it is cut into, which is the lesson the garden's pond already
+        // carries and this one was sent back for.
+        for set in pond::set_stones(reaches)
+            .into_iter()
+            .chain(pond::isle_stones(reaches))
+        {
+            let Some(cut) = self.stones.get(set.cut) else {
+                continue;
+            };
+
+            // the whole lump, where it was put: a set stone carries its own
+            // height, because most of it is in the mortar and what the line
+            // is made of is the little that is not
+            scene.push_material(
+                *cut,
+                &Transform::at(set.at)
+                    .with_rotation(glam::Quat::from_rotation_y(set.turn))
+                    .with_scale(set.size),
+                aim::FIELD_SET,
+                aim::DULL,
+            );
+        }
+
+        let kinds = field::kinds();
+
+        for stood in pond::trees(reaches) {
+            self.draw_a_tree(scene, &stood, &kinds);
+        }
+
+        for stood in pond::litter(reaches) {
+            self.draw_litter(scene, &stood);
+        }
+
+        // the ducks, before the water, so the water is the last thing in
+        // front of what it is over. The garden's koi are the same note.
+        if let (Some(body), Some(head), Some(cube)) = (self.duck, self.ball_mesh, self.cube) {
+            for duck in pond::ducks(reaches, self.since, &self.pond_in_the_field) {
+                let turned = glam::Quat::from_rotation_y(duck.heading);
+                let ahead = vec3(duck.heading.sin(), 0.0, duck.heading.cos());
+                let size = duck.size;
+                let (coat, bill_of) = if duck.drake {
+                    (aim::DUCK_BACK, aim::DUCK_BILL)
+                } else {
+                    (aim::DUCK_HEN, aim::DUCK_HEN_BILL)
+                };
+
+                scene.push_material(
+                    body,
+                    &Transform::at(duck.at)
+                        .with_rotation(turned)
+                        .with_scale(Vec3::splat(size)),
+                    coat,
+                    aim::DULL,
+                );
+
+                // the neck, which is what stops the head being a ball
+                // hanging over a boat
+                let neck = duck.at + ahead * pond::NECK_ON * size;
+                let dark = if duck.drake { aim::DUCK_HEAD } else { coat };
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(neck + Vec3::Y * pond::NECK_UP * 0.5 * size)
+                        .with_rotation(turned)
+                        .with_scale(vec3(pond::NECK_THICK, pond::NECK_UP, pond::NECK_THICK) * size),
+                    dark,
+                    aim::DULL,
+                );
+
+                let on = neck + Vec3::Y * pond::NECK_UP * size;
+
+                scene.push_material(
+                    head,
+                    &Transform::at(on).with_scale(Vec3::splat(pond::HEAD_WIDE * size)),
+                    dark,
+                    aim::DULL,
+                );
+
+                // and the bill, which with the head is the whole of what
+                // says duck at the far side of a pond
+                scene.push_material(
+                    cube,
+                    &Transform::at(
+                        on + ahead * (pond::HEAD_WIDE * 0.5 + pond::BILL_LONG * 0.42) * size
+                            - Vec3::Y * pond::HEAD_WIDE * 0.16 * size,
+                    )
+                    .with_rotation(turned)
+                    .with_scale(vec3(0.046, 0.021, pond::BILL_LONG) * size),
+                    bill_of,
+                    aim::DULL,
+                );
+            }
+        }
+
+        // the water itself, last, with a tight highlight: the default is a
+        // broad one and over four hundred square metres that is a sheen
+        // across the whole pond, which is the one thing that made the
+        // garden's read as a bath.
+        if let Some(mesh) = self.pond_field_mesh {
+            scene.push_material(mesh, &Transform::at(Vec3::ZERO), aim::FIELD_WATER, 420.0);
+        }
+    }
+
+    fn draw_a_tree(&self, scene: &mut Scene, stood: &field::Stood, kinds: &[garden::Tree]) {
+        let field::What::Tree(kind) = stood.what else {
+            return;
+        };
+        let (Some(trunk), Some(tree)) = (self.saplings.get(kind), kinds.get(kind)) else {
+            return;
+        };
+        let turned = glam::Quat::from_rotation_y(stood.turn);
+
+        let bark = Self::bark_of(tree);
+
+        scene.push_material(
+            *trunk,
+            &Transform::at(stood.at)
+                .with_rotation(turned)
+                .with_scale(Vec3::splat(stood.size)),
+            bark,
+            aim::DULL,
+        );
+
+        if let Some(limb) = self.limb {
+            for (from, to) in garden::limbs(tree) {
+                let (from, to) = (field::stands(stood, from), field::stands(stood, to));
+                let along = to - from;
+                let long = along.length();
+
+                if long > 1e-3 {
+                    scene.push_material(
+                        limb,
+                        &Transform::at(from)
+                            .with_rotation(glam::Quat::from_rotation_arc(Vec3::Y, along / long))
+                            .with_scale(vec3(
+                                garden::LIMB_THICK * stood.size,
+                                long,
+                                garden::LIMB_THICK * stood.size,
+                            )),
+                        bark,
+                        aim::DULL,
+                    );
+                }
+            }
+        }
+
+        if let (Some(crown), Some((skin, leaf))) =
+            (self.crown, self.foliage(tree, field::which(stood)))
+        {
+            for sprig in garden::sprigs(tree) {
+                let wide = sprig.wide * stood.size;
+                let tall = sprig.tall * stood.size;
+
+                scene.push_textured(
+                    crown,
+                    skin,
+                    &Transform::at(field::stands(stood, sprig.at))
+                        .with_rotation(glam::Quat::from_rotation_y(sprig.turn + stood.turn))
+                        .with_scale(vec3(wide, tall, wide)),
+                    leaf * sprig.shade,
+                    aim::VOID,
+                );
+            }
+        }
+    }
+
     fn draw_the_field(&self, scene: &mut Scene, camera: &Camera) {
         let reaches = self.room.reaches;
 
@@ -3428,69 +3711,7 @@ impl Arcade {
             }
 
             for stood in field::trees(reaches, cell) {
-                let field::What::Tree(kind) = stood.what else {
-                    continue;
-                };
-                let (Some(trunk), Some(tree)) = (self.saplings.get(kind), kinds.get(kind)) else {
-                    continue;
-                };
-                let turned = glam::Quat::from_rotation_y(stood.turn);
-
-                let bark = Self::bark_of(tree);
-
-                scene.push_material(
-                    *trunk,
-                    &Transform::at(stood.at)
-                        .with_rotation(turned)
-                        .with_scale(Vec3::splat(stood.size)),
-                    bark,
-                    aim::DULL,
-                );
-
-                if let Some(limb) = self.limb {
-                    for (from, to) in garden::limbs(tree) {
-                        let (from, to) = (field::stands(&stood, from), field::stands(&stood, to));
-                        let along = to - from;
-                        let long = along.length();
-
-                        if long > 1e-3 {
-                            scene.push_material(
-                                limb,
-                                &Transform::at(from)
-                                    .with_rotation(glam::Quat::from_rotation_arc(
-                                        Vec3::Y,
-                                        along / long,
-                                    ))
-                                    .with_scale(vec3(
-                                        garden::LIMB_THICK * stood.size,
-                                        long,
-                                        garden::LIMB_THICK * stood.size,
-                                    )),
-                                bark,
-                                aim::DULL,
-                            );
-                        }
-                    }
-                }
-
-                if let (Some(crown), Some((skin, leaf))) =
-                    (self.crown, self.foliage(tree, field::which(&stood)))
-                {
-                    for sprig in garden::sprigs(tree) {
-                        let wide = sprig.wide * stood.size;
-                        let tall = sprig.tall * stood.size;
-
-                        scene.push_textured(
-                            crown,
-                            skin,
-                            &Transform::at(field::stands(&stood, sprig.at))
-                                .with_rotation(glam::Quat::from_rotation_y(sprig.turn + stood.turn))
-                                .with_scale(vec3(wide, tall, wide)),
-                            leaf * sprig.shade,
-                            aim::VOID,
-                        );
-                    }
-                }
+                self.draw_a_tree(scene, &stood, &kinds);
             }
         }
 
@@ -3533,33 +3754,7 @@ impl Arcade {
                     // ground has left its tree and the ground is where
                     // it is now.
                     field::What::Litter => {
-                        let (Some(mesh), Some(leaves)) = (
-                            self.ground,
-                            self.litter
-                                .get((stood.turn * 59.0) as usize % self.litter.len().max(1))
-                                .copied(),
-                        ) else {
-                            continue;
-                        };
-                        let wide = field::LITTER_WIDE * stood.size;
-
-                        scene.push_textured(
-                            mesh,
-                            leaves,
-                            // **The flat plane and not the crown.** A
-                            // sprig is three crossed uprights, because
-                            // what it is for is a spray of leaves on a
-                            // tree seen from any side. Turned on its back
-                            // it laid one quad on the ground and left two
-                            // standing, so the field grew little brown
-                            // tokens on their edges. This wants the one
-                            // flat quad the garden's beds are laid with.
-                            &Transform::at(stood.at + Vec3::Y * field::LITTER_LAID)
-                                .with_rotation(turned)
-                                .with_scale(vec3(wide, 1.0, wide)),
-                            aim::litter_of(field::which(&stood)),
-                            aim::VOID,
-                        );
+                        self.draw_litter(scene, &stood);
                     }
                     field::What::Flower(which) => {
                         let (Some(mesh), Some(head)) = (
@@ -3595,6 +3790,8 @@ impl Arcade {
         if let Some(cube) = self.cube {
             self.draw_the_village(scene, cube);
         }
+
+        self.draw_the_pond(scene);
     }
 
     /// The picture a tree's foliage wears, and the colour to draw it in.
@@ -5171,6 +5368,9 @@ impl Arcade {
         // and spec 0068's village, which is out in the field and so is there
         // whatever the trail says: nothing was answered to earn it
         out.extend(village::solid(self.room.reaches));
+        // and spec 0129's pond, whose kerb is the whole of what stops you
+        // walking out onto the water
+        out.extend(pond::solid(self.room.reaches));
 
         out
     }
@@ -8241,6 +8441,12 @@ impl Game for Arcade {
         if let Some(mesh) = self.pond_mesh {
             renderer.update_mesh(mesh, &self.pool_in_the_garden.surface());
         }
+        if let Some(mesh) = self.pond_field_mesh {
+            renderer.update_mesh(
+                mesh,
+                &pond::water_mesh(self.room.reaches, &self.pond_in_the_field),
+            );
+        }
         if let Some(mesh) = self.pool_mesh {
             renderer.update_mesh(mesh, &self.pool.surface());
         }
@@ -8659,6 +8865,18 @@ impl Game for Arcade {
             .map(|seed| renderer.add_mesh(&garden::slab_mesh(*seed)))
             .collect();
         self.pond_mesh = Some(renderer.add_water_mesh(&self.pool_in_the_garden.surface()));
+        self.pond_field_mesh = Some(renderer.add_mesh(&pond::water_mesh(
+            self.room.reaches,
+            &self.pond_in_the_field,
+        )));
+        self.duck = Some(renderer.add_mesh(&pond::duck_mesh()));
+        self.isles = pond::ISLE_SEEDS
+            .iter()
+            .map(|seed| renderer.add_mesh(&pond::isle_mesh(*seed)))
+            .collect();
+        self.pond_bank = Some(renderer.add_mesh(&pond::bank_mesh(self.room.reaches)));
+        self.pond_verge = Some(renderer.add_mesh(&pond::verge_mesh(self.room.reaches)));
+        self.pond_bed = Some(renderer.add_mesh(&pond::bed_mesh(self.room.reaches)));
         // a trunk apiece, because the lean is a share of the height and the
         // thickness is not: one mesh scaled to two heights is a sapling and a
         // log. The pads are one lump per cut, turned and squashed per pad.
@@ -9517,6 +9735,16 @@ impl Game for Arcade {
             }
         }
         self.pool_in_the_garden.step(dt);
+
+        // and the ducks, which are the same note as the koi: what stops a
+        // pond being a mirror is the thing crossing it. A bird on the
+        // surface pushes all of its own width, where a fish a metre down
+        // pushes nothing.
+        for duck in pond::ducks(self.room.reaches, self.since, &self.pond_in_the_field) {
+            self.pond_in_the_field
+                .push(duck.at, pond::DUCK_LONG * duck.size, pond::STIRS * dt);
+        }
+        self.pond_in_the_field.step(dt);
 
         // the swing between lined up and in orbit, per spec 0015. Three
         // seconds, and it runs from wherever it has got to: caught halfway
@@ -17971,6 +18199,25 @@ mod tests {
                 garden::at(reaches).z,
             ),
         );
+    }
+
+    /// Spec 0129: the pond early in the field, from its south east corner.
+    ///
+    /// **Across the long diagonal**, which is the one line through this
+    /// place that has all of it in it: near water, both islands, the far
+    /// kerb and the field beyond. Looked at from a pace back from the stone
+    /// rather than over it, because what the kerb does is keep you off the
+    /// water and a picture taken from where you cannot stand would not say
+    /// whether it does.
+    #[test]
+    fn the_pond_is_drawn() {
+        let reaches = reaches();
+        // a pace back from the lip on the pond's own south east shoulder,
+        // reckoned off the outline rather than off a size written down
+        let at = pond::rim_at(reaches, 0.86, pond::VERGE + 1.2);
+        let isle = pond::islands(reaches)[1].0;
+
+        looks_right("pond", at, vec3(isle.x, EYE - 0.35, isle.z));
     }
 
     /// Spec 0040: the field's horizon, from the top of the bridge.
