@@ -109,6 +109,14 @@ wall plan's mark uses.
   standing. — `minimap::tests::what_is_in_front_of_you_is_up_the_panel`
 - What is on your right is right of the mark, which is the half a mirror
   leaves intact. — `minimap::tests::what_is_on_your_right_is_right_of_the_mark`
+- The angle the map is turned by and the mapping that places it agree on where
+  a corner lands. — `minimap::tests::the_turn_and_the_mapping_are_one_angle`
+- The floor you are standing on is under the
+  mark. — `minimap::tests::what_you_are_standing_on_is_under_the_mark`
+- Nothing that could show on the panel is culled before the edge gets
+  it. — `minimap::tests::nothing_that_could_show_is_dropped`
+- Two storeys do not draw the same
+  map. — `minimap::tests::two_storeys_do_not_draw_the_same_map`
 
 ### Verified by hand
 
@@ -119,9 +127,24 @@ wall plan's mark uses.
 - **Whether it stops at its own border.** The scissor is the only thing holding
   the rooms inside the panel, and a rectangle escaping it draws across the
   floor.
+- **Whether it reads as a map or as a grey shape.** The rooms are pale on a
+  dark plate and the cabinets show as notches down the hall, which is the one
+  place the cut has any detail in it.
+- **Whether an always-on HUD suits this building at all.** Everything else here
+  is found by walking, and a map in the corner is the first thing in it that
+  hands you the layout.
 
 ## Out of scope
 
 - **No circle.** A driving game's map is round and this one is square, because
   a scissor is a rectangle. A round one wants a stencil or a mask and nobody
   has asked for one.
+- **No marks on it.** No doors, no toys, no trail. Spec 0036's trail records
+  what each room has given up and nothing draws any of it, which this leaves
+  open rather than opening.
+- **No zoom.** One scale, no dial. Spec 0064 refused an index on the arrow
+  keys for the same reason.
+- **Nothing of `behind`.** `plan::drawn` already leaves it out, for the scale
+  reason spec 0115 gives: 360 of the ground floor's 463 pieces are that one
+  room. That it also keeps a secret off the map is luck and not design, and
+  should not be leaned on.
