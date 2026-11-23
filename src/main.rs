@@ -3620,13 +3620,25 @@ impl Arcade {
         }
 
         // the train, wheel by wheel, each turned at the rate the wheel
-        // before it gives it
-        for wheel in clock::going().iter().chain(clock::motion().iter()) {
-            let turn = facing * clock::turned_to(clock::turned(wheel.turns, hours));
+        // before it gives it, and the seconds train a plate behind the rest
+        // of it: indirect centre seconds is a second layer in a real clock
+        // and it reads as one here
+        for (wheel, back) in clock::going()
+            .iter()
+            .chain(clock::motion().iter())
+            .map(|wheel| (wheel, 0.0))
+            .chain(
+                clock::seconds()
+                    .iter()
+                    .map(|wheel| (wheel, -clock::PLATES * 1.3)),
+            )
+        {
+            let turn = facing
+                * clock::turned_to(clock::turned(wheel.turns, clock::when(wheel.beats, hours)));
 
             for (teeth, out) in [
-                (wheel.teeth, 0.0),
-                (wheel.pinion, -clock::WHEEL_THICK * 2.2),
+                (wheel.teeth, back),
+                (wheel.pinion, back - clock::WHEEL_THICK * 2.2),
             ] {
                 let Some(mesh) = wheel_of(teeth) else {
                     continue;
@@ -3642,7 +3654,7 @@ impl Arcade {
 
             scene.push_material(
                 cube,
-                &Transform::at(stood(wheel.at, -clock::PLATES * 0.5))
+                &Transform::at(stood(wheel.at, back - clock::PLATES * 0.5))
                     .with_rotation(
                         facing * glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
                     )
@@ -3660,7 +3672,7 @@ impl Arcade {
 
         for (hand, mesh) in clock::hands().into_iter().zip(&self.hands) {
             let arm = clock::RING * 0.5 * hand.long;
-            let turn = clock::turned(hand.turns, hours);
+            let turn = clock::turned(hand.turns, clock::when(hand.beats, hours));
 
             scene.push_material(
                 *mesh,

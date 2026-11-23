@@ -99,6 +99,8 @@ is a shape written as a profile rather than a box:
 | centre wheel | 64 | third pinion | an hour |
 | third wheel | 60 | escape pinion | eight minutes |
 | escape wheel | 30 | the pallets | a minute |
+| seconds wheel | 32, on the escape arbor | the idler | a minute |
+| idler | 32, on a pinion of 32 | the seconds pinion | a minute |
 | cannon pinion | 10 | minute wheel | an hour |
 | minute wheel | 30, on a pinion of 8 | hour wheel | three hours |
 | hour wheel | 32 | the hour hand | twelve hours |
@@ -107,6 +109,33 @@ The pinions are 8 leaves each where the table does not say otherwise. Sixty
 four over eight is eight, sixty over eight is seven and a half, and eight
 times seven and a half is sixty: the escape wheel turns sixty times while
 the centre wheel turns once, which is a minute against an hour.
+
+**The seconds are in the middle, which took a train of their own.** Jake,
+on the first one: it looks like it sweeps, but because it's so diminutive,
+almost like what you'd see on a wristwatch not a wall clock, it's close to
+meaningless. It was a quarter of the dial's radius, on the escape arbor
+half a metre off centre, among the brass. A wall clock's seconds hand is
+the longest thing on the dial and turns about the same point the others do.
+
+Indirect centre seconds is the real answer and not a cheat: a wheel on the
+escape arbor, an idler, and a pinion on a tube through the middle. All four
+counts the same, because two meshes of equal pairs is one to one twice over
+and two reversals, which is the escape wheel's own rate the same way round.
+What the count is for is reach. A pair of `n` spans `MODULE * n`, and two of
+those have to bridge the gap from the escape arbor to the centre, which at
+thirty-two they just do. The idler stands where both meshes close, on the
+side away from the third wheel so the triangle opens into the clear half of
+the dial. It runs a plate behind the going train, which is where a real
+clock puts it and which reads as the second layer it is.
+
+**And it steps.** A seconds hand that creeps is a quartz clock's. This one
+is held by a pendulum beating seconds through a thirty tooth escape wheel,
+which physically cannot move except one tooth every two beats, so
+everything from the escape wheel onward moves a sixtieth of a turn at a
+time and nothing at all in between. The train in front of it turns
+smoothly, being geared down from a wheel that does not. The step is also
+most of what makes the hand read from across the room: a sixth of a degree
+a second is nothing to see and six degrees at once is a jump.
 
 **And the motion work's two meshes have to span the same distance**, which
 is what picks its numbers. The cannon pinion rides the minute hand's own
@@ -283,6 +312,13 @@ other.
 - Every digit lights its own set of segments, which a table of ten numbers
   written by hand cannot be assumed
   to. — `clock::tests::every_digit_lights_its_own_segments`
+- The seconds train comes back to the middle of the dial at the escape
+  wheel's own rate and the same way round, and the hand on it is the
+  longest of the
+  three. — `clock::tests::the_seconds_come_back_to_the_middle`
+- What the escapement holds moves a second at a time and the train in
+  front of it does
+  not. — `clock::tests::what_the_escapement_holds_moves_a_second_at_a_time`
 - The clock's board and the readout's plate have their backs on the near
   wall's own face, and nothing of the clock is behind
   it. — `clock::tests::the_board_is_against_the_wall`

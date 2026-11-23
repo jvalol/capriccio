@@ -45,6 +45,7 @@ pub const DIAL_UP: f32 = 1.76;
 
 /// One wheel of the train: what it has on its arbor, where that arbor
 /// stands in the face of the clock, and how many turns an hour it makes.
+#[derive(Clone)]
 pub struct Wheel {
     /// The wheel's own teeth, which are what drives the next pinion.
     pub teeth: u32,
@@ -56,6 +57,15 @@ pub struct Wheel {
     /// Turns an hour, signed: a wheel drives its pinion the other way
     /// round.
     pub turns: f32,
+    /// Whether this arbor moves in steps of a second rather than turning.
+    ///
+    /// **Everything from the escape wheel onward does.** That is what an
+    /// escapement is: the pendulum lets one tooth by every two beats, and
+    /// a pendulum that beats seconds therefore moves the escape wheel one
+    /// tooth every two seconds and nothing at all in between. The train in
+    /// front of it turns smoothly, being geared down from a wheel that
+    /// does not.
+    pub beats: bool,
 }
 
 /// How many turns an hour each hand makes, which is what the arbor it is on
@@ -86,6 +96,7 @@ pub fn going() -> Vec<Wheel> {
         pinion: 0,
         at: Vec2::ZERO,
         turns: MINUTE_HAND,
+        beats: false,
     }];
 
     for (teeth, pinion, way) in [(60u32, 8u32, THIRD_WAY), (30, 8, ESCAPE_WAY)] {
@@ -98,10 +109,75 @@ pub fn going() -> Vec<Wheel> {
             pinion,
             at: before.at + vec2(cos, sin) * apart,
             turns: -before.turns * before.teeth as f32 / pinion as f32,
+            beats: teeth == 30,
         });
     }
 
     out
+}
+
+/// How many teeth the seconds train's wheels have.
+///
+/// **All four the same, because the hand has to turn at the escape wheel's
+/// own rate and the right way round.** Two meshes of equal counts is one
+/// to one twice over and two reversals, which is where it started. What
+/// the count is for is reach: each mesh spans half the module times the
+/// sum of its pair, so a pair of `n` spans `MODULE * n`, and two of those
+/// have to bridge the gap from the escape arbor to the middle of the dial.
+pub const SECONDS_TEETH: u32 = 32;
+
+/// The seconds train: the escape arbor's turn carried to the middle of the
+/// dial.
+///
+/// **Because a seconds hand on the escape arbor is a wristwatch's.** Jake,
+/// on the first one: it looks like it sweeps, but because it's so
+/// diminutive, almost like what you'd see on a wristwatch not a wall clock,
+/// it's close to meaningless. It was a quarter of the dial's radius long,
+/// stuck out at an arbor half a metre off centre, in a thicket of brass.
+/// A wall clock's seconds hand is the longest thing on the dial and turns
+/// about the same point the others do.
+///
+/// **Which is a real thing and not a cheat.** Indirect centre seconds is
+/// how a clock whose escape wheel is not in the middle puts seconds in the
+/// middle anyway: a wheel on the escape arbor, an idler, and a pinion on a
+/// tube through the centre. Nothing here is told how fast to turn; the
+/// hand goes round once a minute because the teeth say so.
+///
+/// The idler stands where both meshes close, which is one of the two points
+/// at the right distance from each end. It takes the one away from the
+/// third wheel, so the triangle opens into the clear half of the dial
+/// rather than folding back over the going train.
+pub fn seconds() -> Vec<Wheel> {
+    let escape = going().last().expect("an escape wheel").at;
+    let apart = MODULE * SECONDS_TEETH as f32;
+    let half = escape.length() * 0.5;
+    let out = (apart * apart - half * half).max(0.0).sqrt();
+    let along = escape.normalize_or_zero();
+    let idler = escape * 0.5 + vec2(-along.y, along.x) * out;
+
+    vec![
+        Wheel {
+            teeth: SECONDS_TEETH,
+            pinion: 0,
+            at: escape,
+            turns: SECOND_HAND,
+            beats: true,
+        },
+        Wheel {
+            teeth: SECONDS_TEETH,
+            pinion: SECONDS_TEETH,
+            at: idler,
+            turns: -SECOND_HAND,
+            beats: true,
+        },
+        Wheel {
+            teeth: 0,
+            pinion: SECONDS_TEETH,
+            at: Vec2::ZERO,
+            turns: SECOND_HAND,
+            beats: true,
+        },
+    ]
 }
 
 /// The motion work, which is the twelve to one that the hour hand wants.
@@ -120,12 +196,14 @@ pub fn motion() -> Vec<Wheel> {
             pinion: 0,
             at: Vec2::ZERO,
             turns: MINUTE_HAND,
+            beats: false,
         },
         Wheel {
             teeth: MINUTE_PINION,
             pinion: MINUTE_WHEEL,
             at: vec2(0.0, -apart),
             turns: -MINUTE_HAND * CANNON as f32 / MINUTE_WHEEL as f32,
+            beats: false,
         },
         Wheel {
             teeth: 0,
@@ -133,6 +211,7 @@ pub fn motion() -> Vec<Wheel> {
             at: Vec2::ZERO,
             turns: MINUTE_HAND * CANNON as f32 / MINUTE_WHEEL as f32 * MINUTE_PINION as f32
                 / HOUR_WHEEL as f32,
+            beats: false,
         },
     ]
 }
@@ -202,6 +281,27 @@ pub const SHOWN: f32 = 10.0 + 10.0 / 60.0;
 /// the hands on these arbors have to go.
 pub fn turned(turns_an_hour: f32, hours: f32) -> f32 {
     -turns_an_hour * hours * std::f32::consts::TAU
+}
+
+/// The time an arbor sees: the hour itself, or the last whole second of
+/// it for anything the escapement lets go of a tooth at a time.
+///
+/// **A seconds hand that creeps is a quartz clock's.** This one is on a
+/// pendulum beating seconds through a thirty tooth escape wheel, which
+/// physically cannot move except in steps: one tooth every two beats. The
+/// step is also most of what makes the hand read from across the room,
+/// a sixth of a degree a second being nothing to see and six degrees at
+/// once being a jump.
+pub fn ticked(hours: f32) -> f32 {
+    (hours * 3600.0).floor() / 3600.0
+}
+
+pub fn when(beats: bool, hours: f32) -> f32 {
+    if beats {
+        ticked(hours)
+    } else {
+        hours
+    }
 }
 
 /// Where the pendulum stands at `hours` past midnight, in radians off
@@ -429,6 +529,7 @@ pub fn counts() -> Vec<u32> {
     let mut out: Vec<u32> = going()
         .iter()
         .chain(motion().iter())
+        .chain(seconds().iter())
         .flat_map(|wheel| [wheel.teeth, wheel.pinion])
         .filter(|teeth| *teeth > 0)
         .collect();
@@ -930,7 +1031,10 @@ pub fn readout_board(reaches: f32) -> (Vec3, Vec3) {
 /// thick a hand is cut.
 pub const HOUR_LONG: f32 = 0.56;
 pub const MINUTE_LONG: f32 = 0.84;
-pub const SECOND_LONG: f32 = 0.3;
+/// **The longest of the three**, which is what a seconds hand on a wall
+/// clock is: it runs out past the minute hand to the track itself, where
+/// the minute hand stops a little short of it.
+pub const SECOND_LONG: f32 = 0.9;
 pub const HAND_THICK: f32 = 0.014;
 
 /// One hand: the arbor it is on, how fast that turns, how far it reaches
@@ -940,8 +1044,9 @@ pub struct Hand {
     pub at: Vec2,
     pub long: f32,
     pub cut: f32,
-    /// Whether this is the one that visibly moves, which is the one that
-    /// has to be seen first and is therefore the one that is red.
+    /// Whether this is the one the escapement moves, which is the one that
+    /// steps rather than turning, the one that has to be seen first, and
+    /// therefore the one that is red.
     pub beats: bool,
 }
 
@@ -966,9 +1071,9 @@ pub fn hands() -> Vec<Hand> {
         },
         Hand {
             turns: SECOND_HAND,
-            at: pendulum_at(),
+            at: Vec2::ZERO,
             long: SECOND_LONG,
-            cut: 0.55,
+            cut: 0.5,
             beats: true,
         },
     ]
@@ -985,7 +1090,10 @@ pub const BOB_THICK: f32 = 0.035;
 
 /// How far the movement stands off the wall, and how far apart the bars
 /// that hold it are.
-pub const OFF_THE_WALL: f32 = 0.17;
+/// **Deeper than it was**, because the seconds train runs behind the going
+/// train rather than beside it: two layers of wheels want two plates' worth
+/// of air between the dial and the board.
+pub const OFF_THE_WALL: f32 = 0.28;
 pub const PLATES: f32 = 0.1;
 
 /// Where the clock's middle stands: on the back room's north wall, which is
@@ -1020,7 +1128,7 @@ mod tests {
     /// room cannot.
     #[test]
     fn the_wheels_mesh_because_of_their_teeth() {
-        let going = going();
+        let going: Vec<Wheel> = going();
         // the tip and the root of a wheel as it is actually cut, taken off
         // the same profile the mesh is built from rather than off the
         // module: asked of the module, this test and the placement are the
@@ -1039,7 +1147,14 @@ mod tests {
             (tip, root)
         };
 
-        for pair in going.windows(2) {
+        // the seconds train meshes the same way, and its reach is the whole
+        // reason its counts are what they are: two spans of `MODULE` times
+        // the count have to bridge the gap from the escape arbor to the
+        // middle, and a count too small is a pair of wheels with daylight
+        // between them
+        let trains = [going.clone(), seconds()];
+
+        for pair in trains.iter().flat_map(|train| train.windows(2)) {
             let (driver, driven) = (&pair[0], &pair[1]);
             let apart = driver.at.distance(driven.at);
             let (wheel_tip, wheel_root) = cut(driver.teeth);
@@ -1485,6 +1600,93 @@ mod tests {
             "the dial stands at {}, which is behind the board's face at {}",
             dial_at(REACHES).z,
             front
+        );
+    }
+    /// Spec 0130: the seconds hand turns about the middle of the dial, once
+    /// a minute, the way the escape wheel does.
+    ///
+    /// **Jake, on the first one: close to meaningless.** It was a quarter
+    /// of the radius long, on an arbor half a metre off centre, among the
+    /// brass. This checks the three things that fixing it depended on: the
+    /// train comes back to the middle, it is one to one so the hand keeps
+    /// the escape wheel's own rate, and it turns the same way round rather
+    /// than backwards, which an odd number of meshes would give.
+    #[test]
+    fn the_seconds_come_back_to_the_middle() {
+        let train = seconds();
+        let escape = going().last().expect("an escape wheel").turns;
+        let last = train.last().expect("a wheel at the middle");
+
+        assert_eq!(
+            train[0].at,
+            going().last().expect("an escape wheel").at,
+            "the seconds train does not start on the escape arbor"
+        );
+        assert!(
+            last.at.length() < 1e-5,
+            "the seconds train ends {} from the middle of the dial",
+            last.at.length()
+        );
+        assert!(
+            (last.turns - escape).abs() < 1e-3,
+            "the escape wheel turns {} an hour and the seconds hand {}",
+            escape,
+            last.turns
+        );
+
+        // and the hand is on it, at the middle, and is the longest of the
+        // three
+        let hands = hands();
+        let seconds_hand = hands
+            .iter()
+            .find(|hand| hand.beats)
+            .expect("a seconds hand");
+
+        assert!(
+            seconds_hand.at.length() < 1e-5,
+            "the seconds hand is off centre"
+        );
+        assert!(
+            hands.iter().all(|hand| hand.long <= seconds_hand.long),
+            "the seconds hand is not the longest"
+        );
+    }
+
+    /// Spec 0130: and it steps rather than sweeping, because that is what
+    /// an escapement does.
+    #[test]
+    fn what_the_escapement_holds_moves_a_second_at_a_time() {
+        let hand = turned(SECOND_HAND, when(true, 10.0 + 30.4 / 3600.0));
+        let same = turned(SECOND_HAND, when(true, 10.0 + 30.9 / 3600.0));
+        let next = turned(SECOND_HAND, when(true, 10.0 + 31.1 / 3600.0));
+        let step = std::f32::consts::TAU / 60.0;
+
+        assert!(
+            (hand - same).abs() < 1e-4,
+            "the hand moved {} within one second",
+            (hand - same).abs()
+        );
+        // a part in a thousand, which is what f32 has left after counting
+        // ten hours in seconds: 36,030 needs sixteen bits of the
+        // twenty-four, and the step is what is left over
+        assert!(
+            ((same - next).abs() - step).abs() < 1e-3,
+            "the hand moved {} over a second's edge, against a step of {}",
+            (same - next).abs(),
+            step
+        );
+
+        // and the train in front of the escapement does not step
+        let smooth = going().iter().filter(|wheel| !wheel.beats).count();
+
+        assert_eq!(
+            smooth, 2,
+            "{} wheels of the going train turn smoothly",
+            smooth
+        );
+        assert!(
+            (turned(MINUTE_HAND, 1.0) - turned(MINUTE_HAND, when(false, 1.0))).abs() < 1e-6,
+            "the minute hand is being stepped"
         );
     }
 }
