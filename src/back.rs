@@ -173,7 +173,7 @@ pub fn roofs(reaches: f32) -> Aabb {
 }
 
 pub fn solid(reaches: f32) -> Vec<Aabb> {
-    let (west, east) = span();
+    let (_, east) = span();
     let (far, near) = deep(reaches);
 
     vec![
@@ -193,15 +193,31 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             vec3(east + THICK, TALL, far),
         ),
         // and the near one
-        Aabb::new(
-            vec3(west, 0.0, near),
-            vec3(east + THICK, TALL, near + THICK),
-        ),
+        near_wall(reaches),
         lid(reaches),
     ]
     .into_iter()
     .chain(clutter_solid(reaches))
     .collect()
+}
+
+/// The near wall, which is the one with the clock on it.
+///
+/// **Its own function because something hangs on it now.** Spec 0130
+/// worked its inner face out from `deep` by hand and took a wall's
+/// thickness off, which is a claim about where this box is that nobody
+/// checked: the face is at `near` and there is nothing in front of it. The
+/// clock stood thirty centimetres out into the room, and the black board
+/// behind it cut the buckets along that wall in half. Jake: the cans are
+/// clipped.
+pub fn near_wall(reaches: f32) -> Aabb {
+    let (west, east) = span();
+    let (_, near) = deep(reaches);
+
+    Aabb::new(
+        vec3(west, 0.0, near),
+        vec3(east + THICK, TALL, near + THICK),
+    )
 }
 
 /// The dark end of the room, which is what the rig stands in. Spec 0025.

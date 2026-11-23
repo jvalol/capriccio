@@ -273,6 +273,40 @@ pub fn stood(face: Vec3, at: Vec2, out: f32) -> Vec3 {
     face + facing() * vec3(out, at.y, at.x)
 }
 
+/// The board the clock hangs on, and the one the readout does: where each
+/// stands and how big it is.
+///
+/// **Black, because the white only reads against it.** Jake: the clock
+/// might look better with a black background on the wall. It is the same
+/// argument the bay at the other end of this room already settled, per spec
+/// 0025: the block of cubes is a plain 0.88 white and what makes it burn is
+/// a near-black lining behind it. The ring borrows the cubes' colour and
+/// this is the other half of why they look the way they do.
+///
+/// **As tall as the room takes, because what it backs is not just a ring.**
+/// A board with an even margin round the dial would be a board the pendulum
+/// hangs off the bottom of. This one carries the bob as well, and its top
+/// margin is thinner than its sides because the clock is already as large
+/// as the ceiling allows.
+pub const BOARD_EDGE: f32 = 0.26;
+pub const BOARD_OFF: f32 = 0.03;
+
+pub fn board(reaches: f32) -> (Vec3, Vec3) {
+    let face = dial_at(reaches);
+    let floor = crate::back::floor(reaches).max.y;
+    let under = floor + BOARD_EDGE * 0.46;
+    let over = floor + crate::back::TALL - BOARD_EDGE * 0.23;
+
+    (
+        vec3(
+            face.x,
+            (under + over) * 0.5,
+            face.z + OFF_THE_WALL - BOARD_OFF * 0.5,
+        ),
+        vec3(RING + BOARD_EDGE * 2.0, over - under, BOARD_OFF),
+    )
+}
+
 /// The room the pendulum needs: everything the rod and the bob pass
 /// through at the ends of their swing, with a hand's breadth round it.
 ///
@@ -715,6 +749,183 @@ pub fn numeral(hour: usize) -> Vec<(Vec2, Vec2)> {
     out
 }
 
+/// The digital readout: the same clock said the other way.
+///
+/// **Because a skeleton clock shows you how and not what.** Jake: with a
+/// digital version somewhere. The movement in the ring is an argument about
+/// how a machine divides a day, and reading it is work: you find the hands
+/// among the wheels and you take the minute off a track. The readout takes
+/// no finding at all, and the two of them standing on one wall saying the
+/// same second is the whole point of putting them there together.
+///
+/// **And it is a twenty-four hour clock**, which is the one thing the dial
+/// cannot say. A pair of hands at ten past ten does not tell you which ten
+/// past ten it is, and this room is full of instruments that would rather
+/// be exact than pretty.
+///
+/// Which segments each digit lights, as the usual seven: a across the top,
+/// b and c down the right, d across the bottom, e and f down the left, and
+/// g across the middle.
+const LIT: [u8; 10] = [
+    0b0111111, 0b0000110, 0b1011011, 0b1001111, 0b1100110, 0b1101101, 0b1111101, 0b0000111,
+    0b1111111, 0b1101111,
+];
+
+/// Where each of those seven runs, in a box one across and two tall.
+const SEGMENTS: [(Vec2, Vec2); 7] = [
+    (Vec2::new(-0.5, 1.0), Vec2::new(0.5, 1.0)),
+    (Vec2::new(0.5, 1.0), Vec2::new(0.5, 0.0)),
+    (Vec2::new(0.5, 0.0), Vec2::new(0.5, -1.0)),
+    (Vec2::new(-0.5, -1.0), Vec2::new(0.5, -1.0)),
+    (Vec2::new(-0.5, 0.0), Vec2::new(-0.5, -1.0)),
+    (Vec2::new(-0.5, 1.0), Vec2::new(-0.5, 0.0)),
+    (Vec2::new(-0.5, 0.0), Vec2::new(0.5, 0.0)),
+];
+
+/// How wide a digit is, a colon, and the gap between two of them, in the
+/// same units the box above is written in.
+pub const DIGIT_WIDE: f32 = 1.0;
+pub const COLON_WIDE: f32 = 0.25;
+pub const READOUT_GAP: f32 = 0.3;
+pub const SEGMENT_THICK: f32 = 0.15;
+
+/// What the readout says at `hours` past midnight: hours, minutes and
+/// seconds, each as its two digits.
+pub fn said(hours: f32) -> [u32; 6] {
+    let seconds = (hours * 3600.0).rem_euclid(24.0 * 3600.0) as u32;
+    let (h, m, s) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+
+    [h / 10, h % 10, m / 10, m % 10, s / 10, s % 10]
+}
+
+/// How wide the whole readout is in its own units, which is what the
+/// drawing divides by to fit it to a wall.
+pub fn readout_across() -> f32 {
+    DIGIT_WIDE * 6.0 + COLON_WIDE * 2.0 + READOUT_GAP * 7.0
+}
+
+/// Every piece of it at `hours`: a line, and whether it is alight.
+///
+/// **The dark ones are drawn too.** Seven segments with four of them
+/// missing is four bars floating on a board; it is a figure because the
+/// other three are there and unlit, which is what a display looks like
+/// switched on.
+pub fn readout(hours: f32) -> Vec<(Vec2, Vec2, bool)> {
+    let digits = said(hours);
+    let mut at = -readout_across() * 0.5;
+    let mut out = Vec::new();
+    let mut shown = 0;
+
+    for piece in 0..8 {
+        at += READOUT_GAP;
+
+        // two digits, a colon, two digits, a colon, two digits
+        if piece == 2 || piece == 5 {
+            let middle = at + COLON_WIDE * 0.5;
+
+            for up in [0.45f32, -0.45] {
+                out.push((vec2(middle, up - 0.05), vec2(middle, up + 0.05), true));
+            }
+
+            at += COLON_WIDE;
+            continue;
+        }
+
+        let middle = at + DIGIT_WIDE * 0.5;
+        let lit = LIT[digits[shown] as usize];
+
+        for (n, (from, to)) in SEGMENTS.iter().enumerate() {
+            out.push((
+                *from + vec2(middle, 0.0),
+                *to + vec2(middle, 0.0),
+                lit & (1 << n) != 0,
+            ));
+        }
+
+        at += DIGIT_WIDE;
+        shown += 1;
+    }
+
+    out
+}
+
+/// Where the readout hangs and how wide it is.
+///
+/// **Beside the clock and not under it**, the pendulum having the floor
+/// under the dial, and in the strip of wall east of the board, over the
+/// end of the bench: the room's other readouts are on the bench wall and a
+/// figure you check at a glance belongs where you are working.
+///
+/// **The west strip is where the leaning things are.** The stepladder and
+/// the broom are both in that corner, and the ladder crosses it at exactly
+/// the height a readout wants, which it did: the first one was written
+/// there and the ladder lay across the digits. Same lesson as the bucket
+/// under the pendulum, found the same way.
+///
+/// **Both taken off that strip rather than typed.** Written as numbers of
+/// their own the plate was wider than the wall it had left and ran into
+/// the clock's board, where two faces in one plane fight. It is centred in
+/// what is there and as wide as a share of it, so it cannot be.
+pub const READOUT_UP: f32 = 1.52;
+pub const READOUT_EDGE: f32 = 0.09;
+pub const READOUT_SHARE: f32 = 0.74;
+#[allow(dead_code)]
+pub const READOUT_CLEAR: f32 = 0.3;
+
+pub fn beside_the_board(reaches: f32) -> (f32, f32) {
+    let (_, east) = crate::back::span();
+    let edge = dial_at(reaches).x + board(reaches).1.x * 0.5;
+
+    ((east + edge) * 0.5, east - edge)
+}
+
+/// The wall the readout is on and the air in front of it, which nothing
+/// may stand in.
+#[allow(dead_code)]
+pub fn readout_clear(reaches: f32) -> Aabb {
+    let (middle, size) = readout_board(reaches);
+
+    Aabb::new(
+        vec3(
+            middle.x - size.x * 0.5,
+            middle.y - size.y * 0.5,
+            middle.z - size.z * 0.5 - READOUT_CLEAR,
+        ),
+        middle + size * 0.5,
+    )
+}
+
+pub fn readout_wide(reaches: f32) -> f32 {
+    beside_the_board(reaches).1 * READOUT_SHARE
+}
+
+pub fn readout_at(reaches: f32) -> Vec3 {
+    let face = dial_at(reaches);
+    let floor = crate::back::floor(reaches).max.y;
+
+    vec3(
+        beside_the_board(reaches).0,
+        floor + READOUT_UP,
+        face.z + OFF_THE_WALL - BOARD_OFF,
+    )
+}
+
+/// And the plate it is on, which stands against the wall with the segments
+/// a few millimetres over its face.
+pub fn readout_board(reaches: f32) -> (Vec3, Vec3) {
+    let at = readout_at(reaches);
+    let unit = readout_wide(reaches) / readout_across();
+
+    (
+        vec3(at.x, at.y, at.z + BOARD_OFF * 0.5),
+        vec3(
+            readout_wide(reaches) + READOUT_EDGE * 2.0,
+            unit * 2.0 + READOUT_EDGE * 2.0,
+            BOARD_OFF,
+        ),
+    )
+}
+
 /// How long each hand is, as a share of the ring's own radius, and how
 /// thick a hand is cut.
 pub const HOUR_LONG: f32 = 0.56;
@@ -786,13 +997,12 @@ pub const PLATES: f32 = 0.1;
 /// at the one end of the room you can stand well back from.
 pub fn dial_at(reaches: f32) -> Vec3 {
     let (_, east) = crate::back::span();
-    let (_, north) = crate::back::deep(reaches);
     let floor = crate::back::floor(reaches).max.y;
 
     vec3(
         east - crate::back::WIDE * 0.5,
         floor + DIAL_UP,
-        north - crate::room::THICK - OFF_THE_WALL,
+        crate::back::near_wall(reaches).min.z - OFF_THE_WALL,
     )
 }
 
@@ -1069,21 +1279,54 @@ mod tests {
 
         let swings = swings_over(REACHES);
 
-        for stood in crate::back::clutter(REACHES) {
-            let (across, tall) = stood.thing.size();
-            let box_of = Aabb::new(
-                stood.at - vec3(across * 0.5, 0.0, across * 0.5),
-                stood.at + vec3(across * 0.5, tall, across * 0.5),
-            );
-
+        // off the room's own list of what it stops you walking through,
+        // which is the ladder and the broom as well as the clutter: a
+        // second list of one thing drifts
+        for box_of in crate::back::clutter_solid(REACHES) {
             assert!(
                 !swings.intersects(&box_of),
-                "a {:?} at {} stands in the {} the pendulum swings through",
-                stood.thing,
-                stood.at,
-                swings.min
+                "something standing from {} to {} is in the way of a pendulum that swings {} to {}",
+                box_of.min,
+                box_of.max,
+                swings.min,
+                swings.max
             );
         }
+    }
+
+    /// Spec 0130: and nothing stands in front of the readout.
+    ///
+    /// **The stepladder did.** It leans in the west corner of that wall and
+    /// crosses head height a metre in, which is where the readout was
+    /// written first, so the digits had a rail across them. The same fault
+    /// as the bucket under the pendulum and found the same way, by looking
+    /// at it: both are things placed along a bare wall years before
+    /// anything was hung on it.
+    #[test]
+    fn nothing_stands_in_front_of_the_readout() {
+        const REACHES: f32 = 9.5;
+
+        let clear = readout_clear(REACHES);
+
+        for box_of in crate::back::clutter_solid(REACHES) {
+            assert!(
+                !clear.intersects(&box_of),
+                "something standing from {} to {} is in front of a readout from {} to {}",
+                box_of.min,
+                box_of.max,
+                clear.min,
+                clear.max
+            );
+        }
+
+        // and it is on the wall rather than through the clock's own board
+        let (middle, size) = readout_board(REACHES);
+        let (face, board) = (dial_at(REACHES), board(REACHES).1);
+
+        assert!(
+            (middle.x - face.x).abs() - size.x * 0.5 > board.x * 0.5,
+            "the readout's plate runs into the clock's board"
+        );
     }
     /// Spec 0130: the numeral at an hour stands where the hour hand points
     /// at that hour.
@@ -1122,6 +1365,126 @@ mod tests {
             three.x < -0.99,
             "three o'clock lies {}, which is not to the west",
             three
+        );
+    }
+    /// Spec 0130: the readout says what the hands say.
+    ///
+    /// **Two readings of one clock, and the point of having both is that
+    /// they agree.** The hands come off `turned` and a rate an hour; the
+    /// digits come off the same hours counted into seconds. Nothing joins
+    /// them but the number they are given, which is what this checks.
+    #[test]
+    fn the_readout_says_what_the_hands_say() {
+        let round = std::f32::consts::TAU;
+
+        for hours in [0.0f32, 3.0, 6.5, 9.25, 13.004, 23.75, 23.999] {
+            let [h_ten, h_one, m_ten, m_one, s_ten, s_one] = said(hours);
+            let (hour, minute) = (h_ten * 10 + h_one, m_ten * 10 + m_one);
+            let seconds = s_ten * 10 + s_one;
+
+            // **A hand creeps**, so a hand is read against the whole time
+            // the readout says and not against its own figure: at half
+            // past six the readout says 6 and the hour hand stands at six
+            // and a half, which is the clock being right rather than the
+            // two disagreeing.
+            let says = (minute as f32 + seconds as f32 / 60.0) / 60.0;
+            let apart = |hand: f32, want: f32, of: f32| {
+                let at = (-turned(hand, hours) / round).rem_euclid(1.0) * of;
+
+                ((at - want).rem_euclid(of)).min((want - at).rem_euclid(of))
+            };
+
+            assert!(
+                apart(MINUTE_HAND, minute as f32 + seconds as f32 / 60.0, 60.0) < 0.02,
+                "at {} the readout says {} minutes and {} seconds, which the minute hand does not",
+                hours,
+                minute,
+                seconds
+            );
+            assert!(
+                apart(HOUR_HAND, (hour % 12) as f32 + says, 12.0) < 0.02,
+                "at {} the readout says {}:{:02}, which the hour hand does not",
+                hours,
+                hour,
+                minute
+            );
+
+            assert!(hour < 24 && minute < 60 && seconds < 60);
+        }
+    }
+
+    /// Spec 0130: and every digit lights its own set of segments.
+    ///
+    /// **A table of ten numbers written by hand.** Two of them the same is
+    /// a clock that says six when it means five, and nothing else in here
+    /// would notice: the time would still advance, the segments would
+    /// still light, and the figure would simply be wrong.
+    #[test]
+    fn every_digit_lights_its_own_segments() {
+        for digit in 0..10u32 {
+            let shown = readout(digit as f32 / 3600.0);
+            let alight: Vec<bool> = shown.iter().map(|(_, _, lit)| *lit).collect();
+
+            assert_eq!(
+                shown.len(),
+                7 * 6 + 4,
+                "the readout is not six digits and two colons"
+            );
+
+            for other in 0..10u32 {
+                if other == digit {
+                    continue;
+                }
+
+                let theirs = readout(other as f32 / 3600.0);
+                let lit: Vec<bool> = theirs.iter().map(|(_, _, lit)| *lit).collect();
+
+                assert_ne!(
+                    alight, lit,
+                    "{} and {} light the same segments",
+                    digit, other
+                );
+            }
+        }
+    }
+    /// Spec 0130: the board is against the wall, and the clock is on the
+    /// board.
+    ///
+    /// **Because where that wall's face is was worked out by hand and got
+    /// wrong.** `dial_at` took a wall's thickness off `deep`, which is a
+    /// claim about a box nobody checked: the near wall runs from `near`
+    /// outward and its face is at `near`. The whole clock stood thirty
+    /// centimetres into the room, and the board behind it cut the buckets
+    /// along that wall in half. Jake: the cans are clipped.
+    #[test]
+    fn the_board_is_against_the_wall() {
+        const REACHES: f32 = 9.5;
+
+        let face = crate::back::near_wall(REACHES).min.z;
+
+        for (what, (middle, size)) in [
+            ("the clock's board", board(REACHES)),
+            ("the readout's plate", readout_board(REACHES)),
+        ] {
+            let back = middle.z + size.z * 0.5;
+
+            assert!(
+                (back - face).abs() < 1e-4,
+                "{} has its back at {} and the wall is at {}",
+                what,
+                back,
+                face
+            );
+        }
+
+        // and nothing of the clock is behind the board's own face
+        let front = board(REACHES).0.z - board(REACHES).1.z * 0.5;
+
+        assert!(
+            dial_at(REACHES).z < front,
+            "the dial stands at {}, which is behind the board's face at {}",
+            dial_at(REACHES).z,
+            front
         );
     }
 }

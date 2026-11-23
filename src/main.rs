@@ -3491,6 +3491,54 @@ impl Arcade {
         let facing = clock::facing();
         let stood = |at: glam::Vec2, out: f32| clock::stood(face, at, out);
 
+        // the board it hangs on, and the one the readout is on: near black,
+        // which is what the bay at the other end of this room stands its
+        // cubes against and the other half of why they burn
+        for (middle, size) in [clock::board(reaches), clock::readout_board(reaches)] {
+            scene.push_plain(
+                cube,
+                &Transform::at(middle).with_scale(size),
+                aim::BACK_LINING,
+            );
+        }
+
+        // and the readout on it, which is the same second said the other
+        // way: the movement is an argument about how, and this is the what
+        let plate = clock::readout_at(reaches);
+        let unit = clock::readout_wide(reaches) / clock::readout_across();
+
+        for (from, to, alight) in clock::readout(hours) {
+            // through the same frame the ring's numerals are written in,
+            // because the dial's own x is east and east is on the left of
+            // somebody reading this wall: taken straight, the whole
+            // readout came out mirrored, which on seven segments is a two
+            // that reads as a five
+            let run = clock::aimed(0.0, (to - from) * unit);
+
+            // a segment alight has light of its own, which is what
+            // `push_fitting` is for: over one on `push_material` still
+            // takes the room's light, and this wall is the far end of the
+            // room from the bay's bulb, so an amber meant to burn came
+            // back the colour of weak tea
+            let at = Transform::at(clock::stood(
+                plate,
+                clock::aimed(0.0, (from + to) * 0.5 * unit),
+                0.004,
+            ))
+            .with_rotation(facing * clock::turned_to(clock::laid_along(run)))
+            .with_scale(vec3(
+                0.008,
+                run.length() + clock::SEGMENT_THICK * unit,
+                clock::SEGMENT_THICK * unit,
+            ));
+
+            if alight {
+                scene.push_fitting(cube, &at, aim::READOUT_LIT);
+            } else {
+                scene.push_plain(cube, &at, aim::READOUT_DARK);
+            }
+        }
+
         if let Some(ring) = self.chapter {
             scene.push_material(
                 ring,
@@ -18509,6 +18557,25 @@ mod tests {
             "clock",
             vec3(dial.x, 0.0, dial.z - 2.3),
             vec3(dial.x, dial.y, dial.z),
+        );
+    }
+
+    /// Spec 0130: and the digital readout beside it, which says the same
+    /// second the hands do.
+    ///
+    /// **Its own picture because its faults are its own.** The mirroring
+    /// that made a two read as a five is invisible from across the room
+    /// and plain at a metre, and a reference of the whole wall would carry
+    /// the digits at a dozen pixels across.
+    #[test]
+    fn the_readout_is_drawn() {
+        let reaches = reaches();
+        let plate = clock::readout_at(reaches);
+
+        looks_right(
+            "readout",
+            vec3(plate.x, 0.0, plate.z - 1.35),
+            vec3(plate.x, plate.y, plate.z),
         );
     }
 

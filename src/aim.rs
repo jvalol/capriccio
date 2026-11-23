@@ -645,6 +645,26 @@ pub const HAND: Vec4 = vec4(0.14, 0.15, 0.19, 1.0);
 pub const SECOND_HAND: Vec4 = vec4(0.62, 0.12, 0.09, 1.0);
 pub const BOB: Vec4 = vec4(0.72, 0.56, 0.24, 1.0);
 
+/// And the digital readout beside it: a segment alight, and one that is
+/// not.
+///
+/// **Over one, so a segment burns rather than taking the room's light**,
+/// which is the same argument the gauge bars on the bench are made with
+/// and the same reason: a readout that goes dim when somebody stands in
+/// front of the bulb is a readout you read by moving your head, and this
+/// wall is the far end of the room from that bulb. It is drawn as a
+/// fitting, which is how this building says a thing has light of its own:
+/// over one on `push_material` still takes the room's light, and an amber
+/// meant to burn came back the colour of weak tea.
+///
+/// **Low in green and lower in blue**, because a glow washes toward white
+/// and the first one that burned came out lemon.
+///
+/// The dark one is barely over the board it is on. A display is a figure
+/// because the segments it is not using are still there.
+pub const READOUT_LIT: Vec4 = vec4(2.30, 0.60, 0.10, 1.0);
+pub const READOUT_DARK: Vec4 = vec4(0.09, 0.055, 0.035, 1.0);
+
 /// The way down and the room at the bottom of it. Spec 0007.
 ///
 /// Stone, because a cellar is the one room in the building that is not finished.

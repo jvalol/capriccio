@@ -166,6 +166,31 @@ whatever either bar is actually attached to. Same lesson as the engine's
 spec 0110, two days apart: a reference says what it looked like when
 somebody was happy with it.
 
+**It hangs on a black board, and that is why the white works.** Jake: the
+clock might look better with a black background on the wall. It is the
+argument the bay at the other end of this room already settled, per spec
+0025: the block of cubes is a plain 0.88 white and what makes it burn is a
+near-black lining behind it. The ring borrows the cubes' colour and the
+board is the other half of why they look the way they do. It is as tall as
+the room takes rather than a panel with an even margin, because what it
+backs is a ring with a pendulum under it and not just a ring.
+
+**And a digital version of the same clock stands beside it.** Jake again:
+with a digital version somewhere. The movement in the ring is an argument
+about how a machine divides a day, and reading it is work; the readout
+takes no finding at all. Six seven-segment figures on a plate of the same
+black, amber and alight, saying the same second the hands do.
+
+Two things it can do that the dial cannot. It is a twenty-four hour clock,
+and a pair of hands at ten past ten cannot tell you which ten past ten it
+is. And it carries seconds as figures, where the dial carries them as a red
+hand you have to find among the wheels.
+
+Everything about where it hangs is taken off the wall rather than typed: it
+is centred in the strip east of the board and as wide as a share of that
+strip, over the end of the bench, which is the end of the room the other
+readouts are at. The west strip is where the leaning things are.
+
 ## What the ornament found
 
 **Everything written on the ring was laid at a depth of its own, and the
@@ -184,6 +209,39 @@ mirrored about noon has a bar wherever a dial has a bar. It took putting
 numbers on them, and then it was obvious in one frame: the hour hand stood
 at eleven, pointing at a numeral reading I. An hour mark is now defined as
 where the hour hand points at that hour, which is also what one is.
+
+**The readout came out mirrored.** The twelve numerals go through a frame
+that knows the dial's own x is east and that east is on the left of
+somebody reading this wall; the readout was written with the raw x instead.
+On seven segments a mirror is not obviously a mirror: a two reads as a
+five, a five as a two, and the whole line reverses, so 23:47:12 came back
+as something that looked like a plausible time and was not one. It goes
+through the same frame now.
+
+**And a stepladder leaned across it.** The readout was written into the
+west strip of that wall first, which is where the ladder and the broom are,
+and the ladder crosses head height a metre in. It is in the east strip now,
+and the room's own list of what it stops you walking through is what both
+the readout and the pendulum are tested against, rather than a second list
+of the same clutter.
+
+**An amber meant to burn came back the colour of weak tea.** Over one on
+`push_material` still takes the room's light, and that wall is the far end
+of the room from the bay's bulb. A lit segment is drawn as a fitting now,
+which is this building's way of saying a thing has light of its own, and
+the colour went low in green and lower in blue because a glow washes toward
+white and the first one that burned came out lemon.
+
+**And the whole clock stood thirty centimetres out into the room.** Where
+the back room's near wall has its face was worked out here by hand, off
+`deep` with a wall's thickness taken off it, which is a claim about a box
+nobody checked: that wall runs from `near` outward and its face is at
+`near`. Nothing showed it while the clock was a ring on a stick, because a
+ring hanging a third of a metre proud of a wall looks like a ring hanging
+on a wall. The black board is what showed it. A board that far out stands
+in the middle of where the clutter along that wall lives, and it cut the
+buckets in half down their own depth. Jake: the cans are clipped. The wall
+is a named box now and the clock reads its face off that.
 
 **And the bob came down into a bucket.** Jake: the pendulum intersects an
 object. The back room's clutter was placed by hand along this wall when the
@@ -217,6 +275,20 @@ other.
   told. — `clock::tests::an_hour_mark_stands_where_the_hour_hand_points`
 - Nothing in the room stands where the pendulum
   swings. — `clock::tests::nothing_stands_where_the_pendulum_swings`
+- And nothing stands in front of the readout, nor does its plate run into
+  the clock's own board. — `clock::tests::nothing_stands_in_front_of_the_readout`
+- The readout says what the hands say, read against the whole time rather
+  than against its own figure, a hand being a thing that
+  creeps. — `clock::tests::the_readout_says_what_the_hands_say`
+- Every digit lights its own set of segments, which a table of ten numbers
+  written by hand cannot be assumed
+  to. — `clock::tests::every_digit_lights_its_own_segments`
+- The clock's board and the readout's plate have their backs on the near
+  wall's own face, and nothing of the clock is behind
+  it. — `clock::tests::the_board_is_against_the_wall`
+- The readout is drawn as its blessed reference has it, at ten past ten:
+  its own picture, because a mirrored figure is invisible from across the
+  room and plain at a metre. — `tests::the_readout_is_drawn`
 - The clock is drawn as the blessed reference has it, stopped at ten past
   ten: a picture of a thing whose point is the time cannot be taken from the
   machine's own. — `tests::the_clock_is_drawn`
