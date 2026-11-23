@@ -73,14 +73,24 @@ electrode's face to the shell, hairline and drawn past one so they give off
 rather than take. Each one thins and dims along its run. Each is white where
 it leaves the electrode and violet well before the glass, because what is
 hottest is whitest. Each wanders slowly and crinkles quickly at the same
-time, which is two terms and not one. And each forks: a thinner, dimmer
-branch leaves it in the outer half and lands on the glass like its parent.
+time, which is two terms and not one.
 
-**The sparks.** Where a filament meets the glass it spreads, which is the one
+**The forks.** An arm is a tree and not a thread. Its trunk throws one or two
+forks in its outer half; each of those throws one or two of its own; and
+there it stops, because a fourth generation is shorter than a link. A fork
+leaves off what is left of the limb it is on rather than off the arm it came
+from, keeps about three quarters of what that limb was carrying at the
+point it left, and lands on the glass like the trunk does. Each turns round
+its parent at its own rate and its own way round, so two forks off one limb
+open and close rather than holding their angle.
+
+**The sparks.** Where a limb meets the glass it spreads, which is the one
 place along an arm that is wider than the thread rather than narrower. Two
 spheres: a small bright core and a see-through bloom round it, which is how a
 soft edge gets built here, both pulled in by the bloom so nothing of them
-stands outside the glass. They breathe a little, since the one place on an arm
+stands outside the glass. Every limb carries one, sized off the root of its
+thickness, since a twig a sixth as thick as the trunk wants a spark you can
+still see. They breathe a little, since the one place on an arm
 that is a point rather than a line reads as a bead stuck to the glass if it is
 steady.
 
@@ -138,6 +148,11 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   the slowest. — `plasma::tests::the_arms_crawl_at_their_own_rates_and_jump_apart`
 - Arms come and go, and the globe is never wholly
   dark. — `plasma::tests::the_arms_come_and_go_and_the_globe_is_never_dark`
+- Every arm forks, what it forks into forks again, each fork starts on a link
+  of the limb it left, and every one of them lands on the
+  glass. — `plasma::tests::every_fork_forks_again_and_leaves_the_limb_it_came_from`
+- And two forks off one limb do not turn as a rigid
+  pair. — `plasma::tests::no_two_forks_off_one_limb_swing_together`
 - And neither globe writhes faster than the
   other. — `plasma::tests::neither_globe_writhes_faster_than_the_other`
 - And the room still cannot be walked into and not out of, which spec 0043
@@ -337,6 +352,19 @@ wander runs at about twice what it did. That moved the bound in
 takes its own fixed time out of an era, so shortening the era raises the
 share by arithmetic, and what the test should hold is that crawling is what
 an arm is mostly doing rather than a particular number.
+
+**Then the fork was one fork, which is sixteen copies of one shape.** Jake,
+on the build above: the arms fork right, but they move with the same fork.
+Both halves of that are true and they are different faults. One branch per
+arm is a tree of depth one, and the video it was taken from has filaments
+that split twice; so the fork forks now, and what it forks into forks again,
+and the thing that decides is a seed drawn off the limb's own place in the
+tree. And every fork swung round its parent on one shared term, `since *
+0.4`, which turns a pair of forks as one rigid piece: the shape moved and
+the arrangement did not. Each fork has its own rate and its own way round
+now. Held still, with only the forks' clocks running, two off one limb come
+round toward each other by three quarters of a radian a second; on the
+shared term it was two hundredths of a thousandth, which is the control.
 
 **And `you_can_walk_round_it` ran through the new pedestal and passed.** Its
 ring stood at `middle.x + 1.3`, three centimetres off that pedestal's east

@@ -466,14 +466,7 @@ pub fn filament(
             out
         }
     };
-    // a frame about that line, picked off whichever axis it is least like,
-    // because the cross product of a line with itself is nothing
-    let across = if toward.y.abs() < 0.9 {
-        toward.cross(Vec3::Y).normalize()
-    } else {
-        toward.cross(Vec3::X).normalize()
-    };
-    let other = toward.cross(across);
+    let (across, other) = frame(toward);
 
     let n = of_the_arm(which, side);
     // where it stands: crawling on from where this run struck, with the odd
@@ -525,16 +518,6 @@ pub const BLOOM_THROUGH: f32 = 0.07;
 
 const _: () = assert!(SPARK < BLOOM, "the spark's core is wider than its bloom");
 
-/// Where that spark's middle is, as a share of the shell: in by the bloom,
-/// so nothing of it stands outside the glass.
-pub fn spark_at(reaches: f32, which: usize, side: usize, eye: Vec3, since: f32) -> Vec3 {
-    pulled_in(
-        reaches,
-        side,
-        filament(reaches, which, side, eye, since)[LINKS],
-    )
-}
-
 /// The same for any point on the glass: pulled in along its own radius by the
 /// bloom, so nothing of the spark stands outside.
 pub fn pulled_in(reaches: f32, side: usize, tip: Vec3) -> Vec3 {
@@ -544,72 +527,185 @@ pub fn pulled_in(reaches: f32, side: usize, tip: Vec3) -> Vec3 {
     middle + out * (shell * (1.0 - BLOOM))
 }
 
-/// How many links a branch is drawn in, where along its parent it leaves,
-/// and how far off that parent's line it goes.
+/// A frame about a line: two directions square to it and to each other.
 ///
-/// **Every arm in the real thing forks.** Jake's video of one: not a single
-/// filament in it runs from the electrode to the glass without splitting,
-/// and several split twice. A tree of single threads is the one thing that
-/// still read as drawn rather than struck.
-///
-/// It leaves in the outer half, because a fork at the root is two arms and
-/// not one, and it lands on the glass like its parent rather than stopping
-/// in the air.
-pub const BRANCH_LINKS: usize = 7;
-pub const FORKS_AT: f32 = 0.42;
-pub const FORK_SPREAD: f32 = 0.55;
+/// Its own function because three places want one, and the cross product of
+/// a line with itself is nothing, so each of them has to pick the axis the
+/// line is least like before it can take one.
+fn frame(along: Vec3) -> (Vec3, Vec3) {
+    let line = along.normalize_or_zero();
+    let line = if line == Vec3::ZERO { Vec3::Y } else { line };
+    let across = if line.y.abs() < 0.9 {
+        line.cross(Vec3::Y).normalize()
+    } else {
+        line.cross(Vec3::X).normalize()
+    };
 
-/// A branch off one arm: where it leaves it and the links from there to the
+    (across, line.cross(across))
+}
+
+/// How far a line leaving a point inside the globe runs before it meets the
 /// glass.
 ///
-/// Seeded off the same lit run as its parent, so it is re-struck when the
-/// parent is and crawls with it rather than wandering off on its own clock.
-pub fn branch(
-    reaches: f32,
-    which: usize,
-    side: usize,
-    eye: Vec3,
-    since: f32,
-) -> [Vec3; BRANCH_LINKS + 1] {
+/// **Asked of the ray and not of the middle.** A fork off the outer end of
+/// a branch is nowhere near radial, so landing it at the shell's radius in
+/// its own direction from the middle can put it behind where it started.
+fn to_the_glass(middle: Vec3, shell: f32, from: Vec3, out: Vec3) -> f32 {
+    let p = from - middle;
+    let b = p.dot(out);
+
+    -b + (b * b + shell * shell - p.length_squared()).max(0.0).sqrt()
+}
+
+/// One limb of an arm: the links it is drawn in, how deep in the tree it
+/// stands, which limb it left, and how thick and how bright it is where it
+/// left it.
+#[derive(Clone)]
+pub struct Limb {
+    pub links: Vec<Vec3>,
+    pub deep: usize,
+    pub thick: f32,
+    pub lit: f32,
+}
+
+/// How many times a fork may fork again, and how many links a limb of each
+/// generation is drawn in.
+///
+/// **Every arm in the real thing forks, and the forks fork.** Jake's video
+/// of one: not a single filament in it runs from the electrode to the glass
+/// without splitting, and several split twice. One branch per arm is a tree
+/// of depth one, which is sixteen copies of the same shape, and Jake said so
+/// the moment he saw it: the arms fork, but they move with the same fork.
+///
+/// Three generations and no more, because the fourth is shorter than a link
+/// and costs a hundred boxes a globe to draw a hair.
+pub const DEEPEST: usize = 2;
+pub const LIMB_LINKS: [usize; DEEPEST + 1] = [LINKS, 8, 5];
+
+/// Where along its parent a fork leaves, and how wide the window it leaves
+/// in.
+///
+/// It leaves in the outer half, because a fork at the root is two arms and
+/// not one.
+pub const FORKS_AT: f32 = 0.42;
+pub const FORK_WINDOW: f32 = 0.40;
+
+/// How far off its parent's run a fork goes, and how often a limb throws a
+/// second fork rather than one.
+pub const FORK_SPREAD: f32 = 0.55;
+pub const FORKS_TWICE: f32 = 0.55;
+
+/// How fast a fork swings round its parent, in radians a second, before its
+/// own share of it.
+///
+/// **Its own share, which is the half Jake was looking at.** Every fork
+/// swinging at one rate is a rigid tree: the shape was right and the motion
+/// was one piece turning, which is the other way of saying they move with
+/// the same fork. Its own rate and its own way round, and the angle between
+/// two forks off one parent opens and closes instead of holding.
+pub const FORK_SWINGS: f32 = 0.5;
+
+/// How much of its parent's thickness a fork keeps, since a discharge that
+/// splits divides what it was carrying.
+pub const FORK_KEEPS: f32 = 0.72;
+
+/// One arm, as a tree: the trunk, what it forks into, and what those fork
+/// into in their turn.
+///
+/// Seeded off the same lit run as the trunk, so the whole tree is re-struck
+/// when the arm strikes rather than wandering on through a new discharge.
+pub fn arm(reaches: f32, which: usize, side: usize, eye: Vec3, since: f32) -> Vec<Limb> {
     let (middle, shell) = globe(reaches, side);
-    let parent = filament(reaches, which, side, eye, since);
     let run = struck_at(which, side, clock(which, side, since).0);
-    let seed = of_the_arm(which, side) * 41.3 + run * 13.9;
+    let root = of_the_arm(which, side) * 41.3 + run * 13.9;
+    let quick = quickness(which, side);
 
-    // where it leaves, in the outer half of the parent
-    let at = ((FORKS_AT + 0.4 * scatter(seed)) * LINKS as f32) as usize;
-    let from = parent[at.min(LINKS - 1)];
+    let mut limbs = vec![Limb {
+        links: filament(reaches, which, side, eye, since).to_vec(),
+        deep: 0,
+        thick: THREAD,
+        lit: 1.0,
+    }];
 
-    // and which way it goes: off the parent's own line by about a third of
-    // a right angle, rolled somewhere round it
-    let along = (parent[LINKS] - middle).normalize_or_zero();
-    let across = if along.y.abs() < 0.9 {
-        along.cross(Vec3::Y).normalize()
-    } else {
-        along.cross(Vec3::X).normalize()
-    };
-    let other = along.cross(across);
-    let roll = scatter(seed + 5.3) * std::f32::consts::TAU + since * 0.4;
-    let spread = FORK_SPREAD * (0.5 + 0.5 * scatter(seed + 8.7));
-    let out = (along * spread.cos() + (across * roll.cos() + other * roll.sin()) * spread.sin())
-        .normalize_or_zero();
-    let lands = middle + out * shell;
+    // breadth first, so a limb is grown before anything it grows, and its
+    // own place in the tree seeds it: no two forks of one arm are thrown
+    // the same dice
+    let mut n = 0;
 
-    let mut links = [Vec3::ZERO; BRANCH_LINKS + 1];
+    while n < limbs.len() {
+        if limbs[n].deep < DEEPEST {
+            let young = forks(
+                middle,
+                shell,
+                &limbs[n],
+                root + n as f32 * 7.73,
+                quick,
+                since,
+            );
 
-    for (k, link) in links.iter_mut().enumerate() {
-        let t = k as f32 / BRANCH_LINKS as f32;
-        let held = (t * std::f32::consts::PI).sin() * shell;
-        let quick = quickness(which, side);
-        let slow = since * (2.9 + 6.0 * quick) + k as f32 * WANDERS_BY + seed;
-        let fast = since * (6.1 + 9.0 * quick) + k as f32 * CRINKLES_BY + seed * 2.0;
+            limbs.extend(young);
+        }
 
-        *link = from.lerp(lands, t)
-            + (across * slow.cos() + other * slow.sin()) * (held * WANDER)
-            + (across * fast.cos() + other * fast.sin()) * (held * CRINKLE);
+        n += 1;
     }
 
-    links
+    limbs
+}
+
+/// The forks off one limb: one or two, each leaving somewhere in its
+/// parent's outer run and each landing on the glass like its parent.
+fn forks(middle: Vec3, shell: f32, parent: &Limb, seed: f32, quick: f32, since: f32) -> Vec<Limb> {
+    let how_many = if scatter(seed + 3.1) < FORKS_TWICE {
+        2
+    } else {
+        1
+    };
+
+    (0..how_many)
+        .map(|c| {
+            let own = seed + 17.33 * (c as f32 + 1.0);
+            let last = parent.links.len() - 1;
+            let at =
+                (((FORKS_AT + FORK_WINDOW * scatter(own)) * last as f32) as usize).min(last - 1);
+            let from = parent.links[at];
+            let t = at as f32 / last as f32;
+
+            // off what is left of its parent's run, so a fork forks the limb
+            // it is on rather than the arm it came from
+            let (across, other) = frame(parent.links[last] - from);
+            let along = (parent.links[last] - from).normalize_or_zero();
+            let swings = FORK_SWINGS
+                * (0.35 + 0.65 * scatter(own + 11.1))
+                * if scatter(own + 23.7) > 0.5 { 1.0 } else { -1.0 };
+            let roll = scatter(own + 5.3) * std::f32::consts::TAU + since * swings;
+            let spread = FORK_SPREAD * (0.5 + 0.5 * scatter(own + 8.7));
+            let out = (along * spread.cos()
+                + (across * roll.cos() + other * roll.sin()) * spread.sin())
+            .normalize_or_zero();
+            let lands = from + out * to_the_glass(middle, shell, from, out);
+
+            let links = LIMB_LINKS[parent.deep + 1];
+            let mut path = vec![Vec3::ZERO; links + 1];
+
+            for (k, link) in path.iter_mut().enumerate() {
+                let s = k as f32 / links as f32;
+                let held = (s * std::f32::consts::PI).sin() * shell;
+                let slow = since * (2.9 + 6.0 * quick) + k as f32 * WANDERS_BY + own;
+                let fast = since * (6.1 + 9.0 * quick) + k as f32 * CRINKLES_BY + own * 2.0;
+
+                *link = from.lerp(lands, s)
+                    + (across * slow.cos() + other * slow.sin()) * (held * WANDER)
+                    + (across * fast.cos() + other * fast.sin()) * (held * CRINKLE);
+            }
+
+            Limb {
+                links: path,
+                deep: parent.deep + 1,
+                thick: parent.thick * (1.0 - (1.0 - THINS_TO) * t) * FORK_KEEPS,
+                lit: parent.lit * (1.0 - (1.0 - DIMS_TO) * t),
+            }
+        })
+        .collect()
 }
 
 /// The light it gives off, and how far.
@@ -721,74 +817,57 @@ fn draw_one(
             continue;
         }
 
-        let links = filament(reaches, which, side, eye, since);
-
-        for (k, pair) in links.windows(2).enumerate() {
-            let (from, to) = (pair[0], pair[1]);
-            let span = to - from;
-            let long = span.length();
-
-            if long <= f32::EPSILON {
-                continue;
-            }
-
-            let t = (k as f32 + 0.5) / (LINKS - 1) as f32;
-            let thick = THREAD * (1.0 - (1.0 - THINS_TO) * t);
-            let lit = (1.0 - (1.0 - DIMS_TO) * t) * burning;
-            // white where it leaves the electrode and violet well before the
-            // glass, because what is hottest is whitest and what is white in
-            // the photograph is the first fifth
-            let hue = crate::aim::PLASMA_HOT
-                .truncate()
-                .lerp(crate::aim::PLASMA.truncate(), (t * COOLS_BY).min(1.0));
-
-            scene.push_fitting(
-                cube,
-                &Transform::at((from + to) * 0.5)
-                    .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
-                    .with_scale(vec3(thick, long, thick)),
-                (hue * lit).extend(1.0),
-            );
-        }
-
-        // the branch off it, which every filament in the real thing has.
-        // Thinner and dimmer than its parent, because it is what is left of
-        // the discharge after the fork.
-        let twig = branch(reaches, which, side, eye, since);
-
-        for pair in twig.windows(2) {
-            let (from, to) = (pair[0], pair[1]);
-            let span = to - from;
-            let long = span.length();
-
-            if long <= f32::EPSILON {
-                continue;
-            }
-
-            let thin = THREAD * THINS_TO * 1.8;
-
-            scene.push_fitting(
-                cube,
-                &Transform::at((from + to) * 0.5)
-                    .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
-                    .with_scale(vec3(thin, long, thin)),
-                (crate::aim::PLASMA.truncate() * DIMS_TO * burning).extend(1.0),
-            );
-        }
-
-        // and the sparks where the two of them land, which breathe a little
-        // rather than sitting there: the one place on an arm that is a point
-        // and not a line, so a steady one reads as a bead stuck to the glass
-        let Some(sphere) = sphere else {
-            continue;
-        };
+        // a tree and not a thread: the trunk forks, what it forks into forks
+        // again, and every one of them is thrown its own dice
+        let limbs = arm(reaches, which, side, eye, since);
         let n = of_the_arm(which, side);
         let breath = 0.85 + 0.15 * (since * (2.1 + 5.5 * quickness(which, side)) + n * 2.9).sin();
 
-        for (at, size) in [
-            (spark_at(reaches, which, side, eye, since), 1.0),
-            (pulled_in(reaches, side, twig[BRANCH_LINKS]), 0.55),
-        ] {
+        for limb in &limbs {
+            let last = limb.links.len() - 1;
+
+            for (k, pair) in limb.links.windows(2).enumerate() {
+                let (from, to) = (pair[0], pair[1]);
+                let span = to - from;
+                let long = span.length();
+
+                if long <= f32::EPSILON {
+                    continue;
+                }
+
+                let t = (k as f32 + 0.5) / last as f32;
+                let thick = limb.thick * (1.0 - (1.0 - THINS_TO) * t);
+                let lit = limb.lit * (1.0 - (1.0 - DIMS_TO) * t) * burning;
+                // white where it leaves the electrode and violet well before
+                // the glass, because what is hottest is whitest and what is
+                // white in the photograph is the first fifth. Read off how
+                // far out the link is and not off how far along its own limb
+                // it is, or a fork would start white half way to the glass.
+                let out = ((from + to) * 0.5 - middle).length() / shell;
+                let hue = crate::aim::PLASMA_HOT
+                    .truncate()
+                    .lerp(crate::aim::PLASMA.truncate(), (out * COOLS_BY).min(1.0));
+
+                scene.push_fitting(
+                    cube,
+                    &Transform::at((from + to) * 0.5)
+                        .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
+                        .with_scale(vec3(thick, long, thick)),
+                    (hue * lit).extend(1.0),
+                );
+            }
+
+            // and the spark where it lands, which breathes a little rather
+            // than sitting there: the one place on a limb that is a point
+            // and not a line, so a steady one reads as a bead stuck to the
+            // glass. Sized off the root of its thickness, since a twig a
+            // sixth as thick as the trunk wants a spark you can still see.
+            let Some(sphere) = sphere else {
+                continue;
+            };
+            let at = pulled_in(reaches, side, limb.links[last]);
+            let size = (limb.thick / THREAD).sqrt();
+
             scene.push_fitting(
                 sphere,
                 &Transform::at(at).with_scale(Vec3::splat(shell * SPARK * 2.0 * breath * size)),
@@ -1167,28 +1246,34 @@ mod tests {
                     let since = tenths as f32 * 0.37;
 
                     for which in 0..FILAMENTS {
-                        let tip = filament(reaches, which, side, eye, since)[LINKS] - middle;
-                        let at = spark_at(reaches, which, side, eye, since) - middle;
+                        for (n, limb) in arm(reaches, which, side, eye, since).iter().enumerate() {
+                            let end = limb.links[limb.links.len() - 1];
+                            let tip = end - middle;
+                            let at = pulled_in(reaches, side, end) - middle;
 
-                        assert!(
-                            at.normalize().distance(tip.normalize()) < 1e-3,
-                            "arm {}'s spark is off the line of the arm",
-                            which
-                        );
-                        assert!(
-                            at.length() + shell * BLOOM <= shell + 1e-4,
-                            "arm {}'s bloom reaches {} and the glass is at {}",
-                            which,
-                            at.length() + shell * BLOOM,
-                            shell
-                        );
-                        assert!(
-                            at.length() > shell * 0.8,
-                            "arm {}'s spark is {} out of {}, so it is adrift inside",
-                            which,
-                            at.length(),
-                            shell
-                        );
+                            assert!(
+                                at.normalize().distance(tip.normalize()) < 1e-3,
+                                "arm {}'s limb {} sparks off its own line",
+                                which,
+                                n
+                            );
+                            assert!(
+                                at.length() + shell * BLOOM <= shell + 1e-4,
+                                "arm {}'s limb {} blooms to {} and the glass is at {}",
+                                which,
+                                n,
+                                at.length() + shell * BLOOM,
+                                shell
+                            );
+                            assert!(
+                                at.length() > shell * 0.8,
+                                "arm {}'s limb {} sparks {} out of {}, so it is adrift inside",
+                                which,
+                                n,
+                                at.length(),
+                                shell
+                            );
+                        }
                     }
                 }
             }
@@ -1594,5 +1679,140 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A fork that does not fork is one shape drawn sixteen times, which is
+    /// what Jake saw. Every limb shallower than the deepest throws at least
+    /// one, every fork starts on a link of the limb it left, and every one
+    /// of them lands on the glass like the trunk does.
+    #[test]
+    fn every_fork_forks_again_and_leaves_the_limb_it_came_from() {
+        let reaches = reaches();
+
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
+
+            for eye in all_round(reaches, side) {
+                for tenths in 0..20 {
+                    let since = tenths as f32 * 0.37;
+
+                    for which in 0..FILAMENTS {
+                        let limbs = arm(reaches, which, side, eye, since);
+
+                        // written out rather than read off `DEEPEST`, or
+                        // the test follows the constant it is meant to hold
+                        // and passes with the forking turned off
+                        for deep in [0, 1, 2] {
+                            assert!(
+                                limbs.iter().any(|limb| limb.deep == deep),
+                                "arm {} has nothing {} forks down",
+                                which,
+                                deep
+                            );
+                        }
+
+                        for (n, limb) in limbs.iter().enumerate() {
+                            assert_eq!(
+                                limb.links.len(),
+                                LIMB_LINKS[limb.deep] + 1,
+                                "arm {}'s limb {} is drawn in the wrong number of links",
+                                which,
+                                n
+                            );
+
+                            let end = limb.links[limb.links.len() - 1];
+
+                            assert!(
+                                (end.distance(middle) - shell).abs() < 1e-3,
+                                "arm {}'s limb {} ends {} out and the glass is at {}",
+                                which,
+                                n,
+                                end.distance(middle),
+                                shell
+                            );
+
+                            if limb.deep == 0 {
+                                continue;
+                            }
+
+                            assert!(
+                                limbs.iter().any(|other| other.deep < limb.deep
+                                    && other.links.contains(&limb.links[0])),
+                                "arm {}'s limb {} starts on nothing",
+                                which,
+                                n
+                            );
+                            assert!(
+                                limb.thick < THREAD && limb.lit < 1.0,
+                                "arm {}'s limb {} is no thinner or dimmer than the trunk",
+                                which,
+                                n
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// And the other half of what he said: that they move with the same
+    /// fork. Two forks off one limb that swing at one rate turn about it as
+    /// a rigid pair, so however much the arm under them moves, the one
+    /// never comes round toward the other. Held still, with only the forks'
+    /// own clocks running, they have to.
+    ///
+    /// Of the pair and not of each fork on its own, since two rates drawn
+    /// from the same dice can land near enough to each other that one pair
+    /// in a hundred does hold its angle for a second.
+    #[test]
+    fn no_two_forks_off_one_limb_swing_together() {
+        let reaches = reaches();
+        let (middle, shell) = globe(reaches, 0);
+        let (across, other) = frame(Vec3::Y);
+        let parent = Limb {
+            links: (0..=LINKS)
+                .map(|k| middle + Vec3::Y * (shell * k as f32 / LINKS as f32))
+                .collect(),
+            deep: 0,
+            thick: THREAD,
+            lit: 1.0,
+        };
+
+        // where round the parent each fork's tip has got to
+        let apart = |seed: f32, since: f32| {
+            let young = forks(middle, shell, &parent, seed, 0.5, since);
+
+            (young.len() == 2).then(|| {
+                let round = |limb: &Limb| {
+                    let tip = limb.links[LIMB_LINKS[1]] - middle;
+
+                    tip.dot(other).atan2(tip.dot(across))
+                };
+                let turn = round(&young[1]) - round(&young[0]);
+
+                (turn + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+                    - std::f32::consts::PI
+            })
+        };
+
+        let mut pairs = 0;
+        let mut moved = 0.0;
+
+        for n in 0..400 {
+            let seed = n as f32 * 3.37;
+            let (Some(was), Some(now)) = (apart(seed, 0.0), apart(seed, 1.0)) else {
+                continue;
+            };
+
+            pairs += 1;
+            moved += (now - was).abs();
+        }
+
+        assert!(pairs > 100, "only {} seeds forked twice", pairs);
+        assert!(
+            moved / pairs as f32 > 0.2,
+            "two forks off one limb come round toward each other by {} radians a second, which is a pair turning as one piece",
+            moved / pairs as f32
+        );
     }
 }
