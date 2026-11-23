@@ -90,7 +90,14 @@ spheres: a small bright core and a see-through bloom round it, which is how a
 soft edge gets built here, both pulled in by the bloom so nothing of them
 stands outside the glass. Every limb carries one, sized off the root of its
 thickness, since a twig a sixth as thick as the trunk wants a spark you can
-still see. They breathe a little, since the one place on an arm
+still see.
+
+And a spark spreads rather than stopping. Two or three legs creep round the
+inside of the glass from where a limb lands, each curling as it goes and
+each with a shorter one off its own middle, so the end of an arm is a little
+tree lying on the glass. They are arcs and not lines: a straight run from a
+point on a sphere leaves the sphere at once, and what these are is a
+discharge running on the glass rather than out through it. They breathe a little, since the one place on an arm
 that is a point rather than a line reads as a bead stuck to the glass if it is
 steady.
 
@@ -153,6 +160,9 @@ because the fitting is the globe: the lamp's own body is the thing that glows.
   glass. — `plasma::tests::every_fork_forks_again_and_leaves_the_limb_it_came_from`
 - And two forks off one limb do not turn as a rigid
   pair. — `plasma::tests::no_two_forks_off_one_limb_swing_together`
+- Every spark spreads into legs that run on the glass and never through it,
+  and every leg forks
+  there. — `plasma::tests::every_spark_spreads_on_the_glass_and_forks_there`
 - And neither globe writhes faster than the
   other. — `plasma::tests::neither_globe_writhes_faster_than_the_other`
 - And the room still cannot be walked into and not out of, which spec 0043
@@ -365,6 +375,16 @@ the arrangement did not. Each fork has its own rate and its own way round
 now. Held still, with only the forks' clocks running, two off one limb come
 round toward each other by three quarters of a radian a second; on the
 shared term it was two hundredths of a thousandth, which is the control.
+
+**And then the spark was a bead.** Jake: the sparks should fork too, not
+just end. The same fault a third time and a scale down each time. An arm
+that stopped at the glass was a line that ran out, which the spark was
+written to answer; a spark that is one sphere where an arm lands stops just
+as flatly, because a discharge that reaches glass runs along it. The legs
+creep on great circles rather than straight, which is the one piece of
+arithmetic in it: a line off a point on a sphere leaves the sphere on its
+first step, and the control is to take the projection out and watch every
+leg report that it is inside the glass rather than on it.
 
 **And `you_can_walk_round_it` ran through the new pedestal and passed.** Its
 ring stood at `middle.x + 1.3`, three centimetres off that pedestal's east

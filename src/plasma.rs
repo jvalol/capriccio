@@ -609,6 +609,124 @@ pub const FORK_SWINGS: f32 = 0.5;
 /// splits divides what it was carrying.
 pub const FORK_KEEPS: f32 = 0.72;
 
+/// How far a spark creeps round the inside of the glass, as a turn; how
+/// many legs it spreads into and how often that is three rather than two;
+/// and how many links each leg is drawn in.
+///
+/// **Jake: the sparks should fork too, not just end.** A discharge that
+/// reaches glass does not stop at the glass, it runs along it. A bead where
+/// an arm lands is the same fault as a branch that does not branch, one
+/// scale down: the thing stops where the drawing ran out rather than where
+/// the discharge did.
+pub const LEG_CREEPS: f32 = 0.26;
+pub const LEGS: usize = 2;
+pub const THREE_LEGS: f32 = 0.45;
+pub const LEG_LINKS: usize = 3;
+
+/// How far a leg bends over its own run, how fast it swings round where it
+/// landed, how far off its parent a leg's own fork turns, and how much of
+/// its parent's creep that fork keeps.
+pub const LEG_CURLS: f32 = 0.9;
+pub const LEG_SWINGS: f32 = 0.6;
+pub const LEG_TURNS: f32 = 0.7;
+pub const LEG_KEEPS: f32 = 0.55;
+
+/// A creep round the inside of the glass: an arc from a point on it, set off
+/// in a direction square to it, curling as it goes.
+///
+/// **A great circle and not a line.** A straight run from a point on a
+/// sphere leaves the sphere at once, and what these are is a discharge
+/// running on the glass rather than out through it. Every point is the same
+/// distance out, pulled in by the bloom like the spark they leave.
+fn creeps(
+    middle: Vec3,
+    shell: f32,
+    from: Vec3,
+    toward: Vec3,
+    arc: f32,
+    curl: f32,
+    links: usize,
+) -> Vec<Vec3> {
+    let mut on = (from - middle).normalize_or_zero();
+    let mut way = (toward - on * toward.dot(on)).normalize_or_zero();
+    let step = arc / links as f32;
+    let round = curl / links as f32;
+    let mut path = Vec::with_capacity(links + 1);
+
+    for _ in 0..links {
+        path.push(middle + on * (shell * (1.0 - BLOOM)));
+
+        let next = (on * step.cos() + way * step.sin()).normalize_or_zero();
+
+        way = (-on * step.sin() + way * step.cos()).normalize_or_zero();
+        on = next;
+        // and the curl, which is the way it is going turning a little about
+        // where it has got to
+        way = (way * round.cos() + on.cross(way) * round.sin()).normalize_or_zero();
+    }
+
+    path.push(middle + on * (shell * (1.0 - BLOOM)));
+
+    path
+}
+
+/// What a spark does where it lands: it spreads rather than stopping.
+///
+/// Two or three legs creeping round the inside of the glass, each with a
+/// shorter one off its own middle, so the end of an arm is a little tree on
+/// the glass and not a bead. Scaled by the spark, since a twig's spark is a
+/// sixth of the trunk's and wants a sixth of the spider.
+pub fn spread(
+    middle: Vec3,
+    shell: f32,
+    at: Vec3,
+    size: f32,
+    seed: f32,
+    since: f32,
+) -> Vec<Vec<Vec3>> {
+    let (across, other) = frame(at - middle);
+    let legs = if scatter(seed + 2.7) < THREE_LEGS {
+        LEGS + 1
+    } else {
+        LEGS
+    };
+    let mut all = Vec::with_capacity(legs * 2);
+
+    for leg in 0..legs {
+        let own = seed + 9.41 * (leg as f32 + 1.0);
+        let swings = LEG_SWINGS
+            * (0.3 + 0.7 * scatter(own + 4.3))
+            * if scatter(own + 6.1) > 0.5 { 1.0 } else { -1.0 };
+        let round = scatter(own) * std::f32::consts::TAU + since * swings;
+        let toward = across * round.cos() + other * round.sin();
+        let arc = LEG_CREEPS * size * (0.45 + 0.55 * scatter(own + 1.9));
+        let curl = LEG_CURLS * (scatter(own + 7.7) - 0.5) * 2.0;
+        let crept = creeps(middle, shell, at, toward, arc, curl, LEG_LINKS);
+
+        // and the fork off it, since a spark that spreads into straight legs
+        // is a star and not a discharge
+        let half = LEG_LINKS / 2;
+        let from = crept[half];
+        let on = (from - middle).normalize_or_zero();
+        let along = (crept[half + 1] - from).normalize_or_zero();
+        let turn = LEG_TURNS * if scatter(own + 11.3) > 0.5 { 1.0 } else { -1.0 };
+        let off = along * turn.cos() + on.cross(along) * turn.sin();
+
+        all.push(crept);
+        all.push(creeps(
+            middle,
+            shell,
+            from,
+            off,
+            arc * LEG_KEEPS,
+            curl,
+            LEG_LINKS,
+        ));
+    }
+
+    all
+}
+
 /// One arm, as a tree: the trunk, what it forks into, and what those fork
 /// into in their turn.
 ///
@@ -823,7 +941,7 @@ fn draw_one(
         let n = of_the_arm(which, side);
         let breath = 0.85 + 0.15 * (since * (2.1 + 5.5 * quickness(which, side)) + n * 2.9).sin();
 
-        for limb in &limbs {
+        for (ln, limb) in limbs.iter().enumerate() {
             let last = limb.links.len() - 1;
 
             for (k, pair) in limb.links.windows(2).enumerate() {
@@ -878,6 +996,31 @@ fn draw_one(
                 &Transform::at(at).with_scale(Vec3::splat(shell * BLOOM * 2.0 * breath * size)),
                 (crate::aim::PLASMA.truncate() * burning * 0.55).extend(BLOOM_THROUGH),
             );
+
+            // and what the spark spreads into, which runs on the glass
+            // rather than out through it
+            let thin = limb.thick * THINS_TO;
+            let lit = limb.lit * DIMS_TO * burning;
+
+            for leg in spread(middle, shell, at, size, n * 53.1 + ln as f32 * 7.9, since) {
+                for pair in leg.windows(2) {
+                    let (from, to) = (pair[0], pair[1]);
+                    let span = to - from;
+                    let long = span.length();
+
+                    if long <= f32::EPSILON {
+                        continue;
+                    }
+
+                    scene.push_fitting(
+                        cube,
+                        &Transform::at((from + to) * 0.5)
+                            .with_rotation(Quat::from_rotation_arc(Vec3::Y, span / long))
+                            .with_scale(vec3(thin, long, thin)),
+                        (crate::aim::PLASMA.truncate() * lit).extend(1.0),
+                    );
+                }
+            }
         }
     }
 
@@ -1748,6 +1891,72 @@ mod tests {
                                 which,
                                 n
                             );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A spark that is a bead is the branch that did not branch, one scale
+    /// down. Every one of them spreads into legs that run on the glass and
+    /// never through it, and every leg has a fork of its own.
+    #[test]
+    fn every_spark_spreads_on_the_glass_and_forks_there() {
+        let reaches = reaches();
+
+        for side in 0..SIDES.len() {
+            let (middle, shell) = globe(reaches, side);
+            let hugs = shell * (1.0 - BLOOM);
+
+            for eye in all_round(reaches, side) {
+                for tenths in 0..10 {
+                    let since = tenths as f32 * 0.37;
+
+                    for which in 0..FILAMENTS {
+                        for (ln, limb) in arm(reaches, which, side, eye, since).iter().enumerate() {
+                            let at = pulled_in(reaches, side, limb.links[limb.links.len() - 1]);
+                            let size = (limb.thick / THREAD).sqrt();
+                            let legs = spread(
+                                middle,
+                                shell,
+                                at,
+                                size,
+                                of_the_arm(which, side) * 53.1 + ln as f32 * 7.9,
+                                since,
+                            );
+
+                            // four and not `LEGS * 2`, or the test follows
+                            // the constants it is meant to hold and passes
+                            // with the forking taken out
+                            assert!(
+                                legs.len() >= 4,
+                                "arm {}'s limb {} sparks into {} legs",
+                                which,
+                                ln,
+                                legs.len()
+                            );
+
+                            for (n, leg) in legs.iter().enumerate() {
+                                for on in leg {
+                                    assert!(
+                                        (on.distance(middle) - hugs).abs() < 1e-4,
+                                        "arm {}'s leg {} runs {} out and the glass is at {}",
+                                        which,
+                                        n,
+                                        on.distance(middle),
+                                        shell
+                                    );
+                                }
+
+                                let starts = if n % 2 == 0 {
+                                    leg[0].distance(at) < 1e-4
+                                } else {
+                                    legs[n - 1].iter().any(|on| on.distance(leg[0]) < 1e-4)
+                                };
+
+                                assert!(starts, "arm {}'s leg {} starts off nothing", which, n);
+                            }
                         }
                     }
                 }
