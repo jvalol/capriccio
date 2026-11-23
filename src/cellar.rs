@@ -716,7 +716,13 @@ pub const CANDLESTICK: Vec3 = glam::vec3(0.12, 0.34, 0.12);
 pub const CANDLE: f32 = 0.15;
 pub const CANDLE_FAT: f32 = 0.052;
 pub const CANDLE_FLAME: f32 = 0.075;
-pub const CLOCK: Vec3 = glam::vec3(0.13, 0.34, 0.27);
+/// The clock's body: the box the dial is set into, and nothing else.
+///
+/// **Wider than it was**, because the case gained a column either side of
+/// the dial and a dial that fills the front leaves nowhere for them. The
+/// body alone is not the clock any more: everything under and over it is
+/// [`clock_case`].
+pub const CLOCK: Vec3 = glam::vec3(0.13, 0.28, 0.33);
 
 /// The dial on the front of it: how much of the case it takes, how proud it
 /// stands, and how thick the bezel round it is.
@@ -726,6 +732,219 @@ pub const CLOCK: Vec3 = glam::vec3(0.13, 0.34, 0.27);
 pub const DIAL: f32 = 0.78;
 pub const DIAL_OUT: f32 = 0.012;
 pub const BEZEL: f32 = 1.16;
+
+/// The case round the body: a bun foot, a plinth, mouldings over and under,
+/// a cornice and a caddy, each as its own height.
+///
+/// **A moulding is a step, and three steps are a moulding.** Nothing here is
+/// carved: each of these is a box a little wider or narrower than the one it
+/// sits on, and what reads as ornament is the shadow line where one meets
+/// the next. Jake, of the first one, which was a box with a flat slab on
+/// top: the wood frame of it could be more decorated and ornate.
+pub const CLOCK_FOOT: f32 = 0.020;
+pub const CLOCK_FOOT_WIDE: f32 = 0.032;
+pub const CLOCK_PLINTH: f32 = 0.030;
+pub const CLOCK_MOULD: f32 = 0.010;
+pub const CLOCK_CORNICE: f32 = 0.022;
+pub const CLOCK_CADDY: f32 = 0.026;
+
+/// How far a moulding stands proud of the body, and how far a foot is set in
+/// from the plinth's corner.
+pub const CLOCK_STEP: f32 = 0.016;
+pub const CLOCK_FOOT_IN: f32 = 0.020;
+
+/// The columns either side of the dial, and the finial over the lot.
+pub const CLOCK_PILLAR: f32 = 0.026;
+pub const CLOCK_PILLAR_IN: f32 = 0.018;
+pub const CLOCK_FINIAL: f32 = 0.058;
+pub const CLOCK_FINIAL_WIDE: f32 = 0.038;
+
+/// How thick a hand is cut on this dial.
+///
+/// **Its own number and not the back room's.** `clock::HAND_THICK` is 14
+/// millimetres on a ring 1.84 across; the same hand on a dial a fifth that
+/// size would be a plank.
+pub const CLOCK_HAND_THICK: f32 = 0.004;
+
+/// The case, from the shelf up, each piece as a middle and a size measured
+/// from the point the clock stands on.
+///
+/// **One stack, built by adding heights**, rather than seven boxes each
+/// placed at its own number. A moulding written as its own offset is the
+/// fault this building keeps making: move the plinth and the body stays
+/// where it was, with a shadow line through the middle of nothing.
+pub fn clock_case() -> Vec<(Vec3, Vec3)> {
+    let body = CLOCK;
+    let out = |step: f32| vec3(body.x + step * 2.0, 0.0, body.z + step * 2.0);
+    let stack: [(f32, f32); 6] = [
+        // the plinth, and the moulding that takes it in to the body
+        (CLOCK_PLINTH, CLOCK_STEP),
+        (CLOCK_MOULD, CLOCK_STEP * 0.5),
+        (body.y, 0.0),
+        // and out again over it, to the cornice and the caddy on top
+        (CLOCK_MOULD, CLOCK_STEP * 0.5),
+        (CLOCK_CORNICE, CLOCK_STEP),
+        (CLOCK_CADDY, -CLOCK_STEP * 2.0),
+    ];
+
+    let mut up = CLOCK_FOOT;
+    let mut out_of_it = Vec::new();
+
+    for (tall, step) in stack {
+        let size = out(step);
+
+        out_of_it.push((vec3(0.0, up + tall * 0.5, 0.0), vec3(size.x, tall, size.z)));
+        up += tall;
+    }
+
+    out_of_it
+}
+
+/// Where the middle of the dial is, from the point the clock stands on.
+///
+/// **Read by the dial, the bezel, the marks, the hands and the columns**,
+/// which is five places that were four numbers before any of this moved.
+pub fn clock_dial_at() -> Vec3 {
+    let (at, _) = clock_case()[2];
+
+    at
+}
+
+/// The four feet, as their middles.
+pub fn clock_feet() -> Vec<Vec3> {
+    let (_, plinth) = clock_case()[0];
+    let half = vec3(plinth.x, 0.0, plinth.z) * 0.5 - Vec3::splat(CLOCK_FOOT_IN);
+
+    [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+        .iter()
+        .map(|(x, z)| vec3(half.x * x, CLOCK_FOOT * 0.5, half.z * z))
+        .collect()
+}
+
+/// The two columns flanking the dial, as their middles, with how tall each
+/// one is.
+///
+/// **Against the face and not in front of it**, so most of each column is
+/// inside the body and what shows is the round half of it. Two boxes in one
+/// plane fight; a round thing half buried in a flat one does not.
+pub fn clock_pillars() -> Vec<(Vec3, f32)> {
+    let body = clock_case()[2];
+    let (at, size) = body;
+    let out = size.x * 0.5;
+    let aside = size.z * 0.5 - CLOCK_PILLAR_IN;
+
+    [-1.0f32, 1.0]
+        .iter()
+        .map(|side| (vec3(out, at.y, aside * side), size.y))
+        .collect()
+}
+
+/// Where the finial stands: on the caddy, on the middle.
+pub fn clock_finial_at() -> Vec3 {
+    let (at, size) = clock_case()[5];
+
+    vec3(0.0, at.y + size.y * 0.5, 0.0)
+}
+
+/// The three hands, sized for a dial this big.
+///
+/// **The same `Hand` the clock in the back room is built from**, per spec
+/// 0130, so there is one account in this building of what a hand is and how
+/// fast its arbor turns. What differs is the reach, and the one thing that
+/// matters: this one does not beat.
+///
+/// **A seconds hand that creeps is a quartz clock's**, which spec 0130 says
+/// while refusing one, and is right about the clock it is written on: that
+/// one hangs on a pendulum through a thirty tooth escape wheel and
+/// physically cannot sweep. This one has no train in sight at all, so
+/// nothing is contradicted by a hand that moves the way Jake asked for.
+pub fn clock_hands() -> Vec<crate::clock::Hand> {
+    use crate::clock::{Hand, HOUR_HAND, MINUTE_HAND, SECOND_HAND};
+
+    vec![
+        Hand {
+            turns: HOUR_HAND,
+            at: glam::Vec2::ZERO,
+            long: 0.52,
+            cut: 1.4,
+            beats: false,
+        },
+        Hand {
+            turns: MINUTE_HAND,
+            at: glam::Vec2::ZERO,
+            long: 0.78,
+            cut: 1.0,
+            beats: false,
+        },
+        Hand {
+            turns: SECOND_HAND,
+            at: glam::Vec2::ZERO,
+            long: 0.86,
+            cut: 0.5,
+            beats: false,
+        },
+    ]
+}
+
+/// Where a thing at `turn` sits on the mantel clock's dial, as an offset from
+/// the middle of it.
+///
+/// **Both halves of the sign, because either one alone reads as an error.**
+/// `clock::along` gives a direction across the dial and up it, and across
+/// here runs to the room's plus z, which is the reader's left: the dial faces
+/// plus x, so a reader has forward minus x and up plus y, and forward crossed
+/// with up is minus z. `clock::turned` counts the other way round, being
+/// negative as the hour grows. The two cancel, and a hand at three o'clock
+/// lands on minus z, which is the reader's right, which is where three
+/// o'clock is.
+///
+/// Written here rather than in the drawing because the hands and the quarter
+/// marks both want it, and because a face laid out the wrong way round is a
+/// clock running backwards: the same fault, in the same week, as a map
+/// mirrored about the way you were looking.
+pub fn clock_on_the_dial(turn: f32, reach: f32) -> Vec3 {
+    let way = crate::clock::along(turn);
+
+    vec3(0.0, way.y * reach, way.x * reach)
+}
+
+/// A bun foot: a squat turned ball, flat where it meets the plinth and flat
+/// where it meets the shelf.
+pub fn bun_mesh() -> blitzkit::mesh::MeshData {
+    turned(
+        12,
+        10,
+        lidded(|t| {
+            let round = (t * std::f32::consts::PI).sin();
+
+            (t - 0.5, 0.45 + round * 0.55)
+        }),
+    )
+}
+
+/// A finial: a foot, an urn and a point, which is the shape on the top of
+/// every bracket clock ever made.
+pub fn finial_mesh() -> blitzkit::mesh::MeshData {
+    turned(
+        12,
+        20,
+        lidded(|t| {
+            let waist = if t < 0.12 {
+                0.9
+            } else if t < 0.22 {
+                0.9 - (t - 0.12) / 0.1 * 0.45
+            } else if t < 0.62 {
+                let round = ((t - 0.22) / 0.4 * std::f32::consts::PI).sin();
+
+                0.45 + round * 0.55
+            } else {
+                (1.0 - (t - 0.62) / 0.38).powf(0.7) * 0.4
+            };
+
+            (t - 0.5, waist)
+        }),
+    )
+}
 pub const DECANTER: Vec3 = glam::vec3(0.17, 0.27, 0.17);
 pub const GLASS: Vec3 = glam::vec3(0.09, 0.14, 0.09);
 
@@ -1776,5 +1995,203 @@ mod tests {
         }
 
         assert!(back_up, "you got as far back up as {}", at.y);
+    }
+
+    /// Spec 0007: the clock's case is one stack, every piece resting on the
+    /// one under it.
+    ///
+    /// **Which is the whole reason it is built by adding heights.** A
+    /// moulding written as its own offset is two accounts of where the body
+    /// is, and this building has hung a sconce in a doorway and put a grey
+    /// patch over four hundred books that way. A gap here is a shadow line
+    /// through the middle of nothing.
+    #[test]
+    fn the_clock_case_is_one_stack_with_nothing_floating() {
+        let case = clock_case();
+        let mut top = CLOCK_FOOT;
+
+        assert_eq!(case.len(), 6, "the case is {} pieces", case.len());
+
+        for (n, (at, size)) in case.iter().enumerate() {
+            let bottom = at.y - size.y * 0.5;
+
+            assert!(
+                (bottom - top).abs() < 1e-6,
+                "piece {} starts at {:.4} and the one under it ends at {:.4}",
+                n,
+                bottom,
+                top
+            );
+            assert!(size.y > 0.0, "piece {} has no height", n);
+
+            top = at.y + size.y * 0.5;
+        }
+    }
+
+    /// Spec 0007: every foot is under the plinth and inside its footprint.
+    #[test]
+    fn every_foot_stands_under_the_plinth() {
+        let (plinth_at, plinth) = clock_case()[0];
+        let bottom = plinth_at.y - plinth.y * 0.5;
+        let feet = clock_feet();
+
+        assert_eq!(feet.len(), 4);
+
+        for foot in feet {
+            assert!(
+                (foot.y + CLOCK_FOOT * 0.5 - bottom).abs() < 1e-6,
+                "a foot tops out at {:.4} and the plinth starts at {:.4}",
+                foot.y + CLOCK_FOOT * 0.5,
+                bottom
+            );
+            assert!(
+                foot.y - CLOCK_FOOT * 0.5 > -1e-6,
+                "a foot reaches {:.4} below the shelf",
+                foot.y - CLOCK_FOOT * 0.5
+            );
+
+            for (along, half) in [(foot.x, plinth.x * 0.5), (foot.z, plinth.z * 0.5)] {
+                assert!(
+                    along.abs() + CLOCK_FOOT_WIDE * 0.5 <= half + 1e-6,
+                    "a foot runs {:.4} out of a plinth half {:.4} across",
+                    along.abs() + CLOCK_FOOT_WIDE * 0.5,
+                    half
+                );
+            }
+        }
+    }
+
+    /// Spec 0007: the columns stand either side of the dial and touch
+    /// neither it nor the edge of the body.
+    ///
+    /// **The one measurement in the case that can quietly go wrong.** The
+    /// dial is a share of the body's height and the columns are set in from
+    /// its width, so the two are sized off different numbers and a wider
+    /// dial walks into them without anything else changing.
+    #[test]
+    fn the_columns_stand_clear_of_the_dial() {
+        let (_, body) = clock_case()[2];
+        let bezel = body.y * DIAL * BEZEL * 0.5;
+        let pillars = clock_pillars();
+
+        assert_eq!(pillars.len(), 2);
+
+        for (at, tall) in pillars {
+            let inner = at.z.abs() - CLOCK_PILLAR * 0.5;
+            let outer = at.z.abs() + CLOCK_PILLAR * 0.5;
+
+            assert!(
+                inner > bezel,
+                "a column reaches in to {:.4} and the bezel reaches out to {:.4}",
+                inner,
+                bezel
+            );
+            assert!(
+                outer < body.z * 0.5,
+                "a column reaches out to {:.4} and the body stops at {:.4}",
+                outer,
+                body.z * 0.5
+            );
+            assert!(
+                (tall - body.y).abs() < 1e-6,
+                "a column is {:.4} tall against a body of {:.4}",
+                tall,
+                body.y
+            );
+        }
+    }
+
+    /// Spec 0007: the dial is set into the body and does not run into the
+    /// mouldings over or under it.
+    #[test]
+    fn the_dial_fits_the_body_it_is_set_into() {
+        let (at, body) = clock_case()[2];
+        let bezel = body.y * DIAL * BEZEL * 0.5;
+        let middle = clock_dial_at();
+
+        assert!(
+            (middle - at).length() < 1e-6,
+            "the dial is at {:?} and the body is at {:?}",
+            middle,
+            at
+        );
+        assert!(
+            bezel < body.y * 0.5,
+            "the dial reaches {:.4} and the body is half {:.4} tall",
+            bezel,
+            body.y * 0.5
+        );
+    }
+
+    /// Spec 0130: this one sweeps where the clock in the back room steps.
+    ///
+    /// **Both halves, because either alone passes on the wrong clock.** The
+    /// hands are the back room's own `Hand`, so the thing that makes this
+    /// one different is `beats`, and `when` is what reads it.
+    #[test]
+    fn the_mantel_clock_sweeps_where_the_back_room_steps() {
+        let hours = 10.0 + 10.0 / 60.0 + 17.4 / 3600.0;
+
+        assert!(
+            clock_hands().iter().all(|hand| !hand.beats),
+            "a hand on the mantel clock beats"
+        );
+
+        for hand in clock_hands() {
+            let at = crate::clock::when(hand.beats, hours);
+
+            assert!(
+                (at - hours).abs() < 1e-9,
+                "a hand reads {:.6} where the time is {:.6}",
+                at,
+                hours
+            );
+        }
+
+        assert!(
+            crate::clock::hands().iter().any(|hand| hand.beats),
+            "nothing in the back room beats any more, so this says nothing"
+        );
+    }
+
+    /// Spec 0007: a hand points where the hour says, read as a person
+    /// standing in front of the clock would read it.
+    ///
+    /// **The reader's right is worked out and not asserted.** The dial faces
+    /// the room's plus x, so a reader has forward minus x and up plus y, and
+    /// their right hand is the cross of those two. Writing minus z in here
+    /// instead would be this test agreeing with the drawing about a
+    /// convention they had both got backwards.
+    #[test]
+    fn a_hand_points_where_the_hour_says() {
+        let right = Vec3::NEG_X.cross(Vec3::Y);
+        let up = Vec3::Y;
+
+        for (hours, want, which) in [
+            (0.0, up, "midnight"),
+            (3.0, right, "three"),
+            (6.0, -up, "six"),
+            (9.0, -right, "nine"),
+        ] {
+            let turn = crate::clock::turned(crate::clock::HOUR_HAND, hours);
+            let at = clock_on_the_dial(turn, 1.0);
+
+            assert!(
+                at.distance(want) < 1e-5,
+                "the hour hand at {} points {:?} and should point {:?}",
+                which,
+                at,
+                want
+            );
+        }
+
+        // and the minute hand, which is the same answer twelve times faster
+        let quarter = crate::clock::turned(crate::clock::MINUTE_HAND, 15.0 / 60.0);
+
+        assert!(
+            clock_on_the_dial(quarter, 1.0).distance(right) < 1e-5,
+            "the minute hand at a quarter past points {:?}",
+            clock_on_the_dial(quarter, 1.0)
+        );
     }
 }

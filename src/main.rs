@@ -993,6 +993,10 @@ struct Arcade {
     stave: Option<TextureId>,
     flame: Option<MeshId>,
     candlestick: Option<MeshId>,
+    /// The two turned pieces of the mantel clock's case: its feet and the
+    /// finial on top of it.
+    clock_bun: Option<MeshId>,
+    clock_finial: Option<MeshId>,
     decanter: Option<MeshId>,
     wineglass: Option<MeshId>,
     afghan: Option<TextureId>,
@@ -1716,6 +1720,8 @@ impl Arcade {
             stave: None,
             flame: None,
             candlestick: None,
+            clock_bun: None,
+            clock_finial: None,
             decanter: None,
             wineglass: None,
             afghan: None,
@@ -3508,7 +3514,7 @@ impl Arcade {
     fn draw_the_clock(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
         let face = clock::dial_at(reaches);
-        let hours = self.wall_clock.unwrap_or_else(clock::now);
+        let hours = self.the_hour();
         let counts = clock::counts();
         let wheel_of = |teeth: u32| {
             counts
@@ -8411,6 +8417,17 @@ impl Arcade {
         self.at + over * (self.eye - self.at.dot(over) + EYE)
     }
 
+    /// What time it is, for everything in the building that shows one.
+    ///
+    /// **One account, because there are two clocks now.** The back room's
+    /// reads the machine's own hour per spec 0130 and the cellar's mantel
+    /// clock reads the same one, so the two cannot disagree. `wall_clock`
+    /// is what a picture test pins it to, and a reference drawn off the
+    /// machine's hour is a different picture every minute.
+    fn the_hour(&self) -> f32 {
+        self.wall_clock.unwrap_or_else(clock::now)
+    }
+
     fn facing(&self) -> Vec3 {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
@@ -9043,6 +9060,8 @@ impl Game for Arcade {
         self.dish = Some(renderer.add_mesh(&spa::dish_mesh()));
         self.flame = Some(renderer.add_mesh(&cellar::flame_mesh()));
         self.candlestick = Some(renderer.add_mesh(&cellar::candlestick_mesh()));
+        self.clock_bun = Some(renderer.add_mesh(&cellar::bun_mesh()));
+        self.clock_finial = Some(renderer.add_mesh(&cellar::finial_mesh()));
         self.decanter = Some(renderer.add_mesh(&cellar::decanter_mesh()));
         self.wineglass = Some(renderer.add_mesh(&cellar::glass_mesh()));
         let (_, mat) = cellar::rug(self.room.reaches);
@@ -12758,27 +12777,73 @@ impl Game for Arcade {
                 // a clock in the middle. It reads as a clock because of the
                 // dial and nothing else, so the dial is most of the front of
                 // it: a small pale disc on a brown box reads as a brown box.
-                let case = cellar::CLOCK;
-                let front = shelf.x + case.x * 0.5;
-                let eye = shelf.y + case.y * 0.56;
+                //
+                // **And it says the time**, which is the machine's own, read
+                // through the same `wall_clock` the clock in the back room
+                // uses so that the two of them cannot disagree and so that a
+                // reference picture is not a different picture every minute.
+                // Spec 0130.
+                let hours = self.the_hour();
+                let stands = shelf;
+                let dial_at = stands + cellar::clock_dial_at();
+                let front = dial_at.x + cellar::CLOCK.x * 0.5;
                 let turned = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+                let across = cellar::CLOCK.y * cellar::DIAL;
 
-                scene.push_plain(
-                    cube,
-                    &Transform::at(shelf + Vec3::Y * case.y * 0.5).with_scale(case),
-                    aim::CLOCK_CASE,
-                );
-                // a pediment on top, which is what a mantel clock has instead
-                // of a flat lid
-                scene.push_plain(
-                    cube,
-                    &Transform::at(shelf + Vec3::Y * (case.y + 0.016)).with_scale(vec3(
-                        case.x * 1.14,
-                        0.032,
-                        case.z * 1.14,
-                    )),
-                    aim::CLOCK_CASE,
-                );
+                // the case: a plinth, the body, mouldings either side of it,
+                // a cornice and a caddy, each a box a little wider or
+                // narrower than the one under it. The shadow line where one
+                // meets the next is the whole of the ornament.
+                for (at, size) in cellar::clock_case() {
+                    scene.push_plain(
+                        cube,
+                        &Transform::at(stands + at).with_scale(size),
+                        aim::CLOCK_CASE,
+                    );
+                }
+
+                if let (Some(bun), Some(finial)) = (self.clock_bun, self.clock_finial) {
+                    for at in cellar::clock_feet() {
+                        scene.push_plain(
+                            bun,
+                            &Transform::at(stands + at).with_scale(vec3(
+                                cellar::CLOCK_FOOT_WIDE,
+                                cellar::CLOCK_FOOT,
+                                cellar::CLOCK_FOOT_WIDE,
+                            )),
+                            aim::CLOCK_CASE,
+                        );
+                    }
+
+                    scene.push_plain(
+                        finial,
+                        &Transform::at(
+                            stands
+                                + cellar::clock_finial_at()
+                                + Vec3::Y * cellar::CLOCK_FINIAL * 0.5,
+                        )
+                        .with_scale(vec3(
+                            cellar::CLOCK_FINIAL_WIDE,
+                            cellar::CLOCK_FINIAL,
+                            cellar::CLOCK_FINIAL_WIDE,
+                        )),
+                        aim::BRASS,
+                    );
+                }
+
+                // a column either side of the dial, mostly buried in the
+                // face so that what shows is the round half of it
+                for (at, tall) in cellar::clock_pillars() {
+                    scene.push_plain(
+                        peg_or_cube,
+                        &Transform::at(stands + at).with_scale(vec3(
+                            cellar::CLOCK_PILLAR,
+                            tall,
+                            cellar::CLOCK_PILLAR,
+                        )),
+                        aim::BRASS,
+                    );
+                }
 
                 // the bezel, then the dial inside it
                 for (out, wide, colour) in [
@@ -12787,53 +12852,67 @@ impl Game for Arcade {
                 ] {
                     scene.push_plain(
                         peg_or_cube,
-                        &Transform::at(vec3(front + out, eye, shelf.z))
+                        &Transform::at(vec3(front + out, dial_at.y, dial_at.z))
                             .with_rotation(turned)
-                            .with_scale(vec3(
-                                case.y * cellar::DIAL * wide,
-                                0.012,
-                                case.y * cellar::DIAL * wide,
-                            )),
+                            .with_scale(vec3(across * wide, 0.012, across * wide)),
                         colour,
                     );
                 }
 
                 // four marks at the quarters, which is what the eye counts
-                let reach = case.y * cellar::DIAL * 0.4;
+                let reach = across * 0.4;
                 for quarter in 0..4 {
                     let turn = quarter as f32 * std::f32::consts::FRAC_PI_2;
-                    let (sin, cos) = turn.sin_cos();
+                    let on = cellar::clock_on_the_dial(turn, reach);
 
                     scene.push_plain(
                         cube,
                         &Transform::at(vec3(
                             front + cellar::DIAL_OUT + 0.004,
-                            eye + cos * reach,
-                            shelf.z + sin * reach,
+                            dial_at.y + on.y,
+                            dial_at.z + on.z,
                         ))
-                        .with_rotation(glam::Quat::from_rotation_x(turn))
+                        .with_rotation(clock::turned_to(turn))
                         .with_scale(vec3(0.009, 0.026, 0.009)),
                         aim::CLOCK_CASE,
                     );
                 }
 
-                // and the hands, at ten past ten, which is where the hands sit
-                // in every photograph of a clock ever taken because it reads as
-                // a clock rather than as a number
-                for (turn, long, thick) in [(-1.05f32, 0.62f32, 0.011f32), (1.05, 0.44, 0.015)] {
-                    let arm = case.y * cellar::DIAL * 0.5 * long;
-                    let (sin, cos) = turn.sin_cos();
+                // and the hands, which are the back room's own: the same
+                // `Hand`, the same three meshes off `clock::hand_mesh`, the
+                // same colours. A clock drawn with bars for hands is a clock
+                // with its hands still to be made.
+                //
+                // Each sits on the arbor rather than being slid along
+                // itself, because the mesh runs from its tail to its point
+                // with the arbor at nothing. `turned_to` is the same mapping
+                // as `cellar::clock_on_the_dial`, read as a rotation.
+                //
+                // None of these beats: there is no escapement in sight here
+                // to be contradicted by a seconds hand that sweeps.
+                for (n, (hand, mesh)) in cellar::clock_hands().iter().zip(&self.hands).enumerate() {
+                    let turn = clock::turned(hand.turns, clock::when(hand.beats, hours));
+                    let arm = across * 0.5 * hand.long;
 
-                    scene.push_plain(
-                        cube,
+                    scene.push_material(
+                        *mesh,
                         &Transform::at(vec3(
-                            front + cellar::DIAL_OUT + 0.008,
-                            eye + cos * arm * 0.5,
-                            shelf.z + sin * arm * 0.5,
+                            front + cellar::DIAL_OUT + 0.006 + n as f32 * 0.003,
+                            dial_at.y,
+                            dial_at.z,
                         ))
-                        .with_rotation(glam::Quat::from_rotation_x(turn))
-                        .with_scale(vec3(thick, arm, thick)),
-                        aim::CLOCK_CASE,
+                        .with_rotation(clock::turned_to(turn))
+                        .with_scale(vec3(
+                            cellar::CLOCK_HAND_THICK,
+                            arm,
+                            arm,
+                        )),
+                        if hand.turns == clock::SECOND_HAND {
+                            aim::SECOND_HAND
+                        } else {
+                            aim::HAND
+                        },
+                        aim::MATTE,
                     );
                 }
 

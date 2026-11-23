@@ -238,6 +238,43 @@ The climb is now 4.5 seconds foot to top at sixty, ninety, a hundred and
 twenty and a hundred and forty four frames a second, within a hundredth
 of a second of each other.
 
+**The clock over the fire says the time, and has a case worth looking at.**
+
+Jake, on the first one, which was a brown box with a flat slab on top and its
+hands painted at ten past ten: this clock should show accurate time with a
+continuous second hand, the wood frame of it could be more decorated and
+ornate too.
+
+The time is the machine's own, read through the one `the_hour` that the clock
+in the back room reads, so the two cannot disagree and a picture test pins
+both at once. Spec 0130 is where that hour comes from and why it is the
+player's rather than the building's: the arcade's own day is twenty seconds
+long, and a minute hand on it goes round three times a second.
+
+The seconds hand sweeps. Spec 0130 refuses one for the back room's clock and
+is right about that clock, which hangs on a pendulum through a thirty tooth
+escape wheel and physically cannot move except in steps. This one has no train
+in sight to be contradicted.
+
+The hands are the back room's own: the same `Hand`, the same three meshes off
+`clock::hand_mesh`, the same two colours. What differs is reach, thickness and
+`beats`.
+
+The case is a stack built by adding heights, not seven boxes each at its own
+number: bun feet, a plinth, a moulding in, the body, a moulding out, a cornice
+and a caddy, with a turned finial over the lot and a column either side of the
+dial. Nothing here is carved. Each piece is a box a little wider or narrower
+than the one under it, and what reads as ornament is the shadow line where one
+meets the next. The body widened from 0.27 to 0.33 to leave the columns
+somewhere to stand.
+
+**Which way round the face runs is written once.** `cellar::clock_on_the_dial`
+answers it for the hands and the quarter marks both. It was inline in the
+drawing, where nothing could reach it, which is how spec 0132's map came to be
+mirrored in the same week: a layout convention that only a screenshot can check
+is one that gets checked by Jake.
+
+
 ## Acceptance criteria
 
 - You can walk up a step, and the shallowest is not the hardest. — `walk::tests::it_climbs_a_step`
@@ -265,6 +302,14 @@ of a second of each other.
 - The stair reads as a stair going down. — walk down it.
 - The table reads as a pool table. — walk up to it.
 - The book is findable without being marked. — look along the shelves in the nook.
+- The case is one stack with nothing floating. — `cellar::tests::the_clock_case_is_one_stack_with_nothing_floating`
+- Every foot is under the plinth and inside its footprint. — `cellar::tests::every_foot_stands_under_the_plinth`
+- The columns stand clear of the dial and of the body's edge. — `cellar::tests::the_columns_stand_clear_of_the_dial`
+- The dial is set into the body and fits it. — `cellar::tests::the_dial_fits_the_body_it_is_set_into`
+- A hand points where the hour says, read as somebody standing in front of it
+  would read it. — `cellar::tests::a_hand_points_where_the_hour_says`
+- This clock sweeps where the back room's
+  steps. — `cellar::tests::the_mantel_clock_sweeps_where_the_back_room_steps`
 
 ## Out of scope
 

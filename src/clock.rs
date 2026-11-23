@@ -266,12 +266,17 @@ pub fn now() -> f32 {
         + (now.second() as f32 + now.nanosecond() as f32 * 1e-9) / 3600.0
 }
 
-/// The hour a picture of this room is taken at.
+/// The hour a picture of any room with a clock in it is taken at.
 ///
 /// **Ten past ten, which is where the hands sit in every photograph of a
-/// clock ever taken**, and where the nook's own mantel clock is stuck. A
-/// picture of a room whose whole point is the time has to be taken at one,
-/// or the reference is a different picture every minute.
+/// clock ever taken.** A picture of a room whose whole point is the time has
+/// to be taken at one, or the reference is a different picture every minute.
+///
+/// It said here that this is where the cellar's mantel clock is stuck, which
+/// it was and is not: that one reads `now` through the same `wall_clock`
+/// this pins, so both clocks in the building say one time and both references
+/// hold still. It also called it the nook's, and it stands over the cellar's
+/// fire. See spec 0007.
 #[cfg(test)]
 pub const SHOWN: f32 = 10.0 + 10.0 / 60.0;
 
