@@ -64,6 +64,28 @@ a half and four by three, neither in the middle and neither lined up with the
 other. Each stands a hand over the water with the same two rows of stone
 round it, a winter's leaf fall on it and trees in it.
 
+**Grand trees round the water.** Eleven of them standing on the verge,
+oak and aspen and one fir, at up to two and a half times the size the field
+stands its own: eleven metres against four and a half. The field is meant to
+be a field, which is why its scatter keeps them small; a pond is the one
+place a tree is let grow. Their feet are outside the lip and their crowns are
+over the water, which is what the water has to give back.
+
+**And the water gives it back.** The surface wears a mirror, per engine spec
+0091: a pass over the scene from the camera reflected in the water's own
+plane, which the glass of spec 0092 then samples by screen position. Drawn
+twice, because that glass takes no light at all: the reflection first, and
+the water's own colour two millimetres over it, which is what carries the
+chop and the dark. `field::LITTER_LAID` does the same job for a patch of
+leaves.
+
+The asking is the game's, because the engine draws every mirror it is handed.
+What is asked is whether a sphere half the pond across is in view: a frustum
+holds a sphere it is standing inside, so asking about the whole pond and its
+verge bought a reflection of the water behind your head. Half the pond is a
+sphere nobody can stand inside, because the water is the thing you cannot
+walk into.
+
 **Ducks.** Six of them, each going round a slow ellipse of its own at its own
 pace, riding the water's own height rather than a line drawn at nought: a
 duck on still water sits where the water is. Each pushes the surface as it
@@ -114,6 +136,32 @@ once the ground rises to the pond rather than the pond standing on the
 ground, there is nothing to make out of boxes and nothing left that is
 straight.
 
+## What the reflection costs
+
+**Nothing, and rather less than nothing.** Measured 2026-11-22 from the
+south bank with the pond filling most of the frame, six runs of each arm in
+both orders, the median of the last 240 frames of each run:
+
+| | the whole GPU frame |
+| --- | --- |
+| with the reflection | 4.10 ms |
+| without it, the water see-through as it was | 4.76 ms |
+| without it, the water opaque | 4.60 ms |
+
+The frame with a whole extra pass in it is the fastest of the three, by two
+thirds of a millisecond, in every one of the runs and in both orders. The
+reflection's own pass reads 3.5 ms on the clock, which is most of a frame
+that comes to 4.1: the passes are not disjoint stretches of the timeline,
+which spec 0110 of the engine found as well, and only the total is a frame
+cost.
+
+What is not established is the mechanism. The likely one is that
+`fs_glass` does a texture read and a multiply where the water's own shading
+does the sun, the lamps, a Fresnel and the chop over a third of the screen,
+and the mirror pass draws into 960 by 540 with everything below the water
+clipped away by spec 0093's near plane. That is a guess with a measurement
+beside it, not a finding.
+
 ## Acceptance criteria
 
 - The pond is north of the way there, and nothing of it is on the way or
@@ -138,6 +186,11 @@ straight.
   round. — `pond::tests::the_water_ends_in_stone`
 - A duck is on the water all the way round its circuit, and never on an
   island. — `pond::tests::a_duck_rides_the_water_it_is_on`
+- The grand trees stand on the verge and not in the water, they are grand,
+  and their crowns reach over
+  it. — `pond::tests::the_grand_trees_stand_round_the_water`
+- The water gives back what is in front of you and pays for nothing
+  else. — `pond::tests::the_water_gives_back_only_what_is_looked_at`
 - The pond is drawn as the blessed reference has it, from a pace back from
   its south east shoulder. — `tests::the_pond_is_drawn`
 
@@ -150,6 +203,9 @@ straight.
   `./target/release/capriccio --at 0.28 --sky fair --pose "-42 0 26.2 1.5 170 -11 70"`.
 - Whether the ducks look like ducks and move like them, which a still picture
   cannot say. Walk out of the gap and watch one.
+- Whether the reflection holds together as you walk round the water, which is
+  the one thing a single frame cannot say: a mirror is drawn from one camera
+  and what it gives back moves with yours.
 - Whether the verge reads as ground rising rather than as a mound laid on it.
   The grass on it is the field's own texture, tiled off the world so the
   tiles line up across the join, and the join is the thing to look at.

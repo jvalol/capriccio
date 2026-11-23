@@ -1042,6 +1042,9 @@ struct Arcade {
     isles: Vec<MeshId>,
     /// The bowl the water lies in: the bank it rises through, the verge of
     /// grass round that, and the silt at the bottom.
+    /// What the water gives back, per engine spec 0091: a pass over the
+    /// scene from under it, which the surface then wears.
+    pond_glass: Vec<TextureId>,
     /// Spec 0130's clock: a wheel for every tooth count it has, the
     /// chapter ring, and the bob on the end of the pendulum.
     /// What the clock says, when something other than the machine is
@@ -1724,6 +1727,7 @@ impl Arcade {
             pond_field_mesh: None,
             duck: None,
             isles: Vec::new(),
+            pond_glass: Vec::new(),
             wall_clock: None,
             wheels: Vec::new(),
             chapter: None,
@@ -3650,7 +3654,7 @@ impl Arcade {
         }
     }
 
-    fn draw_the_pond(&self, scene: &mut Scene) {
+    fn draw_the_pond(&self, scene: &mut Scene, camera: &Camera) {
         let reaches = self.room.reaches;
 
         // the verge first, which is the field's own grass carried up to the
@@ -3787,13 +3791,43 @@ impl Arcade {
             }
         }
 
-        // the water itself, last, with a tight highlight: the default is a
-        // broad one and over four hundred square metres that is a sheen
-        // across the whole pond, which is the one thing that made the
-        // garden's read as a bath.
-        if let Some(mesh) = self.pond_field_mesh {
-            scene.push_material(mesh, &Transform::at(Vec3::ZERO), aim::FIELD_WATER, 420.0);
+        // the water itself, last of all, and what it gives back.
+        //
+        // **A mirror, which is a whole pass over the scene**, per engine
+        // spec 0091. Pushed only when the pond is on screen: the field is
+        // drawn from everywhere out of doors and the arcade has no budget
+        // to reflect a pond nobody is looking at. What the glass wears is
+        // the same mesh the water is, so there is nothing to keep in step.
+        let Some(mesh) = self.pond_field_mesh else {
+            return;
+        };
+        let middle = pond::at(reaches);
+        let seen = pond::gives_back(reaches, camera);
+
+        if let (true, [screen, inside, ..]) = (seen, &self.pond_glass[..]) {
+            scene.mirror(*screen, *inside, middle, Vec3::Y);
+            scene.glass(
+                mesh,
+                *screen,
+                &Transform::at(Vec3::ZERO),
+                aim::FIELD_GIVES_BACK,
+            );
         }
+
+        // and the water's own colour over it, a hair above, which is what
+        // brings back the chop and the dark of the water itself: the glass
+        // takes no light at all, per engine spec 0092, so on its own the
+        // pond is a sheet of mirror rather than water with the sky in it.
+        scene.push_material(
+            mesh,
+            &Transform::at(Vec3::Y * pond::SHEEN),
+            if seen {
+                aim::FIELD_OVER_GLASS
+            } else {
+                aim::FIELD_WATER
+            },
+            420.0,
+        );
     }
 
     fn draw_a_tree(&self, scene: &mut Scene, stood: &field::Stood, kinds: &[garden::Tree]) {
@@ -4000,7 +4034,7 @@ impl Arcade {
             self.draw_the_village(scene, cube);
         }
 
-        self.draw_the_pond(scene);
+        self.draw_the_pond(scene, camera);
     }
 
     /// The picture a tree's foliage wears, and the colour to draw it in.
@@ -9087,6 +9121,14 @@ impl Game for Arcade {
             .iter()
             .map(|seed| renderer.add_mesh(&pond::isle_mesh(*seed)))
             .collect();
+        // **Wider than it is tall, because the pond is.** The hall's panes
+        // are square and take 640 each way; this is one sheet lying flat
+        // and most of what it gives back is sky over a long bank of trees.
+        // Engine spec 0094 wants two: one for what the water holds on the
+        // screen, one for what it holds inside another mirror, and the
+        // glass samples by screen position so a picture belongs to the pass
+        // that drew it.
+        self.pond_glass = vec![renderer.add_target(960, 540), renderer.add_target(960, 540)];
         self.wheels = clock::counts()
             .into_iter()
             .map(|teeth| renderer.add_mesh(&clock::wheel_mesh(teeth)))

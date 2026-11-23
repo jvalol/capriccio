@@ -138,6 +138,31 @@ pub const RUNS: f32 = 1.9;
 /// pond comes back the colour of the sky.
 pub const CALM: f32 = 0.38;
 
+/// Whether the water is worth reflecting this frame.
+///
+/// **A reflection is a whole pass over the scene**, per engine spec 0091,
+/// and the engine draws every mirror it is handed: a game that pushes one
+/// for a pond behind its own head pays for it. So the asking is the game's.
+///
+/// **And the sphere it is asked about is half the pond.** A frustum holds a
+/// sphere it is standing inside, so the whole pond and its verge, which is
+/// what this asked about first, is in view from the bank whichever way you
+/// face: it bought a reflection of the water behind your head. Half the
+/// pond is a sphere nobody can stand inside, because the water is what you
+/// cannot walk into, and a glance along the bank still carries it.
+pub fn gives_back(reaches: f32, camera: &blitzkit::camera::Camera) -> bool {
+    camera
+        .frustum()
+        .holds_sphere(at(reaches), ACROSS.max_element() * 0.5)
+}
+
+/// How far over the glass the water's own sheet is laid.
+///
+/// Two millimetres, which is `field::LITTER_LAID` doing the same job for a
+/// patch of leaves: two surfaces in one plane fight, and these two are the
+/// same surface drawn twice on purpose.
+pub const SHEEN: f32 = 0.002;
+
 /// How far across the pond is, and how square its outline runs.
 ///
 /// A rounded oblong rather than an oval: the shape a pond cut into a lawn
@@ -417,6 +442,22 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             vec3(middle.x, RIM_UP + STOPS * 0.5, middle.z),
             vec3(span.x, STOPS, span.z),
         ));
+
+        if n == 0 {
+            // the trunks of the grand trees, the way the field's own are:
+            // only as high as a body, so a crown you could walk under does
+            // not stop you
+            for tree in standing_round(reaches) {
+                let tall = crate::field::TREE_TALL * tree.size;
+                let stops = tall.min(1.8);
+                let wide = 0.26 * tree.size;
+
+                out.push(Aabb::from_center_size(
+                    tree.at + Vec3::Y * stops * 0.5,
+                    vec3(wide, stops, wide),
+                ));
+            }
+        }
 
         // and the ground out of the field, over the verge and across the
         // flat of the lip, which is the first band and was missing: a lip
@@ -820,7 +861,7 @@ pub fn isle_stones(reaches: f32) -> Vec<Set> {
 pub fn trees(reaches: f32) -> Vec<crate::field::Stood> {
     let isles = islands(reaches);
     let kinds = crate::field::kinds();
-    let mut out = Vec::new();
+    let mut out = standing_round(reaches);
 
     // **Small, because an island is looked at across the water.** The field
     // stands these at three quarters to one and a third, which is a tree you
@@ -857,6 +898,57 @@ pub fn trees(reaches: f32) -> Vec<crate::field::Stood> {
     }
 
     out
+}
+
+/// How big the trees round the water are, and where they stand: a share of
+/// the way round the pond, how far out from the lip, which kind and how big
+/// against the field's own.
+///
+/// **Grand ones, which this field has none of.** `field::TREE_TALL` is 4.4
+/// metres and the scatter stands them between three quarters and one and a
+/// third, because a field of big trees is a wood and the field is meant to
+/// be a field. A pond is the one place a tree is let grow: these are two and
+/// a half times that at the biggest, which is eleven metres, and they are
+/// what the water has to give back.
+///
+/// Not evenly spaced and not all one size. Eleven of them at a share each,
+/// bunched where the bank is wide and thin where it is not, because a ring
+/// of trees at the same spacing is an orchard.
+pub const ROUND_THE_WATER: [(f32, f32, usize, f32); 11] = [
+    (0.035, 2.1, 1, 2.35),
+    (0.105, 1.4, 2, 1.85),
+    (0.165, 3.1, 1, 2.6),
+    (0.27, 1.8, 2, 2.05),
+    (0.35, 2.6, 1, 2.45),
+    (0.46, 1.5, 0, 1.7),
+    (0.545, 2.9, 2, 2.2),
+    (0.63, 1.7, 1, 2.5),
+    (0.72, 2.4, 2, 1.95),
+    (0.83, 1.6, 1, 2.3),
+    (0.915, 3.0, 2, 2.15),
+];
+
+/// The grand trees standing round the water.
+///
+/// On the verge, outside the lip, so their trunks are in the grass and their
+/// crowns are over the pond: a tree whose foot is in the bank is a tree
+/// standing in the water.
+pub fn standing_round(reaches: f32) -> Vec<crate::field::Stood> {
+    ROUND_THE_WATER
+        .iter()
+        .map(|(on, out, kind, size)| {
+            let at = rim_at(reaches, *on, *out);
+
+            crate::field::Stood {
+                at: vec3(at.x, section(*out), at.z),
+                // off its own place, so no two of them are turned the same
+                // way and none of it is written down twice
+                turn: (on * 37.0).sin() * std::f32::consts::PI,
+                size: *size,
+                what: crate::field::What::Tree(*kind),
+            }
+        })
+        .collect()
 }
 
 /// How many patches of leaves lie on the bigger island.
@@ -1522,6 +1614,111 @@ mod tests {
                 spot.z
             );
         }
+    }
+
+    /// Spec 0129: the grand trees stand on the verge, over the water and
+    /// not in it.
+    ///
+    /// **Their feet and their crowns are two questions.** A tree with its
+    /// foot in the bank is a tree standing in a pond; a tree whose crown
+    /// clears the water is a tree that gives the pond nothing to reflect.
+    #[test]
+    fn the_grand_trees_stand_round_the_water() {
+        let kinds = crate::field::kinds();
+        let stood = standing_round(REACHES);
+
+        assert!(
+            stood.len() >= 8,
+            "the pond has {} trees round it",
+            stood.len()
+        );
+
+        let mut over = 0;
+
+        for tree in &stood {
+            assert!(
+                !inside(REACHES, tree.at, 0.0),
+                "a tree stands in the water at {} {}",
+                tree.at.x,
+                tree.at.z
+            );
+            assert!(
+                tree.size > 1.5,
+                "a tree round the pond is {} of the field's own, which is not grand",
+                tree.size
+            );
+
+            let crate::field::What::Tree(kind) = tree.what else {
+                continue;
+            };
+            let reach = kinds
+                .get(kind)
+                .map(|one| crate::field::crown_reach(one, tree.size))
+                .unwrap_or(0.0);
+
+            if inside(REACHES, tree.at, reach) {
+                over += 1;
+            }
+        }
+
+        assert!(
+            over >= 4,
+            "only {} of them reach over the water at all",
+            over
+        );
+
+        // and none of them is standing in another
+        for (n, one) in stood.iter().enumerate() {
+            for two in stood.iter().skip(n + 1) {
+                assert!(
+                    one.at.distance(two.at) > 2.0,
+                    "two trees stand together at {} {}",
+                    one.at.x,
+                    one.at.z
+                );
+            }
+        }
+    }
+
+    /// Spec 0129: the water gives back what is in front of you, and pays
+    /// for nothing else.
+    ///
+    /// **A reflection is a whole pass over the scene**, per engine spec
+    /// 0091, and the engine draws every mirror it is handed. So the asking
+    /// is the game's, and this is what says the asking is right: a frustum
+    /// holds a sphere it is standing inside, which is every pond seen from
+    /// its own bank, so the first guard written here bought a reflection of
+    /// the water behind your head.
+    #[test]
+    fn the_water_gives_back_only_what_is_looked_at() {
+        let middle = at(REACHES);
+        let bank = rim_at(REACHES, 0.75, VERGE + 2.0);
+        let mut camera = blitzkit::camera::Camera::new();
+
+        camera.position = bank + Vec3::Y * crate::EYE;
+        camera.target = middle;
+
+        assert!(
+            gives_back(REACHES, &camera),
+            "the pond does not reflect for somebody standing at it"
+        );
+
+        // the same spot, turned round
+        camera.target = camera.position + (camera.position - middle);
+
+        assert!(
+            !gives_back(REACHES, &camera),
+            "the pond reflects for somebody facing away from it"
+        );
+
+        // and from the far side of the field
+        camera.position = middle + vec3(0.0, crate::EYE, 300.0);
+        camera.target = middle;
+
+        assert!(
+            !gives_back(REACHES, &camera),
+            "the pond reflects from three hundred metres off"
+        );
     }
 
     /// Spec 0129: a duck is on the water all the way round its circuit,

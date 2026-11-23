@@ -2191,6 +2191,20 @@ pub const FIELD_TUFT: Vec4 = vec4(0.40, 0.375, 0.180, 1.0);
 pub const FIELD_WATER: Vec4 = vec4(0.105, 0.125, 0.135, 0.86);
 pub const FIELD_SILT: Vec4 = vec4(0.085, 0.075, 0.060, 1.0);
 
+/// What the water gives back, and the water's own colour laid over it.
+///
+/// **Two draws, because the glass takes no light.** Engine spec 0092
+/// multiplies this tint through a picture that was lit when it was drawn,
+/// so the reflection comes back whole and flat, with none of the chop and
+/// none of the water's own darkness in it. The sheet over it carries both,
+/// thin enough to see the reflection through and dark enough that the pond
+/// is water rather than a mirror lying in a field.
+///
+/// A reflection in water is never as bright as what it reflects: a little
+/// under one, and tilted toward the green the water already is.
+pub const FIELD_GIVES_BACK: Vec4 = vec4(0.72, 0.78, 0.78, 1.0);
+pub const FIELD_OVER_GLASS: Vec4 = vec4(0.105, 0.125, 0.135, 0.42);
+
 /// The bank the water rises through, which is wet ground with cobbles set
 /// in it, and the soil an island holds.
 ///
