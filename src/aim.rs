@@ -306,6 +306,14 @@ pub const MAP_EDGE: Vec4 = vec4(0.62, 0.56, 0.44, 0.85);
 pub const MAP_PLATE: Vec4 = vec4(0.03, 0.035, 0.05, 0.96);
 pub const MAP_ROOM: Vec4 = vec4(0.74, 0.71, 0.63, 1.0);
 pub const MAP_MARK: Vec4 = vec4(1.40, 1.05, 0.40, 1.0);
+/// The trail's next station on the map, and the tick that says it is on
+/// another storey.
+///
+/// **Brighter than anything else on the panel.** Everything else there is
+/// the building, drawn in greys so that the one thing you are looking for
+/// is the one thing that is not. It is not the mark's own colour either:
+/// two yellow things on a small panel is a panel with nothing on it.
+pub const MAP_STATION: Vec4 = vec4(0.30, 1.60, 1.45, 1.0);
 pub const GILT: Vec4 = vec4(0.52, 0.40, 0.19, 1.0);
 
 /// The sheet the building's plan is cut on, behind the rooms. Spec 0115.

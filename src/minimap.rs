@@ -160,6 +160,61 @@ pub fn rooms(window: (f32, f32), at: Vec3, facing: Vec3, filled: &[Aabb]) -> Vec
         .collect()
 }
 
+/// Which station the map marks, and nothing at all until the building has
+/// given something up.
+///
+/// **Spec 0036's rule, written where it can be tested.** Somebody who never
+/// finds the trail should not be able to tell it is there, and this map is
+/// on by default, so an untouched run must show an ordinary map of an
+/// ordinary building. Left as an `if` inside the drawing, that rule is a
+/// line nothing can check, which is how the same drawing came to hold a
+/// mirrored map earlier the same day.
+///
+/// **One, never a list.** `bridge::still_held` is spec 0118's own answer,
+/// used here rather than answered again, so the map and the stone in the
+/// field name the same place.
+pub fn marks(trail: &crate::trail::Trail) -> Option<crate::trail::Asked> {
+    if trail.is_empty() {
+        return None;
+    }
+
+    crate::bridge::still_held(trail)
+}
+
+/// How big the mark for the trail's next station is, how far in from the
+/// panel's edge it is pinned when that station is off the map, and the tick
+/// that says it is on another storey.
+pub const STATION: f32 = 11.0;
+pub const STATION_IN: f32 = 15.0;
+pub const STOREY: Vec2 = vec2(13.0, 3.0);
+pub const STOREY_OUT: f32 = 10.0;
+
+/// Where the station's mark goes, and whether it had to be pinned to the
+/// rim because the station is off the map.
+///
+/// **Pinned on its own bearing and not clamped per axis.** The panel is
+/// square, so clamping x and y one at a time is cheaper and bends the
+/// direction at the corners: a station due north-east comes out pointing
+/// north, which is the one thing a rim marker is for. Scaling the whole
+/// offset until its larger side touches the rim keeps the bearing exact and
+/// costs a divide.
+///
+/// The map reaches twelve metres and the building is 46 long plus a field,
+/// so pinned is the usual answer rather than the edge case.
+pub fn station(window: (f32, f32), at: Vec3, facing: Vec3, target: Vec3) -> (Vec2, bool) {
+    let (middle, _) = panel(window);
+    let spot = onto(window, at, facing, vec2(target.x, target.z));
+    let half = WIDE * 0.5 - STATION_IN;
+    let off = spot - middle;
+    let most = off.x.abs().max(off.y.abs());
+
+    if most <= half || most < 1e-4 {
+        (spot, false)
+    } else {
+        (middle + off * (half / most), true)
+    }
+}
+
 /// The mark: where you are, and which way you are looking.
 ///
 /// **It does not turn any more.** The map does, so the nose stands straight
@@ -442,6 +497,95 @@ mod tests {
         assert!(
             ground != upper,
             "the hall and the floor over it draw the same map"
+        );
+    }
+
+    /// Spec 0132: a station inside the map's reach is drawn where it
+    /// stands, and one outside it is pinned to the rim without the bearing
+    /// moving.
+    ///
+    /// **The bearing is the whole of what a pinned marker says.** It cannot
+    /// say how far, it cannot say what room; all it has is which way to set
+    /// off, so a pin that bends the direction is a pin that lies.
+    #[test]
+    fn a_station_off_the_map_keeps_its_bearing_on_the_rim() {
+        let window = window();
+        let (middle, _) = panel(window);
+        let at = vec3(0.0, 0.0, 0.0);
+        let facing = vec3(0.0, 0.0, 1.0);
+        let half = WIDE * 0.5 - STATION_IN;
+
+        // near enough to draw where it stands
+        let near = vec3(3.0, 0.0, 2.0);
+        let (spot, pinned) = station(window, at, facing, near);
+
+        assert!(!pinned, "a station three metres off was pinned to the rim");
+        assert!(
+            spot.distance(onto(window, at, facing, vec2(near.x, near.z))) < 1e-3,
+            "a station on the map is not drawn where it stands"
+        );
+
+        // and far enough to pin, from several ways round
+        for degrees in [0.0_f32, 31.0, 90.0, 147.0, 215.0, 300.0] {
+            let turn = degrees.to_radians();
+            let far = vec3(turn.sin() * 80.0, 0.0, turn.cos() * 80.0);
+            let want = onto(window, at, facing, vec2(far.x, far.z)) - middle;
+            let (spot, pinned) = station(window, at, facing, far);
+            let got = spot - middle;
+
+            assert!(pinned, "a station eighty metres off was drawn on the map");
+            assert!(
+                got.x.abs() <= half + 1e-3 && got.y.abs() <= half + 1e-3,
+                "a pinned station sits at {:?} and the rim is {:.1}",
+                got,
+                half
+            );
+            assert!(
+                (got.normalize().dot(want.normalize()) - 1.0).abs() < 1e-4,
+                "facing {} the bearing moved from {:?} to {:?}",
+                degrees,
+                want.normalize(),
+                got.normalize()
+            );
+        }
+    }
+
+    /// Spec 0036: the map says nothing about the trail until the trail has
+    /// started, and spec 0118: after that it says one thing.
+    ///
+    /// **The whole of what was argued over before this was built.** Jake
+    /// asked for status indicators for the places that unlock valhalla;
+    /// 0036 forbids telling somebody the trail exists before they find it.
+    /// This is where the two were settled, so a later hand moving the test
+    /// has to move the argument with it.
+    #[test]
+    fn the_map_says_nothing_until_the_trail_has_started() {
+        use crate::trail::{Asked, Trail};
+
+        assert_eq!(
+            marks(&Trail::new()),
+            None,
+            "an untouched run is told there is a trail"
+        );
+
+        let mut started = Trail::new();
+        started.gave(Asked::every()[0]);
+
+        assert_eq!(
+            marks(&started),
+            Some(Asked::every()[1]),
+            "a started trail does not name the next station"
+        );
+
+        let mut done = Trail::new();
+        for what in Asked::every() {
+            done.gave(*what);
+        }
+
+        assert_eq!(
+            marks(&done),
+            None,
+            "a finished trail still has the map pointing somewhere"
         );
     }
 }

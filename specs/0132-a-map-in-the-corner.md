@@ -117,6 +117,16 @@ wall plan's mark uses.
   it. — `minimap::tests::nothing_that_could_show_is_dropped`
 - Two storeys do not draw the same
   map. — `minimap::tests::two_storeys_do_not_draw_the_same_map`
+- The map says nothing about the trail until the trail has started, and one
+  thing after. — `minimap::tests::the_map_says_nothing_until_the_trail_has_started`
+- A station off the map is pinned to the rim without its bearing
+  moving. — `minimap::tests::a_station_off_the_map_keeps_its_bearing_on_the_rim`
+- Every station has somewhere to be pointed
+  at. — `trail::tests::every_station_has_a_place`
+- No two stations stand in one
+  place. — `trail::tests::no_two_stations_stand_in_one_place`
+- A station stands where its own room would record
+  it. — `trail::tests::a_station_stands_where_its_own_room_would_record_it`
 
 ### Verified by hand
 
@@ -133,18 +143,24 @@ wall plan's mark uses.
 - **Whether an always-on HUD suits this building at all.** Everything else here
   is found by walking, and a map in the corner is the first thing in it that
   hands you the layout.
+- **Whether a marker pinned to the rim reads as a direction.** Start the trail,
+  then walk the building with the station off the panel and see whether the
+  mark is something you follow or something you ignore.
 
 ## Out of scope
 
 - **No circle.** A driving game's map is round and this one is square, because
   a scissor is a rectangle. A round one wants a stencil or a mask and nobody
   has asked for one.
-- **No marks on it.** No doors, no toys, no trail. Spec 0036's trail records
-  what each room has given up and nothing draws any of it, which this leaves
-  open rather than opening.
+- **No marks on it beyond the trail's next station.** No doors, no toys, no
+  trail behind you. Spec 0036 records what each room has given up and nothing
+  draws any of it, which this still leaves alone: what is marked is the one
+  place you have not been, never the four you have.
 - **No zoom.** One scale, no dial. Spec 0064 refused an index on the arrow
   keys for the same reason.
 - **Nothing of `behind`.** `plan::drawn` already leaves it out, for the scale
   reason spec 0115 gives: 360 of the ground floor's 463 pieces are that one
   room. That it also keeps a secret off the map is luck and not design, and
-  should not be leaned on.
+  should not be leaned on. The station marker is drawn over the panel rather
+  than cut from the floor, so pointing at the sun in there gives away no more
+  than the stone in the field already does.

@@ -7362,6 +7362,44 @@ impl Arcade {
         for (spot, size) in minimap::mark(self.window) {
             geometry.push_quad(&Quad::colored(spot, size, aim::MAP_MARK));
         }
+
+        // **And the trail's next station, once the trail has started.**
+        // Spec 0036 says somebody who never finds the trail should not be
+        // able to tell it is there, and this map is on by default, so
+        // nothing is drawn until the building has given something up.
+        // After that it marks one station, the same one spec 0118's stone
+        // names, which is `bridge::still_held`: one, never a list.
+        let Some(held) = minimap::marks(&self.trail) else {
+            return;
+        };
+        let Some(target) = trail::stands_at(held, &self.room) else {
+            return;
+        };
+
+        let (spot, _) = minimap::station(self.window, at, facing, target);
+
+        geometry.push_quad(
+            &Quad::colored(spot, Vec2::splat(minimap::STATION), aim::MAP_STATION)
+                .clipped_to(least, most),
+        );
+
+        // a tick over or under it when the station is on another storey,
+        // because a map of one floor says nothing about the stairs
+        let theirs = plan::storey_at(target.y);
+        let yours = plan::storey_at(at.y);
+
+        if theirs != yours {
+            let up = if theirs > yours { -1.0 } else { 1.0 };
+
+            geometry.push_quad(
+                &Quad::colored(
+                    spot + Vec2::new(0.0, up * minimap::STOREY_OUT),
+                    minimap::STOREY,
+                    aim::MAP_STATION,
+                )
+                .clipped_to(least, most),
+            );
+        }
     }
 
     fn draw_the_cost(&self, geometry: &mut Geometry, text: &mut TextRenderer) {
@@ -8039,8 +8077,7 @@ impl Arcade {
         self.shifted = false;
     }
     fn the_sun(&self) -> (Vec3, Vec3) {
-        let middle = behind::at(self.room.reaches);
-        let sun = vec3(middle.x, orrery::PLANE, middle.z);
+        let sun = behind::sun_at(self.room.reaches);
         let (from, to) = behind::way();
         let door = vec3((from + to) * 0.5, orrery::PLANE, self.room.reaches);
 

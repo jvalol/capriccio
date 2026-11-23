@@ -198,6 +198,57 @@ impl Asked {
     }
 }
 
+/// Where the building asks this one, as a spot on the floor to point at.
+///
+/// **A match and not a table**, the idiom `bridge::room_colour` already
+/// uses here: a station added to [`Asked`] stops the build on this line
+/// rather than quietly having nowhere to be.
+///
+/// **Each answer comes from its own room's code.** The case asks
+/// `Room::handle`, the pool asks `spa::pool`, the cube asks the bench it
+/// stands on, the wall asks `behind::way` and the sun asks
+/// `behind::sun_at`. A second list of coordinates is the fault this
+/// building has written down under ten other names, and the shape it would
+/// take here is a marker standing on an empty patch of floor.
+///
+/// `None` where the room has not built the thing yet, which is a bench that
+/// is not there and a bookcase with no leaf in it.
+pub fn stands_at(what: Asked, room: &crate::room::Room) -> Option<glam::Vec3> {
+    use glam::{vec3, Vec3};
+
+    let reaches = room.reaches;
+
+    Some(match what {
+        Asked::OpenedTheCase => {
+            let leaf = room.handle()?;
+
+            (leaf.min + leaf.max) * 0.5
+        }
+        // **Under the surface and not on it.** `spa::pool` gives the
+        // water's own level, and `spa::wading`, which is what records this
+        // station, wants your feet below it. The map reads this for its x
+        // and z alone, so the drop changes nothing that is drawn and keeps
+        // the place one the room would say yes to.
+        Asked::WadedInThePool => crate::spa::pool(reaches).0 - Vec3::Y * 0.1,
+        Asked::SolvedTheCube => {
+            let bench = room
+                .benches
+                .iter()
+                .find(|bench| bench.name == crate::kociemba::NAME)?;
+
+            bench.at + Vec3::Y * bench.size.y
+        }
+        // the way in rather than the room beyond it, because what you are
+        // being pointed at is the thing to walk through
+        Asked::GotBehindTheWall => {
+            let (from, to) = crate::behind::way();
+
+            vec3((from + to) * 0.5, 0.0, reaches)
+        }
+        Asked::ReachedTheSun => crate::behind::sun_at(reaches),
+    })
+}
+
 /// What the building has given up, in the order it gave.
 ///
 /// A list rather than a set of flags, because the order is the only thing
@@ -507,6 +558,84 @@ mod tests {
             other.given(),
             "the same two rooms in either order came out the same, so the \
              order is not kept and a trail cannot be walked backwards"
+        );
+    }
+
+    /// Spec 0036: every station the building asks has somewhere to be
+    /// pointed at.
+    ///
+    /// **Which is the one thing a marker cannot be wrong about quietly.** A
+    /// station with no place draws nothing and reads as a station already
+    /// given, which sends somebody looking for a bridge that will not come.
+    #[test]
+    fn every_station_has_a_place() {
+        let room = crate::room::Room::of(crate::games());
+
+        for what in Asked::every() {
+            assert!(
+                stands_at(*what, &room).is_some(),
+                "{:?} is asked for and has nowhere to be",
+                what
+            );
+        }
+    }
+
+    /// Spec 0036: no two stations stand in the same place, because the map
+    /// points at one at a time and two in one spot is one of them lost.
+    #[test]
+    fn no_two_stations_stand_in_one_place() {
+        let room = crate::room::Room::of(crate::games());
+        let places: Vec<(Asked, glam::Vec3)> = Asked::every()
+            .iter()
+            .filter_map(|what| stands_at(*what, &room).map(|at| (*what, at)))
+            .collect();
+
+        for (n, (what, at)) in places.iter().enumerate() {
+            for (other, far) in places.iter().skip(n + 1) {
+                assert!(
+                    at.distance(*far) > 1.0,
+                    "{:?} and {:?} are both at {:?}",
+                    what,
+                    other,
+                    at
+                );
+            }
+        }
+    }
+
+    /// Spec 0036: the place for a station is one the station's own test
+    /// would fire at.
+    ///
+    /// **Asked of the room's own answer and not of a number in here.**
+    /// Wading, the sun and being behind the wall are each recorded by a
+    /// function that reads where your feet are, and those three are the
+    /// ones that can say yes or no about a spot. A marker standing where
+    /// the thing that records the station would not fire is a marker
+    /// pointing at the wrong floor, which is the whole failure this guards.
+    #[test]
+    fn a_station_stands_where_its_own_room_would_record_it() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+
+        let pool = stands_at(Asked::WadedInThePool, &room).expect("the pool has a place");
+        assert!(
+            crate::spa::wading(reaches, pool),
+            "the pool's marker stands at {:?}, where nobody is wading",
+            pool
+        );
+
+        let sun = stands_at(Asked::ReachedTheSun, &room).expect("the sun has a place");
+        assert!(
+            crate::orrery::at_the_sun(crate::behind::sun_at(reaches), sun),
+            "the sun's marker stands at {:?}, which is not at the sun",
+            sun
+        );
+
+        let wall = stands_at(Asked::GotBehindTheWall, &room).expect("the wall has a place");
+        assert!(
+            crate::behind::inside(reaches, wall),
+            "the wall's marker stands at {:?}, which is not behind it",
+            wall
         );
     }
 }

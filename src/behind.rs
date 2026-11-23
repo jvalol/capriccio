@@ -470,6 +470,18 @@ pub fn at(reaches: f32) -> Vec3 {
     vec3(-side + SPAN * 0.5, 0.0, reaches + DEEP * 0.5)
 }
 
+/// Where the sun at the middle of this room stands.
+///
+/// **Named here because two things want it now**: the ride that arrives at
+/// it, which is what records spec 0036's station, and the trail, which has
+/// to say on a map where that station is. Written out twice they drift, and
+/// a marker pointing at a sun that moved is worse than no marker at all.
+pub fn sun_at(reaches: f32) -> Vec3 {
+    let middle = at(reaches);
+
+    vec3(middle.x, crate::orrery::PLANE, middle.z)
+}
+
 pub fn half() -> Vec2 {
     vec2(SPAN * 0.5, DEEP * 0.5)
 }
