@@ -824,6 +824,14 @@ pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.30);
 /// than a green somebody has to look at twice.
 pub const SHORE: Vec4 = vec4(0.82, 0.78, 0.68, 1.0);
 pub const SHALLOWS: Vec4 = vec4(0.38, 0.72, 0.74, 0.42);
+/// The dark that opens in the glass while spec 0133's crossing runs.
+///
+/// **Not quite nought in any channel.** Pure black takes the ambient and
+/// the sun to nothing and reads as a hole cut in the frame, which is a
+/// rendering fault rather than a thing in the room. A hair above it keeps
+/// the sphere's own shading, so the rim of the dark is a rim and not an
+/// edge.
+pub const HORIZON: Vec4 = vec4(0.012, 0.010, 0.018, 1.0);
 pub const WATER_HOT: Vec4 = vec4(0.32, 0.56, 0.60, 0.45);
 /// The sauna's glass, and the steam over hot water.
 ///

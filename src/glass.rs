@@ -1442,7 +1442,7 @@ pub fn draw_the_stair(
     scene: &mut Scene,
     reaches: f32,
     since: f32,
-    off: Vec3,
+    place: Placed,
     cube: MeshId,
     baluster: Option<MeshId>,
     sconce: MeshId,
@@ -1452,7 +1452,7 @@ pub fn draw_the_stair(
     // it is this room: one list of pieces, drawn twice. Everything below
     // reads `reaches` as if it were at home, so a tread added here is a
     // tread on that stair and there is no second account to drift.
-    let moved = |at: Vec3| Transform::at(at + off);
+    let moved = |at: Vec3| Transform::at(place.of(at)).with_rotation(place.turn());
 
     // **Newel to newel, and not the rake plus a post's width.** A board
     // runs from the middle of one post to the middle of the other, which is
@@ -1650,7 +1650,7 @@ pub const BEAM_DOWN: f32 = 0.16;
 pub fn draw_the_room(
     scene: &mut Scene,
     reaches: f32,
-    off: Vec3,
+    place: Placed,
     cube: MeshId,
     column: Option<MeshId>,
 ) {
@@ -1659,7 +1659,7 @@ pub fn draw_the_room(
     // it is this room: one list of pieces, drawn twice. Everything below
     // reads `reaches` as if it were at home, so a tread added here is a
     // tread on that stair and there is no second account to drift.
-    let moved = |at: Vec3| Transform::at(at + off);
+    let moved = |at: Vec3| Transform::at(place.of(at)).with_rotation(place.turn());
 
     let room = inside(reaches);
     // **The border stops at the stairwell rather than running over it.** It
@@ -2001,6 +2001,91 @@ pub fn drawn_otherwise(reaches: f32) -> Vec<Aabb> {
 /// draw ran past what clippy will take, which is the right moment to stop
 /// adding parameters. Each is an option because a mesh is only there once
 /// the renderer has it.
+/// Where a drawing of this room stands in the world.
+///
+/// **Because spec 0133's copy is turned end for end, not slid sideways.**
+/// It was slid: every box offset, which puts the copy's stairwell at the
+/// same end of the room as this one's. You walk from the stair to the ball,
+/// so the stair is behind you, and it was still behind you on the far side.
+/// A half turn of the camera on arrival fixed that and bought a worse
+/// thing. Jake, having watched it through a black frame and seen it
+/// anyway: why is a turn/rotation necessary.
+///
+/// It is not. Turn the room instead and the stair is where you are already
+/// looking, with nothing rotating at any point.
+///
+/// **Its own inverse while `shift.y` is nought**, which is the whole of why
+/// one of these serves both ways across: `of(of(p))` gives back `p`, so the
+/// way home is the way out read again.
+#[derive(Clone, Copy)]
+pub struct Placed {
+    /// Whether the room stands end for end from the way it was built: half
+    /// a turn about a vertical axis, which is the only turn this wants.
+    pub turned: bool,
+    /// Where the room's own origin lands. Under a turn this is twice the
+    /// axis rather than a distance, which is what makes `of` a reflection.
+    pub shift: Vec3,
+}
+
+impl Placed {
+    /// The room where it was built, which is what spec 0064 wants.
+    pub fn home() -> Self {
+        Placed {
+            turned: false,
+            shift: Vec3::ZERO,
+        }
+    }
+
+    /// A point of the room, in the world.
+    pub fn of(self, at: Vec3) -> Vec3 {
+        match self.turned {
+            true => vec3(
+                self.shift.x - at.x,
+                at.y + self.shift.y,
+                self.shift.z - at.z,
+            ),
+            false => at + self.shift,
+        }
+    }
+
+    /// And a box of it.
+    ///
+    /// **Still a box.** A half turn about a vertical axis takes an
+    /// axis-aligned box to an axis-aligned box; what it does is swap which
+    /// corner is which, so the two are sorted again rather than trusted.
+    pub fn box_of(self, box_: Aabb) -> Aabb {
+        let (a, b) = (self.of(box_.min), self.of(box_.max));
+
+        Aabb::new(a.min(b), a.max(b))
+    }
+
+    /// Which way a mesh drawn under it faces.
+    ///
+    /// Nothing for most of what is here, every box and every turned shaft
+    /// being its own half turn already, and not nothing for the rest.
+    pub fn turn(self) -> glam::Quat {
+        match self.turned {
+            true => glam::Quat::from_rotation_y(std::f32::consts::PI),
+            false => glam::Quat::IDENTITY,
+        }
+    }
+}
+
+/// What the ball is doing while spec 0133's crossing runs.
+///
+/// **Three numbers and not three parameters.** `draw` is already at the
+/// count clippy will take, and these three always move together: they are
+/// one gesture read three ways, which is what a struct is for.
+#[derive(Clone, Copy)]
+pub struct Fold {
+    /// What the glass bends by. At or under nought it is a mirror.
+    pub index: f32,
+    /// How much wider than its rest size the ball is drawn.
+    pub swell: f32,
+    /// How far the glass has stopped passing the room, nought to one.
+    pub dark: f32,
+}
+
 #[derive(Clone, Copy)]
 pub struct Meshes {
     pub cube: MeshId,
@@ -2018,7 +2103,14 @@ pub struct Meshes {
 /// bends what is behind it, so winding between them is the room letting go
 /// of its reflection and swallowing the one in front of it. Nothing else
 /// in here cares what it is.
-pub fn draw(scene: &mut Scene, reaches: f32, since: f32, index: f32, off: Vec3, meshes: Meshes) {
+pub fn draw(
+    scene: &mut Scene,
+    reaches: f32,
+    since: f32,
+    fold: Fold,
+    place: Placed,
+    meshes: Meshes,
+) {
     let Meshes {
         cube,
         sphere,
@@ -2026,12 +2118,13 @@ pub fn draw(scene: &mut Scene, reaches: f32, since: f32, index: f32, off: Vec3, 
         sconce,
         column,
     } = meshes;
+    let Fold { index, swell, dark } = fold;
     // **Set out in the room's own numbers and drawn `off` from them.**
     // Spec 0133 stands a copy of this room six hundred metres south, and
     // it is this room: one list of pieces, drawn twice. Everything below
     // reads `reaches` as if it were at home, so a tread added here is a
     // tread on that stair and there is no second account to drift.
-    let moved = |at: Vec3| Transform::at(at + off);
+    let moved = |at: Vec3| Transform::at(place.of(at)).with_rotation(place.turn());
 
     // the balustrade stands in `solid` as upright boxes and is drawn as
     // joinery; the two plinths stand there as one box each and are drawn as a
@@ -2098,10 +2191,10 @@ pub fn draw(scene: &mut Scene, reaches: f32, since: f32, index: f32, off: Vec3, 
         );
     }
 
-    draw_the_room(scene, reaches, off, cube, column);
+    draw_the_room(scene, reaches, place, cube, column);
 
     if let Some(sconce) = sconce {
-        draw_the_stair(scene, reaches, since, off, cube, baluster, sconce);
+        draw_the_stair(scene, reaches, since, place, cube, baluster, sconce);
     }
 
     let Some(sphere) = sphere else {
@@ -2111,8 +2204,18 @@ pub fn draw(scene: &mut Scene, reaches: f32, since: f32, index: f32, off: Vec3, 
 
     scene.lens(
         sphere,
-        &moved(middle).with_scale(Vec3::splat(across * 2.0)),
-        silvered(since),
+        // **Wider while it is swallowing you**, per `elysium::swelling`. At
+        // rest `swell` is one and this is the ball on its plinth; walking
+        // into it grows the sphere until it has closed over the eye, which
+        // is what winding the index alone could not say.
+        &moved(middle).with_scale(Vec3::splat(across * 2.0 * swell)),
+        // **And the glass going out, which is what makes it a hole.** Per
+        // `elysium::darkens`: the tint falls to `aim::HORIZON` as the fold
+        // closes, so the room is bent and wrapped round you and then the
+        // thing bending it stops passing any of it. Nought at rest, where
+        // this is `silvered` exactly and the ball is a mirror with a room
+        // in it.
+        silvered(since).lerp(crate::aim::HORIZON, dark.clamp(0.0, 1.0)),
         index,
     );
 }

@@ -81,14 +81,20 @@ pub fn shores(reaches: f32) -> (Aabb, Aabb) {
     let half = BROAD * 0.5;
     let edge = ACROSS * 0.5;
 
+    // **The near one is the far side of the water, in z.** The room is
+    // turned end for end, per `glass::Placed`, which puts its stairwell at
+    // the low-z end of it whatever you spin it about; you come down that
+    // stair walking the way you already faced, which is -z. So the shore
+    // you land on is beyond the water in +z and the garden is short of it,
+    // and the whole place reads in the direction you are already going.
     (
         Aabb::new(
-            vec3(middle.x - half, -DEEP, middle.z - edge - SHORE),
-            vec3(middle.x + half, 0.0, middle.z - edge),
+            vec3(middle.x - half, -DEEP, middle.z + edge),
+            vec3(middle.x + half, 0.0, middle.z + edge + SHORE),
         ),
         Aabb::new(
-            vec3(middle.x - half, -DEEP, middle.z + edge),
-            vec3(middle.x + half, 0.0, middle.z + edge + half),
+            vec3(middle.x - half, -DEEP, middle.z - edge - half),
+            vec3(middle.x + half, 0.0, middle.z - edge),
         ),
     )
 }
@@ -136,13 +142,13 @@ pub fn wading(reaches: f32, at_: Vec3) -> bool {
 /// under a dozen names.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (near, far) = shores(reaches);
-    let off = room_off(reaches);
+    let place = placing(reaches);
     let mut out = vec![ground(reaches), near, bed(reaches), far];
 
     out.extend(
         crate::glass::solid(reaches)
             .into_iter()
-            .map(|box_| Aabb::new(box_.min + off, box_.max + off)),
+            .map(|box_| place.box_of(box_)),
     );
 
     out
@@ -154,11 +160,17 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 /// **The same room, offset.** Every number in it is `glass`'s own, moved by
 /// the distance between the two places, so a change to that room is a change
 /// to this one and there is no second account of it to drift.
-pub fn room_off(reaches: f32) -> Vec3 {
+pub fn placing(reaches: f32) -> crate::glass::Placed {
     let foot = crate::glass::stair_foot(reaches);
     let (near, _) = shores(reaches);
 
-    vec3(0.0, 0.0, near.min.z - foot.z)
+    // Twice the axis rather than a distance, per `glass::Placed`: the two
+    // numbers are what carry the room's stair foot onto the near shore's
+    // own edge, and the turn does the rest.
+    crate::glass::Placed {
+        turned: true,
+        shift: vec3(foot.x * 2.0, 0.0, near.max.z + foot.z),
+    }
 }
 
 /// How near the sphere's middle you have to be for it to be the thing you
@@ -191,11 +203,11 @@ pub const AT_IT: f32 = 1.35;
 /// **Looking into it, and not merely near it.** The ray has to pass through
 /// the glass, which is what makes it the thing you are doing rather than the
 /// thing you walked past. Spec 0133.
-pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<(Vec3, Vec3)> {
-    let off = room_off(reaches);
+pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<Vec3> {
+    let place = placing(reaches);
     let (here, radius) = crate::glass::ball(reaches);
 
-    for (middle, way) in [(here, off), (here + off, -off)] {
+    for middle in [here, place.of(here)] {
         if from.distance(middle) > radius + AT_IT {
             continue;
         }
@@ -210,7 +222,7 @@ pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<(Vec3, Vec3)> {
         }
 
         if (to - facing * along).length() <= radius {
-            return Some((way, middle));
+            return Some(middle);
         }
     }
 
@@ -236,6 +248,10 @@ pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<(Vec3, Vec3)> {
 /// other is the room letting go of its own reflection and swallowing what
 /// is in front of it, which is the nearest thing in this engine to a hole
 /// opening, and it costs no pass, no target and no shader.
+///
+/// **Half the crossing and not all of it.** Per [`fold`], the arc runs
+/// nought to two: this is what each half takes, so walking into the glass
+/// and standing in the far room with it square again is twice this.
 pub const THROUGH: f32 = 0.7;
 
 pub const SWALLOWS: f32 = 2.4;
@@ -246,10 +262,98 @@ pub const SWALLOWS: f32 = 2.4;
 /// Eased so the first part of the push does little and the last of it does
 /// most: leaning on glass that gives way at once is a door, and this is
 /// meant to read as something resisting and then not.
+///
+/// **Squared and not cubed.** A cube spends the first two thirds of the
+/// crossing doing almost nothing, and with the fold now starting the
+/// moment you walk at the glass rather than when the plinth stops you,
+/// that dead stretch is the whole of what you see first.
 pub fn bending(through: f32) -> f32 {
-    let eased = through.clamp(0.0, 1.0).powi(3);
+    let eased = through.clamp(0.0, 1.0).powi(2);
 
     crate::glass::INDEX + (SWALLOWS - crate::glass::INDEX) * eased
+}
+
+/// Where in the fold a crossing stands, given how far it has run.
+///
+/// **The crossing is an arc and not a ramp.** It ran nought to one and the
+/// move happened at the end of it, so the room you left folded up over
+/// most of a second and the room you arrived in was simply there, square
+/// and unbent. Jake, on his own run: the room i move into snaps into
+/// place, not a good transition, a sense of space warping.
+///
+/// So it runs nought to two. One is the top, where the move happens and
+/// the glass has closed over you; the second half is the same fold read
+/// backwards, with the copy's own ball in front of you at full size
+/// shrinking back onto its plinth while the half turn swings the stair
+/// into view. What you see is one gesture that carries you through, and
+/// not a wind-up and a cut.
+pub fn fold(through: f32) -> f32 {
+    if through <= 1.0 {
+        through.max(0.0)
+    } else {
+        (2.0 - through).max(0.0)
+    }
+}
+
+/// How much wider the ball is drawn, a share `through` of the way across.
+///
+/// **The bend alone is not being swallowed.** Winding the index bows the
+/// room and fringes it, which is a lens doing lens things: Jake, watching
+/// his own run, no wormhole or blackhole like visual transformation. What
+/// a hole does is take you in, so the ball grows until it is around you.
+///
+/// **Stopped just short of closing over you.** At 4.5 the sphere passed
+/// the eye with a quarter of the crossing still to run, and inside it its
+/// far side is wound away and culled: the last stills of that fold were a
+/// flat brown frame with the room gone out of it. Three is the width at
+/// which the bent room wraps the whole view and the glass is still in
+/// front of you, which is the picture the fold should end on.
+pub const SWELLS: f32 = 3.0;
+
+/// How far the glass has stopped letting the room through, a share of the
+/// way across the fold.
+///
+/// **The hole is the glass going out, and not a ball inside it.** The
+/// first go at this pushed an opaque black sphere at the ball's own
+/// middle. Concentric and smaller, the lens's own surface is nearer the
+/// eye and hides it; bigger, it covers the bending it was meant to be the
+/// middle of. Either way it is a sphere in front of a sphere.
+///
+/// So the glass itself darkens. The room goes on being bent and wrapped
+/// round you by the index and the swell, and then the thing doing the
+/// bending stops passing any of it: a bright bent rim closing on a middle
+/// with nothing in it, which is what Jake asked for when he said rotation
+/// is an interesting transition, but not space warping that evokes the
+/// feeling of a blackhole or a wormhole.
+///
+/// **Cubed, so it goes out last.** The lens grows on a square. Straight,
+/// the dark ran ahead of the glass and the first half of the crossing was
+/// black before anything had bent.
+pub fn darkens(fold: f32) -> f32 {
+    fold.clamp(0.0, 1.0).powi(3)
+}
+
+/// How far the whole frame is covered, a share of the way across the fold.
+///
+/// **Because the hole is in front of you and the turn is not.** The glass
+/// darkening is the hole, and it covers whatever the ball covers; the half
+/// turn at the top of the arc needs the frame itself covered, or you watch
+/// the room swing. Jake, having watched it: after the sphere animation
+/// there's still a rotation towards the stairs on the other side, they
+/// should already be there.
+///
+/// [`darkens`] squared, so this is nothing for most of the crossing and
+/// the hole does the work, and seals only at the last of it. Read twice
+/// off the one arc: it shuts on the way in and opens on the way out, with
+/// the move and the turn in the dark between.
+pub fn seals(fold: f32) -> f32 {
+    darkens(fold).powi(2)
+}
+
+/// The multiplier itself, squared like [`bending`] so the two move
+/// together and the growing is the same gesture as the bending.
+pub fn swelling(through: f32) -> f32 {
+    1.0 + (SWELLS - 1.0) * through.clamp(0.0, 1.0).powi(2)
 }
 
 /// Whether you are in this place at all, which is what decides whose
@@ -315,10 +419,17 @@ pub const CLEARS: f32 = 8.0;
 pub fn shades(reaches: f32, at_: Vec3) -> bool {
     let middle = at(reaches);
     let (near, far) = shores(reaches);
+    // **And over the room, which this used to stop short of.** The far
+    // edge was the shore's, and the copy stands back from the shore: the
+    // strip of ground under it was open for the field to sow, and a trunk
+    // there has a room on top of it. It was the same gap before the copy
+    // was turned, on the other side of the shore.
+    let room = placing(reaches).box_of(crate::glass::inside(reaches));
+    let back = room.max.z.max(near.max.z);
 
     (at_.x - middle.x).abs() < BROAD * 0.5 + CLEARS
-        && at_.z > near.min.z - CLEARS
-        && at_.z < far.max.z + CLEARS
+        && at_.z > far.min.z - CLEARS
+        && at_.z < back + CLEARS
 }
 
 /// How near you have to be for any of it to be drawn.
@@ -345,7 +456,7 @@ pub fn draw(
     reaches: f32,
     since: f32,
     eye: Vec3,
-    index: f32,
+    fold: crate::glass::Fold,
     meshes: crate::glass::Meshes,
 ) {
     use blitzkit::mesh::Transform;
@@ -369,7 +480,7 @@ pub fn draw(
         );
     }
 
-    crate::glass::draw(scene, reaches, since, index, room_off(reaches), meshes);
+    crate::glass::draw(scene, reaches, since, fold, placing(reaches), meshes);
 
     // and the water over the bed, which is the only thing here that is not
     // a thing you stand on
@@ -463,7 +574,7 @@ pub fn colonnade(reaches: f32) -> Vec<(Vec3, bool)> {
             let along = n as f32 * COLUMN_APART - run * 0.5;
 
             (
-                vec3(middle.x + along, 0.0, far.min.z + COLONNADE_BACK),
+                vec3(middle.x + along, 0.0, far.max.z - COLONNADE_BACK),
                 standing(n),
             )
         })
@@ -516,7 +627,7 @@ mod tests {
             );
         }
 
-        assert!(near.max.z <= far.min.z, "the shores meet without water");
+        assert!(far.max.z <= near.min.z, "the shores meet without water");
     }
 
     /// Spec 0133: wading here is the baths' own question asked of this
@@ -550,29 +661,41 @@ mod tests {
     /// moves are each other's opposite, so the door works both ways.
     ///
     /// **Which is the whole reason there is no flag.** Both rooms stand in
-    /// the world at once and where you are says which you are in. If these
-    /// two offsets were ever not opposites, the door would put you somewhere
-    /// that is neither.
+    /// the world at once and where you are says which you are in. The way
+    /// home is the way out read again: `Placed::of` is its own inverse, so
+    /// if that ever stopped being true the door would strand somebody.
+    ///
+    /// The copy is turned, so arriving leaves its ball behind you and the
+    /// stair ahead. Going back is walking at the ball you came out of,
+    /// which is why the second look here faces the other way.
     #[test]
     fn the_glass_takes_you_through_and_back() {
         let reaches = reaches();
         let (here, _) = crate::glass::ball(reaches);
-        let off = room_off(reaches);
+        let place = placing(reaches);
         let at = vec3(here.x, here.y, here.z + 1.0);
         let into = (here - at).normalize();
 
-        let (there, _) = through(reaches, at, into).expect("the building's glass is a door");
-        let (back, _) = through(reaches, at + off, into).expect("the other one is too");
+        let there = through(reaches, at, into).expect("the building's glass is a door");
 
         assert!(
-            (there + back).length() < 1e-3,
-            "the two ways through are {:?} and {:?}, which are not opposites",
-            there,
-            back
+            (there - here).length() < 1e-3,
+            "the building's own ball is not what it found"
+        );
+
+        let over = place.of(at);
+        let back = through(reaches, over, -into).expect("the copy's glass is a door too");
+
+        assert!(
+            (back - place.of(here)).length() < 1e-3,
+            "the copy's ball is not what it found from {:?}",
+            over
         );
         assert!(
-            (there - off).length() < 1e-3,
-            "it does not take you to the copy"
+            place.of(over).distance(at) < 1e-3,
+            "going and coming back lands at {:?} rather than {:?}",
+            place.of(over),
+            at
         );
     }
 
@@ -676,7 +799,7 @@ mod tests {
     fn it_is_morning_everywhere_in_it() {
         let reaches = reaches();
         let middle = at(reaches);
-        let foot = crate::glass::stair_foot(reaches) + room_off(reaches);
+        let foot = placing(reaches).of(crate::glass::stair_foot(reaches));
         let (near, far) = shores(reaches);
 
         for (which, spot) in [
@@ -719,7 +842,7 @@ mod tests {
 
         for (at_, _) in &stood {
             assert!(
-                at_.z > middle.z + size.y * 0.5,
+                at_.z < middle.z - size.y * 0.5,
                 "a column stands at {:.1}, which is in the water",
                 at_.z
             );
@@ -801,9 +924,23 @@ mod tests {
             }
         }
 
+        // and the ground the room stands on, which this stopped short of
+        let room = placing(reaches).box_of(crate::glass::inside(reaches));
+
+        for (which, z) in [("the stair's end", room.min.z), ("the far end", room.max.z)] {
+            let spot = vec3(middle.x, 0.0, z);
+
+            assert!(
+                shades(reaches, spot),
+                "the field may sow a tree at {}, {:?}, which is under the room",
+                which,
+                spot
+            );
+        }
+
         // and it stops: a clearing the size of the field is a field with no
         // trees in it
-        let away = vec3(middle.x, 0.0, far.max.z + CLEARS + 20.0);
+        let away = vec3(middle.x, 0.0, far.min.z - CLEARS - 20.0);
 
         assert!(
             !shades(reaches, away),
@@ -821,7 +958,7 @@ mod tests {
     #[test]
     fn the_stair_comes_down_on_the_near_shore() {
         let reaches = reaches();
-        let foot = crate::glass::stair_foot(reaches) + room_off(reaches);
+        let foot = placing(reaches).of(crate::glass::stair_foot(reaches));
         let (near, _) = shores(reaches);
         let (middle, size) = water(reaches);
 
@@ -833,12 +970,38 @@ mod tests {
             near.max.z
         );
         assert!(
-            foot.z < middle.z - size.y * 0.5,
+            foot.z > middle.z + size.y * 0.5,
             "the stair lands in the water"
         );
         assert!(
             (foot.z - crate::glass::stair_foot(reaches).z).abs() > crate::field::GROUND_REACH,
             "this place is inside the field's own reach"
+        );
+    }
+
+    /// The ball is a mirror with a room in it until you walk into it.
+    ///
+    /// **What the darkening must not do is darken.** It is the lens's own
+    /// tint falling away, and that tint is what the ball wears standing on
+    /// its plinth with nobody near it: a share that is anything but nought
+    /// at rest is spec 0064's room permanently dimmed to buy spec 0133 an
+    /// effect.
+    ///
+    /// The second half is that it goes out late. Straight rather than
+    /// cubed, the glass was half gone by the middle of the crossing and
+    /// the bending it is the middle of was never seen.
+    #[test]
+    fn the_glass_is_itself_until_you_walk_into_it() {
+        assert_eq!(darkens(0.0), 0.0, "the ball at rest is not its own tint");
+        assert_eq!(darkens(1.0), 1.0, "the glass never goes out at all");
+
+        let half = darkens(0.5);
+
+        assert!(
+            half < 0.2,
+            "the glass is {:.2} gone halfway across, which is before the \
+             bending it should be the middle of",
+            half
         );
     }
 

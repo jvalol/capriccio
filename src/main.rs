@@ -77,19 +77,6 @@ use room::Room;
 /// Where you stand, how fast, and how far you see.
 const RADIUS: f32 = 0.45;
 
-/// How little you have to have moved, with the keys still down, to count as
-/// pushing against something rather than walking.
-///
-/// How little ground you have to be making toward a thing to count as
-/// pushing against it rather than walking at it.
-///
-/// A centimetre in a frame. At `SPEED` you cover seventy of those in a
-/// sixtieth of a second, so anything actually walking is seven times clear
-/// of it, and a body pressed against a face is well under: what this has to
-/// tolerate is the millimetre of jitter that comes out of resolving a body
-/// against a box every frame. A millimetre was the first number and it was
-/// too tight to hold for the second and a half spec 0133 asks for.
-const STUCK: f32 = 0.01;
 /// How far past the building the fill is given to work in, per spec 0049 of
 /// the engine.
 ///
@@ -849,18 +836,23 @@ struct Arcade {
     /// Whether that map is up. On, because it is a HUD and the point of one
     /// is that it is there; N puts it away.
     showing_map: bool,
-    /// Where spec 0133's glass is taking you, set the frame the push
-    /// finishes and acted on once the walk is over.
+    /// Whether spec 0133's glass has reached the top of its fold, set that
+    /// frame and acted on once the walk is over.
     ///
     /// Held rather than done on the spot because `gone` is asked where you
     /// would end up and is not the place that moves you.
-    went_through: Option<Vec3>,
-    /// How far into that crossing you are, nought to one, which is what the
-    /// ball's index is wound by. Once it starts it runs to the end on its
-    /// own: there is nothing to hold down and nothing to let go of.
+    ///
+    /// **A flag and not a move.** It carried the offset, back when the two
+    /// rooms were a slide apart. `elysium::placing` says where the copy
+    /// stands now, and it says it in one place.
+    went_through: bool,
+    /// How far into that crossing you are, nought to two, per
+    /// `elysium::fold`: one is the top, where the glass has closed and the
+    /// room swaps, and the rest is it opening again. Once it starts it runs
+    /// to the end on its own: there is nothing to hold down.
     going_through: f32,
-    /// Which glass has hold of you, from the frame you walk into it until
-    /// it has put you through.
+    /// The middle of whichever glass has hold of you, from the frame you
+    /// walk into it until it has put you through.
     held_by: Option<Vec3>,
     /// The sheet each of that plan's three storeys is cut on, per spec
     /// 0115. Kept for the same reason as the plan: it goes through the
@@ -1671,7 +1663,7 @@ impl Arcade {
             plan_lips,
             floors,
             showing_map: true,
-            went_through: None,
+            went_through: false,
             going_through: 0.0,
             held_by: None,
             plan_says: Vec::new(),
@@ -2769,18 +2761,24 @@ impl Arcade {
         };
 
         // **And spec 0133's glass, which moves you instead.** `gone` says
-        // where the walk would leave you and sets this when the walk left
-        // you nowhere because you were pushing into the sphere. The copy of
-        // the room is identical, so the move is the offset and a half turn:
-        // the stair you came up is behind you there and in front of you
-        // here, which is the whole of what you see change.
-        if let Some(off) = self.went_through.take() {
-            let (at, falling) = (self.at + off, 0.0);
+        // where the walk would leave you and sets this at the top of the
+        // fold, which is when the glass has closed over you.
+        //
+        // **And nothing turns.** The copy of that room stands end for end,
+        // per `glass::Placed`, so its stairwell is at the end you are
+        // already looking at: there is no half turn here because there is
+        // nothing to correct. A slid copy needed one, hiding it behind the
+        // black made it a thing you could still feel, and Jake asked the
+        // right question of it: why is a turn/rotation necessary.
+        //
+        // `Placed::of` is its own inverse, so this one line is the way out
+        // and the way home both.
+        if std::mem::take(&mut self.went_through) {
+            let at = elysium::placing(self.room.reaches).of(self.at);
 
             self.at = at;
             self.eye = at.y;
-            self.falling = falling;
-            self.yaw += std::f32::consts::PI;
+            self.falling = 0.0;
             self.let_go();
 
             return 0.0;
@@ -7413,6 +7411,33 @@ impl Arcade {
     /// **The floor is drawn and the walls are the gaps**, which is spec
     /// 0115's reading and is the one that works at this size: a wall at
     /// this scale is a line a pixel wide and a room is a shape.
+    /// The black that seals the frame while spec 0133's crossing turns you.
+    ///
+    /// **Over the room and under the help.** The world going out is the
+    /// point of it; the plate and the map going out with it is a flicker
+    /// nobody asked for, so this is pushed before them and they sit on it.
+    ///
+    /// Nothing at all for most of the crossing, per `elysium::seals`: the
+    /// glass darkening is what you watch, and this only shuts the last of
+    /// the way so the half turn happens where there is nothing to see.
+    fn draw_the_fold(&self, geometry: &mut Geometry) {
+        use blitzkit::geometry::quad::Quad;
+
+        let seal = elysium::seals(elysium::fold(self.going_through));
+
+        if seal <= 0.0 {
+            return;
+        }
+
+        let window = Vec2::new(self.window.0, self.window.1);
+
+        geometry.push_quad(&Quad::colored(
+            window * 0.5,
+            window,
+            aim::HORIZON.truncate().extend(seal.clamp(0.0, 1.0)),
+        ));
+    }
+
     fn draw_the_map(&self, geometry: &mut Geometry) {
         use blitzkit::geometry::quad::Quad;
 
@@ -8181,19 +8206,28 @@ impl Arcade {
         let mut pushing = None;
 
         if going.length_squared() > 1e-6 {
-            if let Some((off, middle)) =
+            if let Some(middle) =
                 elysium::through(self.room.reaches, self.looking_from(), self.facing())
             {
-                // **Are you getting any closer to that glass.** Not whether
-                // you moved, which a body sliding along a flat face does
-                // plenty of, and not progress along what you asked for,
-                // which has a sideways component of its own the moment your
-                // hand is on a mouse. The plinth takes everything that
-                // would close the gap and leaves the rest.
-                let closing = (went.0 - self.at).dot((middle - self.at).normalize_or_zero());
+                // **Are you walking at that glass**, which is asked of what
+                // you want and not of what you got. It asked the second:
+                // whether the plinth had already taken your movement away,
+                // so nothing began until you were against it. Jake, on his
+                // own run: the transition is delayed from when i walk up to
+                // the ball to when i go through.
+                //
+                // What you got is the wrong question either way. A body
+                // sliding along a flat face moves plenty and closes nothing,
+                // and a body held by the plinth closes nothing while walking
+                // straight at the thing. The wish has neither problem, and
+                // `through` has already asked whether the glass is what you
+                // are looking into.
+                let asking = going
+                    .normalize_or_zero()
+                    .dot((middle - self.at).normalize_or_zero());
 
-                if closing < STUCK {
-                    pushing = Some(off);
+                if asking > 0.0 {
+                    pushing = Some(middle);
                 }
             }
         }
@@ -8214,13 +8248,22 @@ impl Arcade {
         // what leaning on something that does not give gets you.
         self.held_by = self.held_by.or(pushing);
 
-        if let Some(off) = self.held_by {
+        if self.held_by.is_some() {
+            let was = self.going_through;
+
             self.going_through += dt / elysium::THROUGH;
 
-            if self.going_through >= 1.0 {
+            // **The move is at the top of the arc, not the end of it.**
+            // Per `elysium::fold`: the second half is the fold read
+            // backwards on the far side, so the room you arrive in comes
+            // out of the bend instead of appearing square.
+            if was < 1.0 && self.going_through >= 1.0 {
+                self.went_through = true;
+            }
+
+            if self.going_through >= 2.0 {
                 self.going_through = 0.0;
                 self.held_by = None;
-                self.went_through = Some(off);
             }
         }
 
@@ -8231,6 +8274,22 @@ impl Arcade {
     ///
     /// One list, because the four that walk you and the four that turn you
     /// came apart the moment there were two lists. See `focus_changed`.
+    /// What the ball should be doing this frame.
+    ///
+    /// **Both balls ask the same question of the same number.** Spec
+    /// 0133's two rooms each have one, and which of them is in front of
+    /// you changes halfway through a crossing: the fold is one arc and
+    /// this is read off it twice rather than written out twice. Which
+    /// room it is does not enter into it, so neither does an offset.
+    fn ball_fold(&self) -> glass::Fold {
+        let fold = elysium::fold(self.going_through);
+        glass::Fold {
+            index: elysium::bending(fold),
+            swell: elysium::swelling(fold),
+            dark: elysium::darkens(fold),
+        }
+    }
+
     fn let_go(&mut self) {
         self.walking = [false; 4];
         self.looking = [false; 4];
@@ -10084,10 +10143,10 @@ impl Game for Arcade {
                 eprintln!(
                     "  glass {}  through {:.2}  elysium {}",
                     match elysium::through(self.room.reaches, self.looking_from(), self.facing()) {
-                        Some((off, middle)) => format!(
-                            "yes, {:.2} off its middle, taking you {:.0}",
+                        Some(middle) => format!(
+                            "yes, {:.2} off its middle at {:.0}",
                             self.looking_from().distance(middle),
-                            off.z
+                            middle.z
                         ),
                         None => String::from("no"),
                     },
@@ -10793,6 +10852,10 @@ impl Game for Arcade {
             })
             .collect();
 
+        // the crossing's black first of all, so everything below sits on
+        // it rather than going out with the room
+        self.draw_the_fold(geometry);
+
         plate(geometry, aim::plate_round(&laid, false));
 
         for (at_, words, size, face) in laid {
@@ -10966,7 +11029,14 @@ impl Game for Arcade {
         // is on every surface and a step through a door would be a flash.
         let share = self.sky_fill.unwrap_or(if sky { 1.0 } else { 0.0 });
 
-        scene.light.ambient = garden::indoors().lerp(garden::filled(self.since), share);
+        // **At `clock` and not at `self.since`**, which is the same fault
+        // as the sun three lines up and was still here after it. Spec
+        // 0133's place runs at its own hour: the sun was wound to morning
+        // and the fill was left at the building's night, so everything out
+        // there that the sun does not reach directly was lit by nothing.
+        // Its copy of the glass room has a lid, so the room you land in
+        // was a black box with the joinery drawn correctly inside it.
+        scene.light.ambient = garden::indoors().lerp(garden::filled(clock), share);
 
         // and the baths keep less of it than the rest, so that the pool is
         // the light in the room rather than a bright patch in a lit one.
@@ -11102,8 +11172,8 @@ impl Game for Arcade {
                 scene,
                 self.room.reaches,
                 self.since,
-                elysium::bending(self.going_through),
-                Vec3::ZERO,
+                self.ball_fold(),
+                glass::Placed::home(),
                 glass::Meshes {
                     cube,
                     sphere: seen.then_some(self.globe_mesh).flatten(),
@@ -11122,7 +11192,7 @@ impl Game for Arcade {
                 self.room.reaches,
                 self.since,
                 self.looking_from(),
-                elysium::bending(self.going_through),
+                self.ball_fold(),
                 glass::Meshes {
                     cube,
                     sphere: self.globe_mesh,
@@ -14536,12 +14606,14 @@ impl Game for Arcade {
         // hundred metres apart and a lamp in one is nothing in the other:
         // these would be ten shades spent on a room nobody can see.
         if elysium::holds(self.room.reaches, self.at) {
-            let off = elysium::room_off(self.room.reaches);
+            let place = elysium::placing(self.room.reaches);
 
             for at in glass::lamps(self.room.reaches) {
+                let at = place.of(at);
+
                 shades.push((
-                    eye.distance_squared(at + off),
-                    at + off,
+                    eye.distance_squared(at),
+                    at,
                     glass::LAMP_COLOUR,
                     glass::LAMP_LIT,
                     glass::LAMP_RANGE,
@@ -18924,17 +18996,126 @@ mod tests {
             game.eye = next.y;
             game.falling = falling;
 
-            if game.went_through.is_some() {
+            if game.went_through {
                 break;
             }
         }
 
         assert!(
-            game.went_through.is_some(),
+            game.went_through,
             "walked from {:?} to {:?}, facing {:?}, and the glass did nothing",
             was,
             game.at,
             game.forward()
+        );
+    }
+
+    /// Spec 0133: the room swaps with the frame covered.
+    ///
+    /// **Three goes at one fault.** The crossing ran nought to one with
+    /// the move at the end, so the far room was simply there: the room i
+    /// move into snaps into place. Spreading a half turn over a second
+    /// half fixed the snap and bought a rotation you could watch: they
+    /// should already be there. Turning the copy instead, per
+    /// `glass::Placed`, took the rotation out of it altogether.
+    ///
+    /// What is left to hold is the swap, which is still a cut between two
+    /// rooms however they are placed. The arc runs to two, the swap is at
+    /// the top, and the top is where `elysium::seals` has the frame black:
+    /// the move lands inside the arc, so there is a way back out of the
+    /// dark, and the dark is shut when it lands.
+    #[test]
+    fn the_room_swaps_behind_the_black() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        let wish = game.forward();
+        let mut moved_at = None;
+
+        for _ in 0..480 {
+            let (next, falling) = game.gone(wish, SPEED, 1.0 / 60.0);
+
+            game.at = next;
+            game.eye = next.y;
+            game.falling = falling;
+
+            if game.went_through && moved_at.is_none() {
+                moved_at = Some(game.going_through);
+            }
+
+            if moved_at.is_some() && game.held_by.is_none() {
+                break;
+            }
+        }
+
+        let when = moved_at.expect("the glass never carried anybody through");
+
+        assert!(
+            (1.0..2.0).contains(&when),
+            "the move landed at {} of the arc, so there is nothing left to \
+             unwind on the far side",
+            when
+        );
+
+        let sealed = elysium::seals(elysium::fold(when));
+
+        assert!(
+            sealed > 0.97,
+            "the frame is {:.2} covered when the room swaps, so \
+             the swap is watched rather than hidden",
+            sealed
+        );
+    }
+
+    /// Spec 0133: and it starts the moment you walk at it, not when the
+    /// plinth stops you.""
+    ///
+    /// **The delay Jake timed off his own run**: the transition is delayed
+    /// from when i walk up to the ball to when i go through. The latch
+    /// asked whether the plinth had already taken your movement away, so
+    /// the fold waited for contact; the whole walk from the edge of reach
+    /// to the plinth was dead.
+    ///
+    /// Standing inside reach and taking one step at it has to wind the
+    /// crossing off nought on that step. The control is the old test:
+    /// putting `asking < 0.0` back leaves `going_through` at nought here,
+    /// because nothing has stopped you yet.
+    #[test]
+    fn the_fold_starts_on_the_step_and_not_on_the_plinth() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, radius) = glass::ball(reaches);
+        // inside reach and clear of the plinth, so nothing is stopping you
+        let at = vec3(ball.x, glass::UP, ball.z + radius + elysium::AT_IT * 0.8);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        let wish = game.forward();
+        let (next, falling) = game.gone(wish, SPEED, 1.0 / 60.0);
+
+        game.at = next;
+        game.eye = next.y;
+        game.falling = falling;
+
+        assert!(
+            game.going_through > 0.0,
+            "one step at the glass from {:?} and the crossing is still at {}",
+            at,
+            game.going_through
+        );
+        assert!(
+            next.distance(at) > 0.0,
+            "the body did not move, so this proves nothing about waiting"
         );
     }
 
@@ -18972,13 +19153,13 @@ mod tests {
             game.eye = next.y;
             game.falling = falling;
 
-            if game.went_through.is_some() {
+            if game.went_through {
                 break;
             }
         }
 
         assert!(
-            game.went_through.is_some(),
+            game.went_through,
             "pushed into the glass while drifting and ended at {:?} with nothing happening",
             game.at
         );
@@ -19016,13 +19197,13 @@ mod tests {
             game.eye = next.y;
             game.falling = falling;
 
-            if game.went_through.is_some() {
+            if game.went_through {
                 break;
             }
         }
 
         assert!(
-            game.went_through.is_some(),
+            game.went_through,
             "leaning on it with a quarter of the frames dropped never got through; it reached {:.2}",
             game.going_through
         );
@@ -19065,14 +19246,14 @@ mod tests {
             game.eye = next.y;
             game.falling = falling;
 
-            if game.went_through.is_some() {
+            if game.went_through {
                 break;
             }
         }
 
         assert!(hands_off, "it never started, so this proves nothing");
         assert!(
-            game.went_through.is_some(),
+            game.went_through,
             "let go the moment it started and it never took me; it reached {:.2}",
             game.going_through
         );
