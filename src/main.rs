@@ -101,6 +101,14 @@ const STEPS_UP: f32 = 0.25;
 const ROOM_TALL: f32 = 4.0;
 const EYE: f32 = 1.55;
 
+/// A lamp as the cull reads it: how far the eye is from it squared, where
+/// it stands, what colour it gives off, how bright it is and how far it
+/// reaches.
+///
+/// Named because `lamps` returns a list of them and clippy is right that
+/// five unlabelled numbers in a tuple is not a type.
+type Shade = (f32, Vec3, Vec3, f32, f32);
+
 /// How long the eye takes to catch the feet up, in seconds.
 ///
 /// Short enough that it is not a thing you notice on the level, where there is
@@ -7456,6 +7464,439 @@ impl Arcade {
         );
     }
 
+    /// What is lit in spec 0133's place, which is its copy of spec 0064's
+    /// room and nothing else.
+    ///
+    /// **The room got its joinery before it got these.** Every bead right
+    /// and no light in it is a dark box with good edges: you come through
+    /// the glass standing in that room, and it was black until the stair
+    /// took you out of it.
+    ///
+    /// No shadow casters. Those are the gallery's two middle lamps, and
+    /// there is no gallery here.
+    fn lamps_over_there(&self, eye: Vec3) -> Vec<Shade> {
+        let place = elysium::placing(self.room.reaches);
+
+        glass::lamps(self.room.reaches)
+            .into_iter()
+            .map(|at| {
+                let at = place.of(at);
+
+                (
+                    eye.distance_squared(at),
+                    at,
+                    glass::LAMP_COLOUR,
+                    glass::LAMP_LIT,
+                    glass::LAMP_RANGE,
+                )
+            })
+            .collect()
+    }
+
+    /// Which cabinet you are looking at, if any.
+    ///
+    /// Named because `draw` and `lamps` both ask it and a `match` written
+    /// in each is two accounts of one thing.
+    fn cabinet_in_sight(&self) -> Option<usize> {
+        match self.seen {
+            Some(room::Seen::Cabinet(n)) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Every lamp that could light what you can see, and which of them
+    /// cast shadows.
+    ///
+    /// **Lifted out of `draw`**, where it was built inline over nearly
+    /// four hundred lines. Spec 0134 calls what lights you one of three
+    /// lists a layer governs and warns that the three leak one at a time,
+    /// and a list assembled inside a function that wants a GPU cannot be
+    /// asked anything without one.
+    ///
+    /// A pure read of `self`: nothing in here touches the scene or the
+    /// camera and nothing assigns. The eye is handed in rather than read
+    /// off `looking_from`, because the camera is already standing there.
+    fn lamps(&self, eye: Vec3) -> (Vec<Shade>, Vec<Vec3>) {
+        // **One world's lamps, per spec 0134, and this was the leak.** The
+        // list below is the arcade's and it was built whatever layer you
+        // were on. That cost nothing while spec 0133's place was six
+        // hundred metres south, because a lamp that far off is culled by
+        // its own range; the moment the two shared their x and z, the
+        // hall's sconces, the cellar's hearth and the neon were all live
+        // over there, spending a budget of sixty four on a beach.
+        //
+        // Found by lifting this out of `draw` to make it testable, which
+        // is what spec 0134 says the three lists are for: they leak one at
+        // a time, and two of them were right.
+        if self.layer == layers::ELYSIUM {
+            return (self.lamps_over_there(eye), Vec::new());
+        }
+
+        let at = self.cabinet_in_sight();
+
+        // every band lights the room around it, because a glowing rectangle
+        // that throws nothing is a coloured rectangle.
+        let mut near: Vec<(f32, usize)> = self
+            .room
+            .stood
+            .iter()
+            .enumerate()
+            .filter(|(_, stood)| stood.cabinet.is_built())
+            .map(|(n, stood)| (eye.distance_squared(stood.at), n))
+            .collect();
+        near.sort_by(|one, other| one.0.total_cmp(&other.0));
+
+        // the nook's own, because a light with no fitting is a bright patch on
+        // a wall and no reason for it: the sconces down both long walls, the
+        // one over the way through that the run leaves dark, and the pendants
+        // over the open floor. `room::nook_lamps` is the one list, so what the
+        // room is lit by is a question with one answer.
+        let mut shades: Vec<Shade> = room::nook_lamps(self.room.reaches)
+            .into_iter()
+            .map(|(at, lit, range)| {
+                (
+                    eye.distance_squared(at),
+                    at,
+                    study::SCONCE_COLOUR,
+                    lit,
+                    range,
+                )
+            })
+            .collect();
+
+        // **The lantern on the roof has no lamp, and that is spec 0057's
+        // own finding.** Its colour is far past one and biased hard warm,
+        // because a lamp inside the box cannot light the box's outside
+        // faces: they point away, so no lambert and no light, and the
+        // warmth has to survive the clamp instead. A lamp up there lights
+        // nothing it is for and does light the hall through the lid, which
+        // is what `the_hall_is_drawn` caught: eighteen per cent of a
+        // picture that looks the same.
+        //
+        // Spec 0057's lantern had one because it hung in a shaft cut down
+        // into the imaginarium, and there was a room under it that wanted
+        // the light. There is no room under this one.
+
+        // and the gallery's three, per spec 0022. The room at the end of the
+        // aisle has one thing in it and these are over that rather than over
+        // the middle of the floor.
+        //
+        // **One over each exhibit, and the same two always cast.** Spec
+        // 0094. The engine carries two shadowing lamps against six here,
+        // so two of the six have to be chosen, and the first go chose the
+        // two nearest the eye. Jake walked the room and sent back a light
+        // sweeping over the floor and into the wall: four metres of
+        // sidestep changes that pair three times, and each change
+        // re-points a shadow map at a different lamp, so a shadow vanishes
+        // from under one plinth and appears under another while you walk.
+        // A shadow is the highest contrast thing in a room and the worst
+        // possible thing to decide per frame.
+        //
+        // So it is the middle of each group of three, which is a place and
+        // not a distance. Those two are each directly over one exhibit and
+        // within a step of two more, and nothing about them moves.
+        let lit: Vec<Vec3> = room::gallery_lamps(self.room.reaches);
+        let middles = [1, display::count() - 2];
+
+        let casters: Vec<Vec3> = middles
+            .iter()
+            .filter_map(|n| lit.get(*n).copied())
+            .collect();
+
+        for (n, at) in lit.iter().enumerate() {
+            if middles.contains(&n) {
+                continue;
+            }
+
+            shades.push((
+                eye.distance_squared(*at),
+                *at,
+                aim::GALLERY_LAMP,
+                aim::GALLERY_LIT,
+                aim::GALLERY_RANGE,
+            ));
+        }
+
+        // and the corridor of mirrors', one over each frame, per spec 0061.
+        //
+        // **Here rather than in `mirrors::draw` where the rest of that room
+        // is.** Pushed at the scene there, they went in ahead of this list
+        // and so survived spec 0050's cap of sixty four wherever you stood,
+        // while the three worst ranked lamps at the entrance were dropped to
+        // make room for lamps behind a bookcase. The count was halved to
+        // five for it and the cap was still three over.
+        //
+        // Pushing them after the cull instead was tried, on the argument
+        // that a mirror is pointed at corridor this frustum throws away. It
+        // changed no picture anywhere the glass was looked at and put the
+        // entrance back over the cap, so it is not in.
+        for at in mirrors::lamps() {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                mirrors::LAMP_COLOUR,
+                mirrors::LAMP_LIT,
+                mirrors::LAMP_RANGE,
+            ));
+        }
+
+        // and the back room's two: the bulb over its near half, per spec
+        // 0024, and the bay's own, per spec 0025
+        {
+            let at = back::lamp(self.room.reaches);
+
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                aim::BACK_LAMP,
+                aim::BACK_LIT,
+                aim::BACK_RANGE,
+            ));
+
+            let bay = back::bay_lamp(self.room.reaches);
+
+            shades.push((
+                eye.distance_squared(bay),
+                bay,
+                aim::BACK_BAY_LAMP,
+                aim::BACK_BAY_LIT,
+                aim::BACK_BAY_RANGE,
+            ));
+        }
+
+        // and the carving's own, in front of the runestone's face, which
+        // is what makes the thing read as glowing rather than as a neon
+        // tube stuck on a rock: the light it gives off lands on the
+        // stone holding it. Only while the stone is there to hold it.
+        if let Some((stone, size)) = bridge::runestone(self.room.reaches, &self.trail) {
+            let (at, lit, strength, range) = bridge::carving_lamp(stone, size, self.since);
+
+            shades.push((eye.distance_squared(at), at, lit, strength, range));
+        }
+
+        // and spec 0064's bays, which are the only light in the room over
+        // the nook. Every lamp sits in a fitting, per this building's own
+        // rule, and up there the fitting is the slot between two columns.
+        for at in glass::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                glass::LAMP_COLOUR,
+                glass::LAMP_LIT,
+                glass::LAMP_RANGE,
+            ));
+        }
+
+        // and spec 0122's globes, whose fitting is the globe itself.
+        for at in plasma::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                plasma::LAMP_COLOUR,
+                plasma::LAMP_LIT,
+                plasma::LAMP_RANGE,
+            ));
+        }
+
+        // and the pendant over the sign, which is a fitting like any other.
+        let lamp = sign::at(self.room.reaches)
+            + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP - sign::SHADE.y);
+        shades.push((
+            eye.distance_squared(lamp),
+            lamp,
+            sign::LAMP_COLOUR,
+            sign::LAMP_LIT,
+            sign::LAMP_RANGE,
+        ));
+
+        // and the neon over the way in, which throws its own colour on the
+        // ceiling and the floor under it. A sign burning past one with no light
+        // of its own is a bright patch and no reason for it.
+        let burning = neon::at(self.room.reaches);
+        shades.push((
+            eye.distance_squared(burning),
+            burning,
+            neon::COLOUR,
+            neon::LIT,
+            neon::RANGE,
+        ));
+
+        // the spa's own lamps, and the sauna's, which is a different warmth
+        // from the room it stands in. Spec 0008.
+        for lamp in spa::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::SPA_LAMP,
+                spa::LAMP_LIT,
+                spa::LAMP_RANGE,
+            ));
+        }
+
+        // and the pool's own, down in its walls under the water. Spec 0082.
+        for lamp in spa::pool_lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::SPA_LAMP,
+                spa::POOL_LIT,
+                spa::POOL_RANGE,
+            ));
+        }
+
+        // and what the water throws back into the room, which is the thing
+        // that makes a pool a light rather than a bright patch of floor.
+        for lamp in spa::glow(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::SPA_GLOW,
+                spa::GLOW_LIT,
+                spa::GLOW_RANGE,
+            ));
+        }
+
+        // the garden's, which are inside its stone lanterns and nowhere else.
+        // Spec 0010.
+        // and they come up as the sun goes down, per spec 0019, over a couple
+        // of minutes rather than at a stroke: nothing in this garden is
+        // switched.
+        {
+            let lit = garden::lanterns_lit(self.since);
+
+            for lamp in garden::lamps(self.room.reaches) {
+                shades.push((
+                    eye.distance_squared(lamp),
+                    lamp,
+                    aim::LANTERN_LIT,
+                    garden::LAMP_LIT * lit,
+                    garden::LAMP_RANGE,
+                ));
+            }
+        }
+
+        // the sun, which is the only lamp in the room behind the wall. Spec
+        // 0015. Neptune really does get one nine hundredth of the Earth's
+        // sunlight, so an outer planet that is barely lit is right; the room
+        // carries a little starlight so nothing is ever flat black.
+        let (sun, _) = self.the_sun();
+        shades.push((
+            eye.distance_squared(sun),
+            sun,
+            orrery::SUNLIGHT,
+            orrery::SUN_LIT,
+            orrery::sun_range(),
+        ));
+
+        let stove = spa::stove_lamp(self.room.reaches);
+        shades.push((
+            eye.distance_squared(stove),
+            stove,
+            aim::SAUNA_LAMP,
+            spa::SAUNA_LIT,
+            spa::SAUNA_RANGE,
+        ));
+
+        // and the one over the pool table, in the same list as everything else.
+        // The cellar had no light of its own at all, which is why it came out
+        // as flat grey surfaces with no shape to any of them.
+        let table = cellar::table(self.room.reaches);
+        let over = table.at + Vec3::Y * (table.size.y + cellar::LAMP_UP - cellar::SHADE.y);
+        shades.push((
+            eye.distance_squared(over),
+            over,
+            cellar::LAMP_COLOUR,
+            cellar::LAMP_LIT,
+            cellar::LAMP_RANGE,
+        ));
+
+        // the fire, which is what the room is lit by, and wanders as a fire
+        // does
+        let hearth =
+            cellar::hearth(self.room.reaches) + Vec3::Y * 0.35 + Vec3::X * cellar::FIRE_DEEP * 0.5;
+        shades.push((
+            eye.distance_squared(hearth),
+            hearth,
+            cellar::FIRE_COLOUR,
+            cellar::FIRE_LIT * cellar::flicker(self.since),
+            cellar::FIRE_RANGE,
+        ));
+
+        // and the cellar's own, which are red and faint. One bright thing to
+        // stand round and everything else going dark at the edges is what makes
+        // a room downstairs worth sitting in.
+        for at in cellar::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                cellar::GLOW,
+                cellar::GLOW_LIT,
+                cellar::GLOW_RANGE,
+            ));
+        }
+        // and the space behind the wall, which is faint and cool where every
+        // other light in here is warm. Most of it is not lit at all, which is
+        // the room. Spec 0011.
+        for at_ in behind::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at_),
+                at_,
+                behind::LAMP_COLOUR,
+                behind::LAMP_LIT,
+                behind::LAMP_RANGE,
+            ));
+        }
+
+        // and the hall's ceiling panels, off the same list that draws them so
+        // there is no lamp in here that is not in a fitting
+        for (at, _) in self.room.lattice().2.iter() {
+            let lamp = room::panel_lamp(*at);
+
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                room::PANEL_COLOUR,
+                room::PANEL_LIT * room::panel_flicker(*at, self.since),
+                room::PANEL_RANGE,
+            ));
+        }
+
+        // and the cabinets' neon, which is a lamp like any other and has to
+        // be ranked like one.
+        //
+        // **It was pushed after the sort, so the cap fell on it first.** The
+        // engine keeps the first sixty four lights it is given and drops the
+        // rest without a word, so push order is what decides. The fitted
+        // lamps went in culled and ranked and the neon went in afterwards,
+        // which protected a ceiling lamp over the glow a cabinet throws on
+        // the carpet, in the one room whose whole character is that glow.
+        // Standing at the entrance and sweeping the hall asked for a hundred
+        // and thirteen, so forty nine were dropped and the neon was all of
+        // them.
+        shades.extend(near.iter().map(|&(_, n)| {
+            let stood = &self.room.stood[n];
+            let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
+            let strength = if at == Some(n) {
+                aim::LAMP_LIT
+            } else {
+                aim::LAMP_INTENSITY
+            };
+            let throws = stood.at
+                + Vec3::Y * room::CABINET.y * aim::NEON_UP
+                + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK);
+
+            (
+                eye.distance_squared(throws),
+                throws,
+                glow.truncate().normalize_or(Vec3::ONE),
+                strength,
+                aim::LAMP_RANGE,
+            )
+        }));
+
+        (shades, casters)
+    }
+
     /// The sky this layer stands under: its dome, the moon, the sun and
     /// the cloud over the pair of them.
     ///
@@ -14559,396 +15000,9 @@ impl Game for Arcade {
             );
         }
 
-        let at = match self.seen {
-            Some(room::Seen::Cabinet(n)) => Some(n),
-            _ => None,
-        };
-
-        // every band lights the room around it, because a glowing rectangle
-        // that throws nothing is a coloured rectangle.
+        let at = self.cabinet_in_sight();
         let eye = camera.position;
-        let mut near: Vec<(f32, usize)> = self
-            .room
-            .stood
-            .iter()
-            .enumerate()
-            .filter(|(_, stood)| stood.cabinet.is_built())
-            .map(|(n, stood)| (eye.distance_squared(stood.at), n))
-            .collect();
-        near.sort_by(|one, other| one.0.total_cmp(&other.0));
-
-        // the nook's own, because a light with no fitting is a bright patch on
-        // a wall and no reason for it: the sconces down both long walls, the
-        // one over the way through that the run leaves dark, and the pendants
-        // over the open floor. `room::nook_lamps` is the one list, so what the
-        // room is lit by is a question with one answer.
-        let mut shades: Vec<(f32, Vec3, Vec3, f32, f32)> = room::nook_lamps(self.room.reaches)
-            .into_iter()
-            .map(|(at, lit, range)| {
-                (
-                    eye.distance_squared(at),
-                    at,
-                    study::SCONCE_COLOUR,
-                    lit,
-                    range,
-                )
-            })
-            .collect();
-
-        // **The lantern on the roof has no lamp, and that is spec 0057's
-        // own finding.** Its colour is far past one and biased hard warm,
-        // because a lamp inside the box cannot light the box's outside
-        // faces: they point away, so no lambert and no light, and the
-        // warmth has to survive the clamp instead. A lamp up there lights
-        // nothing it is for and does light the hall through the lid, which
-        // is what `the_hall_is_drawn` caught: eighteen per cent of a
-        // picture that looks the same.
-        //
-        // Spec 0057's lantern had one because it hung in a shaft cut down
-        // into the imaginarium, and there was a room under it that wanted
-        // the light. There is no room under this one.
-
-        // and the gallery's three, per spec 0022. The room at the end of the
-        // aisle has one thing in it and these are over that rather than over
-        // the middle of the floor.
-        //
-        // **One over each exhibit, and the same two always cast.** Spec
-        // 0094. The engine carries two shadowing lamps against six here,
-        // so two of the six have to be chosen, and the first go chose the
-        // two nearest the eye. Jake walked the room and sent back a light
-        // sweeping over the floor and into the wall: four metres of
-        // sidestep changes that pair three times, and each change
-        // re-points a shadow map at a different lamp, so a shadow vanishes
-        // from under one plinth and appears under another while you walk.
-        // A shadow is the highest contrast thing in a room and the worst
-        // possible thing to decide per frame.
-        //
-        // So it is the middle of each group of three, which is a place and
-        // not a distance. Those two are each directly over one exhibit and
-        // within a step of two more, and nothing about them moves.
-        let lit: Vec<Vec3> = room::gallery_lamps(self.room.reaches);
-        let middles = [1, display::count() - 2];
-
-        let casters: Vec<Vec3> = middles
-            .iter()
-            .filter_map(|n| lit.get(*n).copied())
-            .collect();
-
-        for (n, at) in lit.iter().enumerate() {
-            if middles.contains(&n) {
-                continue;
-            }
-
-            shades.push((
-                eye.distance_squared(*at),
-                *at,
-                aim::GALLERY_LAMP,
-                aim::GALLERY_LIT,
-                aim::GALLERY_RANGE,
-            ));
-        }
-
-        // and the corridor of mirrors', one over each frame, per spec 0061.
-        //
-        // **Here rather than in `mirrors::draw` where the rest of that room
-        // is.** Pushed at the scene there, they went in ahead of this list
-        // and so survived spec 0050's cap of sixty four wherever you stood,
-        // while the three worst ranked lamps at the entrance were dropped to
-        // make room for lamps behind a bookcase. The count was halved to
-        // five for it and the cap was still three over.
-        //
-        // Pushing them after the cull instead was tried, on the argument
-        // that a mirror is pointed at corridor this frustum throws away. It
-        // changed no picture anywhere the glass was looked at and put the
-        // entrance back over the cap, so it is not in.
-        for at in mirrors::lamps() {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                mirrors::LAMP_COLOUR,
-                mirrors::LAMP_LIT,
-                mirrors::LAMP_RANGE,
-            ));
-        }
-
-        // and the back room's two: the bulb over its near half, per spec
-        // 0024, and the bay's own, per spec 0025
-        {
-            let at = back::lamp(self.room.reaches);
-
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                aim::BACK_LAMP,
-                aim::BACK_LIT,
-                aim::BACK_RANGE,
-            ));
-
-            let bay = back::bay_lamp(self.room.reaches);
-
-            shades.push((
-                eye.distance_squared(bay),
-                bay,
-                aim::BACK_BAY_LAMP,
-                aim::BACK_BAY_LIT,
-                aim::BACK_BAY_RANGE,
-            ));
-        }
-
-        // and the carving's own, in front of the runestone's face, which
-        // is what makes the thing read as glowing rather than as a neon
-        // tube stuck on a rock: the light it gives off lands on the
-        // stone holding it. Only while the stone is there to hold it.
-        if let Some((stone, size)) = bridge::runestone(self.room.reaches, &self.trail) {
-            let (at, lit, strength, range) = bridge::carving_lamp(stone, size, self.since);
-
-            shades.push((eye.distance_squared(at), at, lit, strength, range));
-        }
-
-        // and spec 0064's bays, which are the only light in the room over
-        // the nook. Every lamp sits in a fitting, per this building's own
-        // rule, and up there the fitting is the slot between two columns.
-        for at in glass::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                glass::LAMP_COLOUR,
-                glass::LAMP_LIT,
-                glass::LAMP_RANGE,
-            ));
-        }
-
-        // and the same bays in spec 0133's copy of that room, moved with
-        // it. The copy got its joinery before it got these, and a room with
-        // every bead right and no light in it is a dark box with good
-        // edges: you come through the glass standing in that room, and it
-        // was black until the stair took you out of it.
-        //
-        // Only while you are over there, because the two rooms are six
-        // hundred metres apart and a lamp in one is nothing in the other:
-        // these would be ten shades spent on a room nobody can see.
-        if self.layer == layers::ELYSIUM {
-            let place = elysium::placing(self.room.reaches);
-
-            for at in glass::lamps(self.room.reaches) {
-                let at = place.of(at);
-
-                shades.push((
-                    eye.distance_squared(at),
-                    at,
-                    glass::LAMP_COLOUR,
-                    glass::LAMP_LIT,
-                    glass::LAMP_RANGE,
-                ));
-            }
-        }
-
-        // and spec 0122's globes, whose fitting is the globe itself.
-        for at in plasma::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                plasma::LAMP_COLOUR,
-                plasma::LAMP_LIT,
-                plasma::LAMP_RANGE,
-            ));
-        }
-
-        // and the pendant over the sign, which is a fitting like any other.
-        let lamp = sign::at(self.room.reaches)
-            + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP - sign::SHADE.y);
-        shades.push((
-            eye.distance_squared(lamp),
-            lamp,
-            sign::LAMP_COLOUR,
-            sign::LAMP_LIT,
-            sign::LAMP_RANGE,
-        ));
-
-        // and the neon over the way in, which throws its own colour on the
-        // ceiling and the floor under it. A sign burning past one with no light
-        // of its own is a bright patch and no reason for it.
-        let burning = neon::at(self.room.reaches);
-        shades.push((
-            eye.distance_squared(burning),
-            burning,
-            neon::COLOUR,
-            neon::LIT,
-            neon::RANGE,
-        ));
-
-        // the spa's own lamps, and the sauna's, which is a different warmth
-        // from the room it stands in. Spec 0008.
-        for lamp in spa::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(lamp),
-                lamp,
-                aim::SPA_LAMP,
-                spa::LAMP_LIT,
-                spa::LAMP_RANGE,
-            ));
-        }
-
-        // and the pool's own, down in its walls under the water. Spec 0082.
-        for lamp in spa::pool_lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(lamp),
-                lamp,
-                aim::SPA_LAMP,
-                spa::POOL_LIT,
-                spa::POOL_RANGE,
-            ));
-        }
-
-        // and what the water throws back into the room, which is the thing
-        // that makes a pool a light rather than a bright patch of floor.
-        for lamp in spa::glow(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(lamp),
-                lamp,
-                aim::SPA_GLOW,
-                spa::GLOW_LIT,
-                spa::GLOW_RANGE,
-            ));
-        }
-
-        // the garden's, which are inside its stone lanterns and nowhere else.
-        // Spec 0010.
-        // and they come up as the sun goes down, per spec 0019, over a couple
-        // of minutes rather than at a stroke: nothing in this garden is
-        // switched.
-        {
-            let lit = garden::lanterns_lit(self.since);
-
-            for lamp in garden::lamps(self.room.reaches) {
-                shades.push((
-                    eye.distance_squared(lamp),
-                    lamp,
-                    aim::LANTERN_LIT,
-                    garden::LAMP_LIT * lit,
-                    garden::LAMP_RANGE,
-                ));
-            }
-        }
-
-        // the sun, which is the only lamp in the room behind the wall. Spec
-        // 0015. Neptune really does get one nine hundredth of the Earth's
-        // sunlight, so an outer planet that is barely lit is right; the room
-        // carries a little starlight so nothing is ever flat black.
-        let (sun, _) = self.the_sun();
-        shades.push((
-            eye.distance_squared(sun),
-            sun,
-            orrery::SUNLIGHT,
-            orrery::SUN_LIT,
-            orrery::sun_range(),
-        ));
-
-        let stove = spa::stove_lamp(self.room.reaches);
-        shades.push((
-            eye.distance_squared(stove),
-            stove,
-            aim::SAUNA_LAMP,
-            spa::SAUNA_LIT,
-            spa::SAUNA_RANGE,
-        ));
-
-        // and the one over the pool table, in the same list as everything else.
-        // The cellar had no light of its own at all, which is why it came out
-        // as flat grey surfaces with no shape to any of them.
-        let table = cellar::table(self.room.reaches);
-        let over = table.at + Vec3::Y * (table.size.y + cellar::LAMP_UP - cellar::SHADE.y);
-        shades.push((
-            eye.distance_squared(over),
-            over,
-            cellar::LAMP_COLOUR,
-            cellar::LAMP_LIT,
-            cellar::LAMP_RANGE,
-        ));
-
-        // the fire, which is what the room is lit by, and wanders as a fire
-        // does
-        let hearth =
-            cellar::hearth(self.room.reaches) + Vec3::Y * 0.35 + Vec3::X * cellar::FIRE_DEEP * 0.5;
-        shades.push((
-            eye.distance_squared(hearth),
-            hearth,
-            cellar::FIRE_COLOUR,
-            cellar::FIRE_LIT * cellar::flicker(self.since),
-            cellar::FIRE_RANGE,
-        ));
-
-        // and the cellar's own, which are red and faint. One bright thing to
-        // stand round and everything else going dark at the edges is what makes
-        // a room downstairs worth sitting in.
-        for at in cellar::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                cellar::GLOW,
-                cellar::GLOW_LIT,
-                cellar::GLOW_RANGE,
-            ));
-        }
-        // and the space behind the wall, which is faint and cool where every
-        // other light in here is warm. Most of it is not lit at all, which is
-        // the room. Spec 0011.
-        for at_ in behind::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(at_),
-                at_,
-                behind::LAMP_COLOUR,
-                behind::LAMP_LIT,
-                behind::LAMP_RANGE,
-            ));
-        }
-
-        // and the hall's ceiling panels, off the same list that draws them so
-        // there is no lamp in here that is not in a fitting
-        for (at, _) in self.room.lattice().2.iter() {
-            let lamp = room::panel_lamp(*at);
-
-            shades.push((
-                eye.distance_squared(lamp),
-                lamp,
-                room::PANEL_COLOUR,
-                room::PANEL_LIT * room::panel_flicker(*at, self.since),
-                room::PANEL_RANGE,
-            ));
-        }
-
-        // and the cabinets' neon, which is a lamp like any other and has to
-        // be ranked like one.
-        //
-        // **It was pushed after the sort, so the cap fell on it first.** The
-        // engine keeps the first sixty four lights it is given and drops the
-        // rest without a word, so push order is what decides. The fitted
-        // lamps went in culled and ranked and the neon went in afterwards,
-        // which protected a ceiling lamp over the glow a cabinet throws on
-        // the carpet, in the one room whose whole character is that glow.
-        // Standing at the entrance and sweeping the hall asked for a hundred
-        // and thirteen, so forty nine were dropped and the neon was all of
-        // them.
-        shades.extend(near.iter().map(|&(_, n)| {
-            let stood = &self.room.stood[n];
-            let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
-            let strength = if at == Some(n) {
-                aim::LAMP_LIT
-            } else {
-                aim::LAMP_INTENSITY
-            };
-            let throws = stood.at
-                + Vec3::Y * room::CABINET.y * aim::NEON_UP
-                + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK);
-
-            (
-                eye.distance_squared(throws),
-                throws,
-                glow.truncate().normalize_or(Vec3::ONE),
-                strength,
-                aim::LAMP_RANGE,
-            )
-        }));
+        let (mut shades, casters) = self.lamps(eye);
 
         // and first, throw away every lamp that cannot light anything you
         // can see. A lamp gives exactly nothing past its range, so all it
@@ -19129,6 +19183,64 @@ mod tests {
             was,
             game.at,
             game.forward()
+        );
+    }
+
+    /// Spec 0134: no lamp lights across layers.
+    ///
+    /// **The third list, and the one that was leaking.** The arcade's
+    /// lamps were built whatever layer you were on. That cost nothing
+    /// while spec 0133's place was six hundred metres south, since a lamp
+    /// that far away is culled by its own range; the moment the two shared
+    /// their x and z, the hall's sconces and the cellar's hearth were live
+    /// over a beach, against an engine budget of sixty four.
+    ///
+    /// Asked of positions, because a lamp is where it is. Spec 0064's room
+    /// is the one place both layers light, each its own copy, so this
+    /// takes a lamp from a room only the arcade has.
+    #[test]
+    fn no_lamp_reaches_another_layer() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let eye = vec3(0.0, EYE, 0.0);
+        let nooks = room::nook_lamps(reaches);
+
+        assert!(
+            !nooks.is_empty(),
+            "the nook has no lamps, so this proves nothing"
+        );
+
+        let near_a_nook_lamp = |shades: &[Shade]| -> bool {
+            shades
+                .iter()
+                .any(|(_, at, _, _, _)| nooks.iter().any(|(one, _, _)| one.distance(*at) < 1e-3))
+        };
+
+        let (here, casters) = game.lamps(eye);
+
+        assert!(
+            near_a_nook_lamp(&here),
+            "the arcade does not light its own nook, so this proves nothing"
+        );
+        assert!(!casters.is_empty(), "and nothing casts, which it should");
+
+        game.layer = layers::ELYSIUM;
+
+        let (there, theirs) = game.lamps(eye);
+
+        assert!(
+            !near_a_nook_lamp(&there),
+            "the nook's lamps are lit in spec 0133's place, on a layer the \
+             nook is not on"
+        );
+        assert!(
+            theirs.is_empty(),
+            "the gallery casts shadows in a place with no gallery"
+        );
+        assert!(
+            !there.is_empty(),
+            "nothing lights spec 0133's place at all, which is the fault \
+             the copy's bays were added for"
         );
     }
 

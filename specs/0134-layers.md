@@ -133,20 +133,25 @@ Part of this is built. The ones marked unbuilt have no test yet.
 - Nothing on another layer stops you, which is the list the back door was
   about. — `tests::nothing_on_another_layer_stops_you`
 
+- No lamp lights across layers, which is the list that was
+  leaking. — `tests::no_lamp_reaches_another_layer`
+
 ### Not built yet
 
-Both of the remaining two are built and neither is held directly. They are
-the other two of the three lists, and what the spec warns about is a list
-leaking on its own, so holding them indirectly is holding the wrong thing.
+The third list is held only indirectly, which is the wrong thing to hold:
+what this spec warns about is a list leaking on its own, and the lamps
+proved that is not hypothetical.
 
-What stops them being written is that both are assembled inside `draw`,
-which wants a renderer: the lamps are a `Vec` built inline there, and what
-is drawn can only be read back off a `Scene` that a GPU filled. The lamps
-want lifting into their own method first, the way `draw_the_sky` was.
+**It wants something the engine does not expose.** What is drawn can only
+be read back off a `Scene` a renderer filled, and `Scene::batches` is
+private. Six read-backs are public, `outlines`, `point_lights`,
+`spot_lights`, `mirrors`, `glass_surfaces` and `lenses`, and none of them
+gives the instances. So this needs either a seventh accessor in blitzkit,
+which is a published crate and its own decision, or a different way of
+asking.
 
 - Nothing on another layer is
   drawn. — `tests::nothing_on_another_layer_is_drawn`
-- No lamp lights across layers. — `tests::no_lamp_reaches_another_layer`
 
 ### Verified by hand
 
