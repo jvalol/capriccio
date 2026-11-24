@@ -104,7 +104,7 @@ pub fn at(lon: f32, lat: f32) -> (f32, f32) {
 /// The map: sea, land filled in, a grid over it, and the circles with names.
 pub fn drawn() -> TextureData {
     let mut pixels = vec![0u8; (WIDE * TALL * 4) as usize];
-    for texel in pixels.chunks_exact_mut(4) {
+    for texel in pixels.as_chunks_mut::<4>().0 {
         texel[..3].copy_from_slice(&SEA);
         texel[3] = 255;
     }
@@ -133,7 +133,7 @@ pub fn drawn() -> TextureData {
         }
 
         cuts.sort_by(f32::total_cmp);
-        for pair in cuts.chunks_exact(2) {
+        for pair in cuts.as_chunks::<2>().0 {
             let (from, to) = (pair[0].max(0.0) as u32, pair[1].min(WIDE as f32) as u32);
             for x in from..to {
                 let at = ((y * WIDE + x) * 4) as usize;

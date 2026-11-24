@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(mesh.indices.len() % 3, 0);
         assert!(mesh.indices.len() >= 18, "a wedge is six triangles");
 
-        for triangle in mesh.indices.chunks_exact(3) {
+        for triangle in mesh.indices.as_chunks::<3>().0 {
             let corner = |n: usize| Vec3::from(mesh.vertices[triangle[n] as usize].position);
             let (a, b, c) = (corner(0), corner(1), corner(2));
             let wound = (b - a).cross(c - b);

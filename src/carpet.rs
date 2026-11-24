@@ -1595,7 +1595,9 @@ mod tests {
         let level = &carpet.levels[0];
         let lit = level
             .pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|texel| {
                 (0..3).any(|n| (texel[n] as i32 - GROUND[n] as i32).abs() > swing(GROUND[n]))
             })
@@ -1634,7 +1636,7 @@ mod tests {
         let swing = |colour: u8| colour as i32 * (WOVEN_PILE + WOVEN_ROW) / 100 + 1;
         let (mut darkest, mut lightest) = (255u8, 0u8);
 
-        for texel in level.pixels.chunks_exact(4) {
+        for texel in level.pixels.as_chunks::<4>().0 {
             // the ground only: a spread taken over the thrown shapes as well
             // would pass on a floor whose ground was flat
             if (0..3).any(|n| (texel[n] as i32 - GROUND[n] as i32).abs() > swing(GROUND[n])) {
@@ -1702,7 +1704,7 @@ mod tests {
         let mut lowest = 255i32;
         let mut highest = 0i32;
         let mut flat = true;
-        for texel in level.pixels.chunks_exact(4) {
+        for texel in level.pixels.as_chunks::<4>().0 {
             lowest = lowest.min(texel[0] as i32);
             highest = highest.max(texel[0] as i32);
             if texel[0] != base[0] {
@@ -1742,7 +1744,7 @@ mod tests {
 
         assert_eq!(carpet.width(), WOVEN);
         assert_eq!(carpet.height(), WOVEN);
-        for texel in carpet.levels[0].pixels.chunks_exact(4) {
+        for texel in carpet.levels[0].pixels.as_chunks::<4>().0 {
             assert_eq!(texel[3], 255, "a texel is not opaque");
         }
     }

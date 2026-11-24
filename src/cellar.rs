@@ -1847,7 +1847,7 @@ mod tests {
         // half that was wrong. A stored normal pointing out and a triangle
         // wound inwards are both possible at once, and a triangle wound away
         // from you is culled and drawn nowhere.
-        for triangle in mesh.indices.chunks_exact(3) {
+        for triangle in mesh.indices.as_chunks::<3>().0 {
             let corner = |n: usize| Vec3::from(mesh.vertices[triangle[n] as usize].position);
             let (a, b, c) = (corner(0), corner(1), corner(2));
             let wound = (b - a).cross(c - b);

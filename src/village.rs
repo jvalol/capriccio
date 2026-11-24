@@ -2235,7 +2235,9 @@ mod tests {
         // nothing on the street leans into the ground it is laid on
         let under = level
             .pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|texel| texel[2] < 128)
             .count();
         assert_eq!(
@@ -3122,7 +3124,7 @@ mod tests {
         // and the path is not drawn at all, which is the one fault here
         // that a picture would show as nothing rather than as something
         // wrong.
-        for (n, triangle) in mesh.indices.chunks_exact(3).enumerate() {
+        for (n, triangle) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
             let corner = |at: u32| {
                 let one = mesh.vertices[at as usize].position;
 

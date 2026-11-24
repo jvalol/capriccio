@@ -2213,7 +2213,7 @@ mod tests {
         let level = sky.levels.first().expect("the full size picture");
         let mut lit: Vec<f32> = Vec::new();
 
-        for texel in level.pixels.chunks_exact(4) {
+        for texel in level.pixels.as_chunks::<4>().0 {
             let (r, g, b) = (texel[0] as f32, texel[1] as f32, texel[2] as f32);
 
             lit.push((r * 0.2126 + g * 0.7152 + b * 0.0722) / 255.0);

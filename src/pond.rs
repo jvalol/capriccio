@@ -277,7 +277,7 @@ pub fn water_mesh(reaches: f32, water: &blitzkit::water::Water) -> blitzkit::mes
     let edge = shore();
     let mut indices = Vec::with_capacity(whole.indices.len());
 
-    for face in whole.indices.chunks_exact(3) {
+    for face in whole.indices.as_chunks::<3>().0 {
         if face.iter().all(|n| {
             whole
                 .vertices

@@ -1705,7 +1705,7 @@ pub fn faceted(mesh: blitzkit::mesh::MeshData) -> blitzkit::mesh::MeshData {
 
     let mut vertices = Vec::with_capacity(mesh.indices.len());
 
-    for triangle in mesh.indices.chunks_exact(3) {
+    for triangle in mesh.indices.as_chunks::<3>().0 {
         let corners = [
             mesh.vertices[triangle[0] as usize],
             mesh.vertices[triangle[1] as usize],

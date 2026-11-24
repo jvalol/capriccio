@@ -2457,7 +2457,7 @@ pub fn glow_of(art: &blitzkit::texture::TextureData) -> Vec3 {
 
     let mut sum = Vec3::ZERO;
     let mut seen = 0.0;
-    for texel in level.pixels.chunks_exact(4) {
+    for texel in level.pixels.as_chunks::<4>().0 {
         sum += glam::vec3(texel[0] as f32, texel[1] as f32, texel[2] as f32);
         seen += 1.0;
     }

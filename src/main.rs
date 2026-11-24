@@ -16850,7 +16850,9 @@ mod tests {
                 let mesh = display::mesh_at(n, knob);
                 let area: f32 = mesh
                     .indices
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|one| {
                         let at = |n: u32| Vec3::from(mesh.vertices[n as usize].position);
                         (at(one[1]) - at(one[0]))
