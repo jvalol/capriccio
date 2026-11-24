@@ -103,6 +103,15 @@ drawing then costs one quad a room piece.
 **The storey you are on**, by `plan::storey_at`, which is the same answer the
 wall plan's mark uses.
 
+**No panel where there is nothing to map** (2026-11-24). The plate used to
+be drawn before anything was known about what would go on it, so standing
+in the field or the village gave a grey rectangle with the mark alone in
+it. That is not a map of open country; it is what a map looks like when it
+has broken, and the village's own published photograph had carried one in
+the corner since the day that shot was first taken. The rooms are gathered
+first now and an empty list draws nothing at all, which is also the answer
+spec 0134 gives for a layer with no map of its own.
+
 ## Acceptance criteria
 
 - What is in front of you is up the panel, whichever way you are
@@ -121,6 +130,8 @@ wall plan's mark uses.
   thing after. — `minimap::tests::the_map_says_nothing_until_the_trail_has_started`
 - A station off the map is pinned to the rim without its bearing
   moving. — `minimap::tests::a_station_off_the_map_keeps_its_bearing_on_the_rim`
+- There is no panel where there is nothing to map, so the field and the
+  village show none. — `tests::no_map_is_drawn_where_there_is_nothing_to_map`
 - Every station has somewhere to be pointed
   at. — `trail::tests::every_station_has_a_place`
 - No two stations stand in one

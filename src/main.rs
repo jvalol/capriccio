@@ -8189,6 +8189,24 @@ impl Arcade {
         let facing = self.facing();
         let turn = minimap::turn(facing);
 
+        // **Nothing to map is no map, which is the plate's question and not
+        // the room loop's.** `rooms` is already cut to what can reach the
+        // panel, so an empty list is the honest answer that this storey has
+        // nothing near you: outdoors in the field, in the village, anywhere
+        // off the building's own footprint. Drawn anyway it was a grey plate
+        // with a marker alone in it, which reads as a map that has broken
+        // rather than as open country. `media/village.png` had carried one
+        // for as long as the village has been photographed.
+        //
+        // Asked here rather than after the plate because the plate is the
+        // thing being decided. The same answer the layer gate above gives,
+        // for the same reason.
+        let rooms = minimap::rooms(self.window, at, facing, floor);
+
+        if rooms.is_empty() {
+            return;
+        }
+
         geometry.push_quad(&Quad::colored(middle, size, aim::MAP_EDGE));
         geometry.push_quad(&Quad::colored(
             middle,
@@ -8200,7 +8218,7 @@ impl Arcade {
         // is the map's one angle and the window is its one edge, so both are
         // read here rather than worked out per rectangle. Engine specs 0112
         // and 0113.
-        for (spot, size) in minimap::rooms(self.window, at, facing, floor) {
+        for (spot, size) in rooms {
             geometry.push_quad(
                 &Quad::colored(spot, size, aim::MAP_ROOM)
                     .turned(turn)
@@ -19466,6 +19484,51 @@ mod tests {
             there.runs().is_empty(),
             "the building's plan is drawn in spec 0133's place, {} runs of it",
             there.runs().len()
+        );
+    }
+
+    /// Spec 0132: no map where there is nothing to map.
+    ///
+    /// **The panel was drawn before anything was known about what would go
+    /// in it**, so standing in the field gave a grey plate with the marker
+    /// alone in it. That is not a map of open country, it is what a map
+    /// looks like when it has broken, and `media/village.png` had carried
+    /// one in the corner for as long as the village has been photographed.
+    ///
+    /// Stood at `village::posed`, which is that photograph's own camera
+    /// rather than a position picked to pass. The first half is the control
+    /// and it matters more than usual here: the drawing gives up early when
+    /// the height is off the building's storeys, so a test that only
+    /// checked the field could pass without this change existing.
+    #[test]
+    fn no_map_is_drawn_where_there_is_nothing_to_map() {
+        let mut game = Arcade::new();
+
+        let mut inside = Geometry::new();
+        game.draw_the_map(&mut inside);
+        assert!(
+            !inside.runs().is_empty(),
+            "the arcade draws no map where it starts, so this proves nothing"
+        );
+
+        let (stand, yaw, pitch) = village::posed(game.room.reaches);
+        game.at = stand;
+        game.yaw = yaw;
+        game.pitch = pitch;
+
+        assert_eq!(
+            plan::storey_at(game.looking_from().y),
+            plan::storey_at(Arcade::new().looking_from().y),
+            "the village stands off the building's storeys, so the drawing \
+             gives up before it reaches the thing this tests"
+        );
+
+        let mut out = Geometry::new();
+        game.draw_the_map(&mut out);
+        assert!(
+            out.runs().is_empty(),
+            "a map of the building is drawn out in the village, {} runs of it",
+            out.runs().len()
         );
     }
 
