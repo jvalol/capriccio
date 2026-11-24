@@ -6079,12 +6079,6 @@ impl Arcade {
         }
     }
 
-    /// Which of the nook's two sconce walls the hall of mirrors is behind.
-    /// `room::bookcase_wall`, which the nook's own lamps also ask.
-    fn bookcase_wall(&self) -> (f32, f32) {
-        room::bookcase_wall(self.room.reaches)
-    }
-
     fn draw_the_people(&self, scene: &mut Scene) {
         let (Some(body), Some(head), Some(thigh), Some(shin), Some(cube)) =
             (self.body, self.head, self.thigh, self.shin, self.cube)
@@ -13865,19 +13859,6 @@ impl Game for Arcade {
             for along in study::sconces(from, to) {
                 sconce(vec3(face, bench_floor + study::SCONCE_UP, along), out);
             }
-        }
-
-        // and one over the way through, which the run leaves dark: spec 0061
-        // and `mirrors::doorway_lamp`. The same fitting as the rest of that
-        // wall, higher, because at the run's own height the middle of the
-        // opening is a hole.
-        {
-            let (face, out) = self.bookcase_wall();
-
-            sconce(
-                mirrors::doorway_lamp(face, out) - Vec3::X * out * study::SCONCE_OUT,
-                out,
-            );
         }
 
         // and the pendants over the open floor, which is what lights the floor:

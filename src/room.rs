@@ -960,26 +960,6 @@ pub fn open_floor(reaches: f32) -> (Vec3, Vec3) {
     )
 }
 
-/// Which of the nook's two sconce walls the hall of mirrors is behind, as the
-/// face it stands on and which way a bracket reaches off it.
-///
-/// **Found rather than indexed.** `sconce_runs` gives two and which is which is
-/// not written anywhere, so taking `[1]` would be a fact nobody stated that the
-/// next person to add a wall would break. The one nearest the corridor's own
-/// east face is the one the bookcases are on.
-pub fn bookcase_wall(reaches: f32) -> (f32, f32) {
-    sconce_runs(reaches)
-        .iter()
-        .copied()
-        .min_by(|one, other| {
-            (one.0 - crate::mirrors::EAST)
-                .abs()
-                .total_cmp(&(other.0 - crate::mirrors::EAST).abs())
-        })
-        .map(|(face, out, _, _)| (face, out))
-        .unwrap_or((crate::mirrors::EAST, 1.0))
-}
-
 /// Every lamp in the nook: where it is, how bright it burns and how far it
 /// reaches.
 ///
@@ -993,8 +973,6 @@ pub fn nook_lamps(reaches: f32) -> Vec<(Vec3, f32, f32)> {
         SCONCE_UP,
     };
 
-    let (face, out) = bookcase_wall(reaches);
-
     sconce_runs(reaches)
         .iter()
         .copied()
@@ -1003,7 +981,6 @@ pub fn nook_lamps(reaches: f32) -> Vec<(Vec3, f32, f32)> {
                 .into_iter()
                 .map(move |along| vec3(face + out * SCONCE_OUT, SCONCE_UP, along))
         })
-        .chain(std::iter::once(crate::mirrors::doorway_lamp(face, out)))
         .map(|at| (at, SCONCE_LIT, SCONCE_RANGE))
         .chain(
             pendant_shades(reaches)
@@ -3084,6 +3061,69 @@ mod tests {
         );
     }
 
+    /// What the dimmest part of this floor may be, as a fraction of one
+    /// lamp's own brightness. The band in the middle was at nought.
+    ///
+    /// Out here rather than in one test's body because two of them ask it
+    /// and they are asking the same question: how dark this room's floor
+    /// is allowed to get anywhere on it.
+    const DIMMEST: f32 = 0.12;
+
+    /// Spec 0061. The way through is lit without a lamp of its own.
+    ///
+    /// **It had one, and the reason went away.** On 2026-11-09 the
+    /// threshold read black and a sconce was hung over it, the argument
+    /// being that the run is spaced every 2.2 against an opening 2.18
+    /// wide, so the two that bracket it fall outside each end and nothing
+    /// lands between them.
+    ///
+    /// Measured today, with that fitting taken out: the bracketing
+    /// sconces put 0.21 on the threshold by themselves and spec 0006's
+    /// pendants another 0.18, for 0.39 against a [`DIMMEST`] of 0.12.
+    /// Spec 0064's stair lamps, which I first wrote in here as part of the
+    /// reason, reach it with exactly nothing and are out of this note
+    /// because they were a guess and the probe said so.
+    ///
+    /// So the fitting came out. One sconce in a wall of sconces hanging
+    /// thirteen centimetres above the line reads as a mistake whatever its
+    /// reason, and Jake asked the right question of it: why is it there at
+    /// all, the entrance to the pool hall doesn't have a light over it.
+    ///
+    /// This holds the thing that was actually wanted, which is that the
+    /// threshold is lit. If it ever goes dark again, this is what says so.
+    #[test]
+    fn the_way_through_is_lit_by_the_room() {
+        let room = super::Room::of(crate::games());
+        let reaches = room.reaches;
+        let lamps = super::nook_lamps(reaches);
+        let (south, north) = crate::mirrors::way();
+        let (face, _, _, _) = super::sconce_runs(reaches)[1];
+        let spot = vec3(face, 0.0, (south + north) * 0.5);
+
+        let lit: f32 = lamps
+            .iter()
+            .map(|(lamp, lit, range)| {
+                let d = (*lamp - spot).length();
+
+                if d > *range || d <= 0.0 {
+                    return 0.0;
+                }
+
+                let left = 1.0 - d / range;
+
+                lit * left * left * ((lamp.y - spot.y) / d).max(0.0)
+            })
+            .sum();
+
+        assert!(
+            lit > DIMMEST,
+            "the threshold is lit {:.3}, under the {} this floor's dimmest \
+             corner is allowed, so it wants a lamp of its own again",
+            lit,
+            DIMMEST
+        );
+    }
+
     /// Spec 0006: every part of the open floor has a lamp on it.
     ///
     /// **Jake, 2026-11-09: the nook floor reads black.** A brighter rug did not
@@ -3104,10 +3144,6 @@ mod tests {
     /// than for its distance.
     #[test]
     fn every_part_of_the_open_floor_has_a_lamp_on_it() {
-        /// What the dimmest corner of the rug may be, as a fraction of one
-        /// lamp's own brightness. The band in the middle was at nought.
-        const DIMMEST: f32 = 0.12;
-
         let room = super::Room::of(crate::games());
         let reaches = room.reaches;
         let lamps = super::nook_lamps(reaches);
