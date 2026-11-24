@@ -840,6 +840,15 @@ pub const SHALLOWS: Vec4 = vec4(0.26, 0.58, 0.62, 0.64);
 /// was the ground standing up: nothing separated a shaft from the beach
 /// behind it. Cooler and a shade lighter, which is quarried stone beside
 /// sand and is also the only thing here that is not warm.
+/// The land round spec 0133's horizon.
+///
+/// **Pale, because distance is pale.** `FAR_HILL` is a night blue for a
+/// field at night; this is the same shape at the same remove in a morning,
+/// and what says a hill is twelve miles off is that the air between you has
+/// taken nearly all of it. Barely darker than the sky it stands against,
+/// and warm with it rather than against it.
+pub const ELYSIUM_HILL: Vec4 = vec4(0.60, 0.63, 0.67, 1.0);
+
 /// Sand the water has been over, along both of spec 0133's shores.
 ///
 /// Darker and a shade cooler than `SHORE`, which is what wet sand is.

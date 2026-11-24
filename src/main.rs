@@ -1120,6 +1120,8 @@ struct Arcade {
     /// to each frame. The pond beside it works the same way.
     elysium_sea: blitzkit::water::Water,
     elysium_sea_mesh: Option<MeshId>,
+    /// The sand on the ground that follows you past the two shores.
+    elysium_beyond: Option<MeshId>,
     saplings: Vec<MeshId>,
     /// The plaster on the field's own wall, which is tiled where the
     /// garden's is one picture a wall. Spec 0040.
@@ -1818,6 +1820,7 @@ impl Arcade {
             elysium_shores: [None; 2],
             elysium_sea: elysium::sea(reaches),
             elysium_sea_mesh: None,
+            elysium_beyond: None,
             saplings: Vec::new(),
             render: None,
             rendered: vec![None, None],
@@ -4112,7 +4115,11 @@ impl Arcade {
         //
         // Before the trees, because it stands behind everything out here and
         // a thing at infinity is drawn first.
-        if let Some(hill) = self.hill {
+        //
+        // **And not in spec 0133's place**, which has its own: that ring is
+        // `aim::FAR_HILL`, a night blue, and a ninth of it is towers. A
+        // city at the edge of a morning with nobody in it.
+        if let (Some(hill), false) = (self.hill, elysium::holds(reaches, self.at)) {
             for far in field::horizon(self.at) {
                 scene.push_material(
                     hill,
@@ -5810,7 +5817,7 @@ impl Arcade {
         // first, and then inside `building` before that, it made the
         // building six hundred metres long and took the plan's sheet, the
         // map's cut, the nook's benches and sixteen pictures with it.
-        out.extend(elysium::solid(self.room.reaches));
+        out.extend(elysium::solid(self.room.reaches, self.at));
         // and spec 0068's village, which is out in the field and so is there
         // whatever the trail says: nothing was answered to earn it
         out.extend(village::solid(self.room.reaches));
@@ -9515,6 +9522,9 @@ impl Game for Arcade {
         }
 
         self.elysium_sea_mesh = Some(renderer.add_water_mesh(&self.elysium_sea.surface()));
+        self.elysium_beyond = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::splat(
+            elysium::BROAD * 2.0 / elysium::SAND_TILE,
+        ))));
         // and the building's own outward walls, which until spec 0041 flew
         // round them were the colour of the rooms' insides.
         //
@@ -11234,6 +11244,8 @@ impl Game for Arcade {
                         sand,
                         shores: [near, far],
                         sea: self.elysium_sea_mesh,
+                        hill: self.hill,
+                        beyond: self.elysium_beyond,
                     }),
                     _ => None,
                 },

@@ -64,14 +64,19 @@ pub fn at(reaches: f32) -> Vec3 {
 /// shore and round the water until it was told to keep out. Something has
 /// to be under you instead, and it has to reach further than you can see
 /// across, or the edge of it is the edge of the world.
-pub fn ground(reaches: f32) -> Aabb {
-    let middle = at(reaches);
+pub fn ground(at_: Vec3) -> Aabb {
     let half = BROAD;
+    // snapped to the sand's own tile, per `field::ground`: a slab that
+    // followed exactly would carry its texture with it, so walking would
+    // slide the ground under your feet. Snapped, it jumps a tile at a time
+    // and a jump of a tile is a jump of nothing.
+    let middle = vec3(
+        (at_.x / SAND_TILE).round() * SAND_TILE,
+        -DEEP - 0.7,
+        (at_.z / SAND_TILE).round() * SAND_TILE,
+    );
 
-    Aabb::new(
-        vec3(middle.x - half, -DEEP - 1.0, middle.z - half),
-        vec3(middle.x + half, -DEEP - 0.4, middle.z + half),
-    )
+    Aabb::from_center_size(middle, vec3(half * 2.0, 0.6, half * 2.0))
 }
 
 /// The near shore, where the stair comes down, and the far one the garden
@@ -140,10 +145,21 @@ pub fn wading(reaches: f32, at_: Vec3) -> bool {
 /// to that stair is a tread on this one. A second account of a room that is
 /// meant to be the same room is the fault this building has written down
 /// under a dozen names.
-pub fn solid(reaches: f32) -> Vec<Aabb> {
+pub fn solid(reaches: f32, at_: Vec3) -> Vec<Aabb> {
     let (near, far) = shores(reaches);
     let place = placing(reaches);
-    let mut out = vec![ground(reaches), near, bed(reaches), far];
+    let mut out = vec![near, bed(reaches), far];
+
+    // **The ground that follows you only follows you here.** It is a slab
+    // three hundred metres across centred on wherever you are standing,
+    // which is right out here and is a floor through the building at a
+    // metre down everywhere else: `tests::the_clip_walks_the_whole_route`
+    // found it in the cellar, two of the route's places walled off by a
+    // sheet of Elysium. The rest of this list is fixed geometry six
+    // hundred metres away and wants no such test.
+    if holds(reaches, at_) {
+        out.push(ground(at_));
+    }
 
     out.extend(
         crate::glass::solid(reaches)
@@ -399,6 +415,20 @@ pub fn swelling(through: f32) -> f32 {
 pub fn holds(reaches: f32, at_: Vec3) -> bool {
     let middle = at(reaches);
 
+    // **Still a box, and a box has an edge you can walk out of.** This and
+    // `ground` were the same 150 metres, so the edge of what held you and
+    // the edge of what held you up were one line, and a step over it put
+    // you in the arcade's field at night. The ground follows you now,
+    // which takes the drop away, and the line is still there.
+    //
+    // Making this everything past a line instead was tried and reverted.
+    // The field is unbounded in z on purpose and its own walks go out to
+    // z 1019: `tests::you_cannot_walk_behind_the_building` and
+    // `tests::the_clip_walks_the_whole_route` both failed, naming the
+    // spot, because a half plane here takes the field's wall away out
+    // there. Two unbounded worlds cannot share a direction, so the
+    // boundary has to be handled rather than removed, and which way is a
+    // question about this place and not about arithmetic.
     (at_.x - middle.x).abs() < BROAD && (at_.z - middle.z).abs() < BROAD
 }
 
@@ -490,6 +520,11 @@ pub struct Ground {
     pub shores: [blitzkit::renderer::scene::MeshId; 2],
     /// The water's own surface, which the renderer rebuilds every frame.
     pub sea: Option<blitzkit::renderer::scene::MeshId>,
+    /// `field::hill_mesh`, which this borrows and tints its own way.
+    pub hill: Option<blitzkit::renderer::scene::MeshId>,
+    /// And the ground beyond the shores, which follows you and so is the
+    /// sand you are standing on most of the time you are out here.
+    pub beyond: Option<blitzkit::renderer::scene::MeshId>,
 }
 
 /// Draws it: the shores, the water, and the copy of the glass room.
@@ -522,6 +557,19 @@ pub fn draw(
     let column = meshes.column;
     let (near, far) = shores(reaches);
 
+    // the horizon first, because it stands behind everything here and a
+    // thing at infinity is drawn before the things in front of it
+    if let Some(hill) = ground_.and_then(|g| g.hill) {
+        for (stood, wide, high) in horizon(eye) {
+            scene.push_material(
+                hill,
+                &Transform::at(stood).with_scale(vec3(wide, high, wide)),
+                crate::aim::ELYSIUM_HILL,
+                crate::aim::DULL,
+            );
+        }
+    }
+
     // **The slabs sink a hair and the sand is laid on their true top.**
     // A textured plane at the same height as the box's own face is two
     // exposed faces in one plane, which is the fault this building has
@@ -532,12 +580,32 @@ pub fn draw(
         None => 0.0,
     };
 
-    for piece in [ground(reaches), bed(reaches)] {
+    for piece in [ground(eye), bed(reaches)] {
         scene.push_material(
             cube,
             &Transform::at(piece.center()).with_scale(piece.size()),
             crate::aim::SHORE,
             crate::aim::MATTE,
+        );
+    }
+
+    // and the sand on the ground that follows you, which is what you walk
+    // on everywhere but the two shores
+    if let (Some(ground_), Some(plane)) = (ground_, ground_.and_then(|g| g.beyond)) {
+        let piece = ground(eye);
+        let size = piece.size();
+
+        scene.push_textured(
+            plane,
+            ground_.sand,
+            &Transform::at(vec3(
+                piece.center().x,
+                piece.max.y + 0.004,
+                piece.center().z,
+            ))
+            .with_scale(vec3(size.x, 1.0, size.z)),
+            crate::aim::SHORE,
+            crate::aim::VOID,
         );
     }
 
@@ -775,6 +843,69 @@ pub fn waterline(reaches: f32) -> [Aabb; 2] {
             vec3(far.max.x, far.max.y + up, far.max.z),
         ),
     ]
+}
+
+/// The land all the way round, standing where the sky meets the ground.
+///
+/// **Because the world ended in a ruled line.** The two shores and the
+/// ground under them are slabs, and past the last of them the sand simply
+/// stopped and the sky began: from the colonnade you could see the edge of
+/// the place. The field solved this long ago and this is its solution, not
+/// a second one.
+///
+/// **Round the eye and not on the ground**, per `field::horizon`: a hill
+/// you can walk to is a hill that wants a collider and stops being a
+/// horizon. These keep their bearing however far you go and never arrive.
+///
+/// **Its own ring and not the field's.** That one is `aim::FAR_HILL`, a
+/// night blue, and a ninth of it is towers, which is a city at the edge of
+/// a field at night. This place is a morning with nobody in it: hills
+/// only, lower, wider, and pale enough to read as distance rather than as
+/// shapes.
+///
+/// Off `field::sees` for how far out, because that is the number the sky's
+/// own dome is counted from and a range outside the sky is drawn nowhere
+/// at all. `field::horizon`'s note has what that cost to find out.
+pub const HORIZON_MANY: usize = 56;
+pub const HORIZON_OUT: f32 = 0.35;
+pub const HILL_HIGH: f32 = 0.058;
+pub const HILL_WIDE: f32 = 0.54;
+
+/// Where each stands, how wide it is and how high.
+pub fn horizon(at: Vec3) -> Vec<(Vec3, f32, f32)> {
+    let out = crate::field::sees(at) * HORIZON_OUT;
+    let mut rng: u32 = 0x9E37_79B1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        (rng % 10_000) as f32 / 10_000.0
+    };
+
+    (0..HORIZON_MANY)
+        .map(|n| {
+            let bearing = n as f32 / HORIZON_MANY as f32 * std::f32::consts::TAU;
+            // jittered off its own bearing, or the ring reads as a cog
+            let aside = (next() - 0.5) * std::f32::consts::TAU / HORIZON_MANY as f32 * 1.7;
+            let turn = bearing + aside;
+            let size = 0.5 + next() * 0.5;
+            // and standing nearer or further, so the range has depth.
+            //
+            // **Under the field's own ceiling and not level with it.** Its
+            // spread tops out at 1.12 and so did this, which is the same
+            // ceiling reached by different rolls: the first ring drawn this
+            // way put a hill 164.5 out against the field's furthest at
+            // 164.3, and `tests::the_horizon_stands_no_further_out_than_the
+            // _fields` caught it on its first run.
+            let far = out * (0.80 + next() * 0.26);
+
+            (
+                vec3(at.x + turn.cos() * far, 0.0, at.z + turn.sin() * far),
+                out * HILL_WIDE * size,
+                out * HILL_HIGH * size,
+            )
+        })
+        .collect()
 }
 
 /// The water, as the engine simulates it.
@@ -1466,6 +1597,43 @@ mod tests {
         assert!(
             (foot.z - crate::glass::stair_foot(reaches).z).abs() > crate::field::GROUND_REACH,
             "this place is inside the field's own reach"
+        );
+    }
+
+    /// This place's horizon stands no further out than the field's.
+    ///
+    /// **Which is how it stays inside the sky.** A backdrop is hung at a
+    /// share of the far plane and a range put outside it is drawn nowhere
+    /// at all, which looks exactly like a range that was never pushed:
+    /// `field::horizon`'s note says that took four pictures to work out.
+    /// The field's ring is held inside the dome by a test of its own, so
+    /// the cheapest way for this one to be safe is to be no further out
+    /// than that, measured off both functions rather than off the two
+    /// constants agreeing.
+    #[test]
+    fn the_horizon_stands_no_further_out_than_the_fields() {
+        let eye = at(reaches()) + Vec3::Y * 1.55;
+        let furthest = |ds: Vec<f32>| ds.into_iter().fold(0.0f32, f32::max);
+
+        let mine = furthest(
+            horizon(eye)
+                .into_iter()
+                .map(|(stood, _, _)| stood.distance(vec3(eye.x, 0.0, eye.z)))
+                .collect(),
+        );
+        let theirs = furthest(
+            crate::field::horizon(eye)
+                .into_iter()
+                .map(|far| far.at.distance(vec3(eye.x, 0.0, eye.z)))
+                .collect(),
+        );
+
+        assert!(
+            mine <= theirs + 1e-3,
+            "this place's furthest hill is {:.1} out and the field's is \
+             {:.1}, so this one may be behind the sky",
+            mine,
+            theirs
         );
     }
 
