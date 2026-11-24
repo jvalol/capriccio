@@ -331,17 +331,22 @@ pub const SEES: f32 = 320.0;
 
 /// Draws it: the shores, the water, and the copy of the glass room.
 ///
-/// **From the same boxes it is walked on.** Everything here is
-/// [`solid`]'s own list, which is `glass::solid` offset plus the ground, so
-/// what you see and what stops you cannot come apart. The original room is
-/// drawn as joinery by `glass::draw`; this is the blocking model of it, and
-/// the two are one list of boxes either way.
+/// **The room is `glass::draw` again, moved.** It was a loop over
+/// [`solid`]'s boxes in one flat colour, which is a blocking model: Jake
+/// walked it and the copy was a dark slab where the room he had just left
+/// has a floor, a colonnade, coffering and a stair. Spec 0064's room is
+/// drawn by one function and that function now takes where to put it, so
+/// this is the same joinery and not a second account of it.
+///
+/// What is left here is the ground: the two shores, the bed and the water,
+/// which belong to this place and to nothing else.
 pub fn draw(
     scene: &mut blitzkit::renderer::scene::Scene,
     reaches: f32,
+    since: f32,
     eye: Vec3,
-    cube: blitzkit::renderer::scene::MeshId,
-    column: Option<blitzkit::renderer::scene::MeshId>,
+    index: f32,
+    meshes: crate::glass::Meshes,
 ) {
     use blitzkit::mesh::Transform;
 
@@ -351,23 +356,20 @@ pub fn draw(
         return;
     }
 
+    let cube = meshes.cube;
+    let column = meshes.column;
     let (near, far) = shores(reaches);
 
-    for piece in solid(reaches) {
-        let ground =
-            piece == near || piece == far || piece == bed(reaches) || piece == ground(reaches);
-
+    for piece in [ground(reaches), near, bed(reaches), far] {
         scene.push_material(
             cube,
             &Transform::at(piece.center()).with_scale(piece.size()),
-            if ground {
-                crate::aim::SHORE
-            } else {
-                crate::aim::FAR_ROOM
-            },
+            crate::aim::SHORE,
             crate::aim::MATTE,
         );
     }
+
+    crate::glass::draw(scene, reaches, since, index, room_off(reaches), meshes);
 
     // and the water over the bed, which is the only thing here that is not
     // a thing you stand on

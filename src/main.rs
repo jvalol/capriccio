@@ -11100,9 +11100,10 @@ impl Game for Arcade {
 
             glass::draw(
                 scene,
-                &self.room,
+                self.room.reaches,
                 self.since,
                 elysium::bending(self.going_through),
+                Vec3::ZERO,
                 glass::Meshes {
                     cube,
                     sphere: seen.then_some(self.globe_mesh).flatten(),
@@ -11119,9 +11120,16 @@ impl Game for Arcade {
             elysium::draw(
                 scene,
                 self.room.reaches,
+                self.since,
                 self.looking_from(),
-                cube,
-                self.column,
+                elysium::bending(self.going_through),
+                glass::Meshes {
+                    cube,
+                    sphere: self.globe_mesh,
+                    baluster: self.baluster,
+                    sconce: self.sconce,
+                    column: self.column,
+                },
             );
 
             // and spec 0122's globe beside the ball, drawn whether or not
@@ -14516,6 +14524,29 @@ impl Game for Arcade {
                 glass::LAMP_LIT,
                 glass::LAMP_RANGE,
             ));
+        }
+
+        // and the same bays in spec 0133's copy of that room, moved with
+        // it. The copy got its joinery before it got these, and a room with
+        // every bead right and no light in it is a dark box with good
+        // edges: you come through the glass standing in that room, and it
+        // was black until the stair took you out of it.
+        //
+        // Only while you are over there, because the two rooms are six
+        // hundred metres apart and a lamp in one is nothing in the other:
+        // these would be ten shades spent on a room nobody can see.
+        if elysium::holds(self.room.reaches, self.at) {
+            let off = elysium::room_off(self.room.reaches);
+
+            for at in glass::lamps(self.room.reaches) {
+                shades.push((
+                    eye.distance_squared(at + off),
+                    at + off,
+                    glass::LAMP_COLOUR,
+                    glass::LAMP_LIT,
+                    glass::LAMP_RANGE,
+                ));
+            }
         }
 
         // and spec 0122's globes, whose fitting is the globe itself.

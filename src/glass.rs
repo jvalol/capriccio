@@ -1442,10 +1442,18 @@ pub fn draw_the_stair(
     scene: &mut Scene,
     reaches: f32,
     since: f32,
+    off: Vec3,
     cube: MeshId,
     baluster: Option<MeshId>,
     sconce: MeshId,
 ) {
+    // **Set out in the room's own numbers and drawn `off` from them.**
+    // Spec 0133 stands a copy of this room six hundred metres south, and
+    // it is this room: one list of pieces, drawn twice. Everything below
+    // reads `reaches` as if it were at home, so a tread added here is a
+    // tread on that stair and there is no second account to drift.
+    let moved = |at: Vec3| Transform::at(at + off);
+
     // **Newel to newel, and not the rake plus a post's width.** A board
     // runs from the middle of one post to the middle of the other, which is
     // where joinery meets a post. The rake's own two ends are the bottom and
@@ -1488,7 +1496,7 @@ pub fn draw_the_stair(
         ] {
             scene.push_material(
                 cube,
-                &Transform::at(middle + Vec3::Y * up)
+                &moved(middle + Vec3::Y * up)
                     .with_rotation(turn)
                     .with_scale(vec3(thick, deep, long)),
                 colour,
@@ -1499,7 +1507,7 @@ pub fn draw_the_stair(
         for post in posts {
             scene.push_material(
                 cube,
-                &Transform::at(post.center()).with_scale(post.size()),
+                &moved(post.center()).with_scale(post.size()),
                 crate::aim::GLASS_STRING,
                 crate::aim::MATTE,
             );
@@ -1508,7 +1516,7 @@ pub fn draw_the_stair(
 
             scene.push_material(
                 cube,
-                &Transform::at(vec3(
+                &moved(vec3(
                     post.center().x,
                     post.max.y - cap * 0.5,
                     post.center().z,
@@ -1525,8 +1533,7 @@ pub fn draw_the_stair(
             for at in balusters(reaches, side) {
                 scene.push_material(
                     baluster,
-                    &Transform::at(at + Vec3::Y * tall * 0.5)
-                        .with_scale(vec3(BALUSTER, tall, BALUSTER)),
+                    &moved(at + Vec3::Y * tall * 0.5).with_scale(vec3(BALUSTER, tall, BALUSTER)),
                     crate::aim::GLASS_BALUSTER,
                     crate::aim::MATTE,
                 );
@@ -1546,7 +1553,7 @@ pub fn draw_the_stair(
 
         scene.push_material(
             cube,
-            &Transform::at(vec3(middle.x, run.max.y - HANDRAIL * 0.5, middle.z))
+            &moved(vec3(middle.x, run.max.y - HANDRAIL * 0.5, middle.z))
                 .with_scale(along * long + across * (HANDRAIL * 1.4) + Vec3::Y * HANDRAIL),
             crate::aim::GLASS_RAIL,
             crate::aim::MATTE,
@@ -1562,7 +1569,7 @@ pub fn draw_the_stair(
 
                 scene.push_material(
                     baluster,
-                    &Transform::at(vec3(at.x, run.min.y + tall * 0.5, at.z))
+                    &moved(vec3(at.x, run.min.y + tall * 0.5, at.z))
                         .with_scale(vec3(BALUSTER, tall, BALUSTER)),
                     crate::aim::GLASS_BALUSTER,
                     crate::aim::MATTE,
@@ -1581,7 +1588,7 @@ pub fn draw_the_stair(
     for board in tread_boards(reaches) {
         scene.push_material(
             cube,
-            &Transform::at(board.center()).with_scale(board.size()),
+            &moved(board.center()).with_scale(board.size()),
             crate::aim::GLASS_PIER,
             crate::aim::MATTE,
         );
@@ -1591,7 +1598,7 @@ pub fn draw_the_stair(
     for at in stair_sconces(reaches) {
         scene.push_material(
             sconce,
-            &Transform::at(at).with_scale(Vec3::splat(SCONCE_WIDE)),
+            &moved(at).with_scale(Vec3::splat(SCONCE_WIDE)),
             lit_sconce(since),
             crate::aim::VOID,
         );
@@ -1600,7 +1607,7 @@ pub fn draw_the_stair(
     for nosing in nosings(reaches) {
         scene.push_material(
             cube,
-            &Transform::at(nosing.center()).with_scale(nosing.size()),
+            &moved(nosing.center()).with_scale(nosing.size()),
             crate::aim::GLASS_PIER,
             crate::aim::MATTE,
         );
@@ -1640,7 +1647,20 @@ pub const BEAM_DOWN: f32 = 0.16;
 /// neither is a thing a body meets; what a body meets is the shaft, which is
 /// already in `solid` and already what the glass traces. Adding them to the
 /// walk would be a ring of ledges round every column for no gain.
-pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Option<MeshId>) {
+pub fn draw_the_room(
+    scene: &mut Scene,
+    reaches: f32,
+    off: Vec3,
+    cube: MeshId,
+    column: Option<MeshId>,
+) {
+    // **Set out in the room's own numbers and drawn `off` from them.**
+    // Spec 0133 stands a copy of this room six hundred metres south, and
+    // it is this room: one list of pieces, drawn twice. Everything below
+    // reads `reaches` as if it were at home, so a tread added here is a
+    // tread on that stair and there is no second account to drift.
+    let moved = |at: Vec3| Transform::at(at + off);
+
     let room = inside(reaches);
     // **The border stops at the stairwell rather than running over it.** It
     // is laid between the two colonnades and the slot is between them too,
@@ -1668,7 +1688,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
 
         scene.push_material(
             cube,
-            &Transform::at(box_.center()).with_scale(box_.size()),
+            &moved(box_.center()).with_scale(box_.size()),
             colour,
             crate::aim::MATTE,
         );
@@ -1692,7 +1712,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
 
             scene.push_material(
                 cube,
-                &Transform::at(vec3(at.x, middle, at.z)).with_scale(vec3(
+                &moved(vec3(at.x, middle, at.z)).with_scale(vec3(
                     round + ABACUS_OUT * 2.0,
                     ABACUS,
                     round + ABACUS_OUT * 2.0,
@@ -1707,7 +1727,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
 
             scene.push_material(
                 column,
-                &Transform::at(vec3(at.x, at.y, at.z)).with_scale(vec3(
+                &moved(vec3(at.x, at.y, at.z)).with_scale(vec3(
                     size.x.max(size.z),
                     tall,
                     size.x.max(size.z),
@@ -1764,7 +1784,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
         ] {
             scene.push_material(
                 cube,
-                &Transform::at(middle).with_scale(size),
+                &moved(middle).with_scale(size),
                 crate::aim::GLASS_TRIM,
                 crate::aim::MATTE,
             );
@@ -1782,7 +1802,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
     for z in along {
         scene.push_material(
             cube,
-            &Transform::at(vec3(
+            &moved(vec3(
                 (room.min.x + room.max.x) * 0.5,
                 room.max.y - BEAM_DOWN * 0.5,
                 z,
@@ -1807,7 +1827,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
     ] {
         scene.push_material(
             cube,
-            &Transform::at(vec3(
+            &moved(vec3(
                 x,
                 room.max.y - BEAM_DOWN * 0.5,
                 (room.min.z + room.max.z) * 0.5,
@@ -1856,7 +1876,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
     ] {
         scene.push_material(
             cube,
-            &Transform::at(at).with_scale(size),
+            &moved(at).with_scale(size),
             crate::aim::GLASS_TRIM,
             crate::aim::MATTE,
         );
@@ -1865,7 +1885,7 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
     for (piece, colour) in plinth_pieces(reaches) {
         scene.push_material(
             cube,
-            &Transform::at(piece.center()).with_scale(piece.size()),
+            &moved(piece.center()).with_scale(piece.size()),
             colour,
             crate::aim::MATTE,
         );
@@ -1998,7 +2018,7 @@ pub struct Meshes {
 /// bends what is behind it, so winding between them is the room letting go
 /// of its reflection and swallowing the one in front of it. Nothing else
 /// in here cares what it is.
-pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32, meshes: Meshes) {
+pub fn draw(scene: &mut Scene, reaches: f32, since: f32, index: f32, off: Vec3, meshes: Meshes) {
     let Meshes {
         cube,
         sphere,
@@ -2006,7 +2026,12 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32,
         sconce,
         column,
     } = meshes;
-    let reaches = room.reaches;
+    // **Set out in the room's own numbers and drawn `off` from them.**
+    // Spec 0133 stands a copy of this room six hundred metres south, and
+    // it is this room: one list of pieces, drawn twice. Everything below
+    // reads `reaches` as if it were at home, so a tread added here is a
+    // tread on that stair and there is no second account to drift.
+    let moved = |at: Vec3| Transform::at(at + off);
 
     // the balustrade stands in `solid` as upright boxes and is drawn as
     // joinery; the two plinths stand there as one box each and are drawn as a
@@ -2029,7 +2054,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32,
     {
         scene.push_material(
             cube,
-            &Transform::at(piece.center()).with_scale(piece.size()),
+            &moved(piece.center()).with_scale(piece.size()),
             colour(piece, &named, UP + TALL * 0.5, since),
             crate::aim::MATTE,
         );
@@ -2047,7 +2072,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32,
         for (at, size) in &panels {
             scene.push_material(
                 cube,
-                &Transform::at(*at).with_scale(*size),
+                &moved(*at).with_scale(*size),
                 crate::aim::GLASS_PIER,
                 crate::aim::MATTE,
             );
@@ -2056,7 +2081,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32,
         for (at, size) in &ribs {
             scene.push_material(
                 cube,
-                &Transform::at(*at).with_scale(*size),
+                &moved(*at).with_scale(*size),
                 crate::aim::GLASS_TRIM,
                 crate::aim::MATTE,
             );
@@ -2067,16 +2092,16 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32,
     for pane in panes(reaches) {
         scene.push_material(
             cube,
-            &Transform::at(pane.center()).with_scale(pane.size()),
+            &moved(pane.center()).with_scale(pane.size()),
             lit(since),
             crate::aim::VOID,
         );
     }
 
-    draw_the_room(scene, reaches, cube, column);
+    draw_the_room(scene, reaches, off, cube, column);
 
     if let Some(sconce) = sconce {
-        draw_the_stair(scene, reaches, since, cube, baluster, sconce);
+        draw_the_stair(scene, reaches, since, off, cube, baluster, sconce);
     }
 
     let Some(sphere) = sphere else {
@@ -2086,7 +2111,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32,
 
     scene.lens(
         sphere,
-        &Transform::at(middle).with_scale(Vec3::splat(across * 2.0)),
+        &moved(middle).with_scale(Vec3::splat(across * 2.0)),
         silvered(since),
         index,
     );
