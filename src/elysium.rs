@@ -278,10 +278,20 @@ pub fn holds(reaches: f32, at_: Vec3) -> bool {
 /// makes this somewhere else: spec 0133 wants three differences visible in
 /// the first frame and this is the one you cannot miss.
 ///
-/// A quarter of a day past dawn, which `garden::OPENS_AT` puts at 0.4 of
-/// it: high enough that the sun is up and the shadows are short, and short
-/// of noon, which is the hour with no shape to it.
-pub const MORNING: f32 = crate::garden::DAY * 0.55;
+/// **An hour, not a `since`.** `garden::hour` is a `since` divided by the
+/// day and offset by `garden::OPENS_AT`, so the two are not the same number
+/// and `garden::when` is the one function that turns this one into the
+/// other. Written as a `since` instead, this read 0.95 of a day, which is
+/// the small hours: Elysium was lit by nothing at all and the first three
+/// faults reported off it were a dark sky, flat grey water and an unlit
+/// room, all of them this. Dividing by `DAY` was wrong a second way, since
+/// a run under `--film` or `--shot` sets its own day length.
+///
+/// 0.17 is morning. `garden::sun_up` is a plain sine of the hour, so it
+/// rises from nothing at 0.0 and stands highest at 0.25: this is well up,
+/// with the shadows still long enough to have a direction, and short of the
+/// hour with no shape to it.
+pub const MORNING: f32 = 0.17;
 
 /// How far past its own edge this keeps the field's scatter off.
 ///
@@ -331,6 +341,7 @@ pub fn draw(
     reaches: f32,
     eye: Vec3,
     cube: blitzkit::renderer::scene::MeshId,
+    column: Option<blitzkit::renderer::scene::MeshId>,
 ) {
     use blitzkit::mesh::Transform;
 
@@ -368,6 +379,93 @@ pub fn draw(
         crate::aim::SHALLOWS,
         crate::aim::MATTE,
     );
+
+    // and the colonnade on the far shore, which is the garden
+    let Some(column) = column else {
+        return;
+    };
+
+    for (stood, upright) in colonnade(reaches) {
+        let turned = match upright {
+            true => (
+                stood + Vec3::Y * COLUMN_TALL * 0.5,
+                glam::Quat::IDENTITY,
+                vec3(COLUMN_WIDE, COLUMN_TALL, COLUMN_WIDE),
+            ),
+            // **A fallen one lies along the row and half buried.** A
+            // cylinder laid on grass with its whole face showing reads as a
+            // pipe somebody put down; sunk a little it reads as something
+            // that has been there a while.
+            false => (
+                stood + Vec3::Y * COLUMN_WIDE * 0.34,
+                glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                vec3(COLUMN_WIDE, COLUMN_TALL * 0.78, COLUMN_WIDE),
+            ),
+        };
+
+        scene.push_material(
+            column,
+            &Transform::at(turned.0)
+                .with_rotation(turned.1)
+                .with_scale(turned.2),
+            crate::aim::SHORE,
+            crate::aim::MATTE,
+        );
+    }
+}
+
+/// The colonnade on the far shore: how tall a column stands, how thick, how
+/// far apart they are set and how many there are.
+///
+/// **A row of columns and nothing holding them up.** Spec 0133 asks for a
+/// garden with nobody in it, and the thing that makes a garden read as one
+/// without a single figure is something built standing in it with no use
+/// left. This is the one shape in that language this building already owns:
+/// `glass::column_mesh`, the same lathe the room you came from is full of.
+///
+/// Set across the way you walk in, so you come out of the water looking
+/// down the length of it rather than at one end.
+pub const COLUMN_TALL: f32 = 5.4;
+pub const COLUMN_WIDE: f32 = 0.78;
+pub const COLUMN_APART: f32 = 4.6;
+pub const COLUMNS: usize = 15;
+
+/// How far back from the water's edge the colonnade stands.
+///
+/// Past the far shore's own width, so you walk out of the water, up the
+/// shore, and then to it rather than straight into it.
+pub const COLONNADE_BACK: f32 = 16.0;
+
+/// Which of them are still standing.
+///
+/// **Not every other one.** A gap on a beat is a pattern and reads as
+/// design; what a ruin looks like is a run of them standing and then two
+/// missing and then one. These are picked by hand because fifteen is few
+/// enough to pick by hand, and a rule that made them look accidental would
+/// be a rule nobody could check.
+pub fn standing(n: usize) -> bool {
+    !matches!(n, 3 | 4 | 9 | 12)
+}
+
+/// Where each column of the colonnade stands, with whether it is upright.
+///
+/// A fallen one lies where it stood, along the row, which is where a column
+/// goes when it goes: outward would be a column somebody pushed.
+pub fn colonnade(reaches: f32) -> Vec<(Vec3, bool)> {
+    let middle = at(reaches);
+    let (_, far) = shores(reaches);
+    let run = (COLUMNS - 1) as f32 * COLUMN_APART;
+
+    (0..COLUMNS)
+        .map(|n| {
+            let along = n as f32 * COLUMN_APART - run * 0.5;
+
+            (
+                vec3(middle.x + along, 0.0, far.min.z + COLONNADE_BACK),
+                standing(n),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -600,6 +698,80 @@ mod tests {
         );
     }
 
+    /// Spec 0133: the colonnade stands on the far shore, across the way
+    /// you walk in, and every column of it is on dry ground.
+    ///
+    /// **Across and not along.** You come out of the water looking down the
+    /// length of it, which is the one arrangement where a row of columns
+    /// reads as something that was a building. End on it is a column.
+    #[test]
+    fn the_colonnade_stands_across_the_way_in_on_dry_ground() {
+        let reaches = reaches();
+        let (_, far) = shores(reaches);
+        let (middle, size) = water(reaches);
+        let stood = colonnade(reaches);
+
+        assert_eq!(stood.len(), COLUMNS);
+
+        let (mut least, mut most) = (f32::MAX, f32::MIN);
+
+        for (at_, _) in &stood {
+            assert!(
+                at_.z > middle.z + size.y * 0.5,
+                "a column stands at {:.1}, which is in the water",
+                at_.z
+            );
+            assert!(
+                at_.z >= far.min.z && at_.z <= far.max.z,
+                "a column stands at {:.1}, off the far shore which runs {:.1}..{:.1}",
+                at_.z,
+                far.min.z,
+                far.max.z
+            );
+
+            least = least.min(at_.x);
+            most = most.max(at_.x);
+        }
+
+        // and it runs across you rather than away from you
+        let across = most - least;
+        let deep = stood.iter().map(|(at_, _)| at_.z).fold(f32::MIN, f32::max)
+            - stood.iter().map(|(at_, _)| at_.z).fold(f32::MAX, f32::min);
+
+        assert!(
+            across > deep,
+            "the colonnade runs {:.1} across and {:.1} away, so you meet it end on",
+            across,
+            deep
+        );
+    }
+
+    /// Spec 0133: some of it has fallen, and not on a beat.
+    ///
+    /// **A gap every other one is a pattern.** What a ruin looks like is a
+    /// run standing, then two gone, then one. This holds that some are down,
+    /// that most are not, and that the gaps are not evenly spaced.
+    #[test]
+    fn the_colonnade_is_a_ruin_and_not_a_pattern() {
+        let down: Vec<usize> = (0..COLUMNS).filter(|n| !standing(*n)).collect();
+
+        assert!(!down.is_empty(), "nothing has fallen, so it is a colonnade");
+        assert!(
+            down.len() * 3 < COLUMNS * 2,
+            "{} of {} are down, which is a heap rather than a ruin",
+            down.len(),
+            COLUMNS
+        );
+
+        let gaps: Vec<usize> = down.windows(2).map(|two| two[1] - two[0]).collect();
+
+        assert!(
+            gaps.windows(2).any(|two| two[0] != two[1]),
+            "the fallen ones are evenly spaced at {:?}, which reads as design",
+            gaps
+        );
+    }
+
     /// Spec 0133: nothing the field sows stands in this place.
     ///
     /// **The third time this building has had to say it.** `field::open`
@@ -666,5 +838,23 @@ mod tests {
             (foot.z - crate::glass::stair_foot(reaches).z).abs() > crate::field::GROUND_REACH,
             "this place is inside the field's own reach"
         );
+    }
+
+    /// The sun is up over this place, and it is morning rather than evening.
+    ///
+    /// This asks `garden::sun_up`, which is the thing that was wrong, rather
+    /// than asking `MORNING` what it says. Written as a `since` the constant
+    /// read 0.95 of a day and the sun stood at -0.31: three faults reported
+    /// off that one line, all of them a dark world.
+    #[test]
+    fn the_sun_stands_well_up_over_elysium() {
+        let hour = crate::garden::when(MORNING);
+        let up = crate::garden::sun_up(hour);
+
+        // Only that the sun is up, which is the thing that was wrong.
+        // Morning against afternoon wants the hour rather than the
+        // brightness, and the hour here is a constant, so that assertion
+        // was one clippy rejects and one a wrong value passed anyway.
+        assert!(up > 0.8, "the sun stands at {:+.3} over Elysium", up);
     }
 }

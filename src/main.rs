@@ -4113,6 +4113,20 @@ impl Arcade {
             }
         }
 
+        // **And none of it in spec 0133's place.** The field sows round
+        // wherever you are standing, and `elysium::shades` keeps it off the
+        // shores and the water but not off the ground beyond them, so a
+        // trunk out there stands in mid air with nothing under it.
+        //
+        // Not the dark spike. I wrote that cause in here first and then
+        // checked it: the spike outlived this change, and listing every box
+        // in `elysium::solid` found no spike among them. It is the copied
+        // room, which is still the blocking model this file's neighbour
+        // says it is. This is its own small fault and worth keeping out.
+        if elysium::holds(self.room.reaches, self.at) {
+            return;
+        }
+
         // the trees, which are three meshes stood many times
         let kinds = field::kinds();
 
@@ -8625,7 +8639,7 @@ impl Arcade {
     /// world they are lighting.
     fn sky_clock(&self) -> f32 {
         if elysium::holds(self.room.reaches, self.at) {
-            return elysium::MORNING;
+            return garden::when(elysium::MORNING);
         }
 
         self.since
@@ -11102,7 +11116,13 @@ impl Game for Arcade {
             // shores, the water between them and the copy of this room
             // standing over the near one. Drawn from the same boxes it is
             // walked on, and only while you are near enough to see it.
-            elysium::draw(scene, self.room.reaches, self.looking_from(), cube);
+            elysium::draw(
+                scene,
+                self.room.reaches,
+                self.looking_from(),
+                cube,
+                self.column,
+            );
 
             // and spec 0122's globe beside the ball, drawn whether or not
             // the ball is being traced: the two are separate things and a
@@ -11935,10 +11955,10 @@ impl Game for Arcade {
             // in front of it; indoors it would be hanging inside the
             // building.
             if let (Some(ball), Some(face)) = (self.moon, self.moon_face) {
-                let showing = moon::showing(self.since);
+                let showing = moon::showing(self.sky_clock());
 
                 if showing > 0.01 && self.in_the_open() {
-                    let out = moon::at(self.since);
+                    let out = moon::at(self.sky_clock());
                     let eye = self.looking_from();
                     let off = moon::off(eye);
                     let hung = eye + out * off;
@@ -11953,7 +11973,7 @@ impl Game for Arcade {
                         &Transform::at(hung)
                             .with_rotation(moon::turned(-out))
                             .with_scale(Vec3::splat(moon::wide(off))),
-                        moon::lit(self.since),
+                        moon::lit(self.sky_clock()),
                         aim::VOID,
                     );
                 }
@@ -11973,17 +11993,17 @@ impl Game for Arcade {
             // nothing lights it, so what is wanted is a flat disc past one
             // in every channel, which `garden::sunlit_disc` is.
             if let Some(ball) = self.sun {
-                let showing = garden::sun_showing(self.since);
+                let showing = garden::sun_showing(self.sky_clock());
 
                 if showing > 0.01 && self.in_the_open() {
                     let eye = self.looking_from();
                     let off = moon::off(eye);
-                    let hung = eye + garden::sun_at(self.since) * off;
+                    let hung = eye + garden::sun_at(self.sky_clock()) * off;
 
                     scene.push_plain(
                         ball,
                         &Transform::at(hung).with_scale(Vec3::splat(garden::sun_wide(off))),
-                        garden::sunlit_disc(self.since),
+                        garden::sunlit_disc(self.sky_clock()),
                     );
                 }
             }
@@ -12004,15 +12024,15 @@ impl Game for Arcade {
             // of cloud lit from inside. On the backdrop it lit a clear
             // night sky, which is a flash with nothing to flash in.
             if let (Some(mesh), true) = (self.cloud_deck, self.sees_outdoors) {
-                let overhead = garden::overhead(self.since);
+                let overhead = garden::overhead(self.sky_clock());
                 // **The flash added after the tint and not before it.**
                 // It is its own light on the cloud rather than a share of
                 // the cloud's colour: multiplied in, a storm's dark deck
                 // put out its own lightning.
                 let lit = garden::gives_off(
-                    garden::skylit(self.since).truncate() * overhead.cloud
+                    garden::skylit(self.sky_clock()).truncate() * overhead.cloud
                         + self.flashed().truncate(),
-                    self.since,
+                    self.sky_clock(),
                 );
                 let hung = Transform::at(self.looking_from())
                     .with_scale(Vec3::splat(garden::deck_scale(self.looking_from())));
