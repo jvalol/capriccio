@@ -19132,6 +19132,77 @@ mod tests {
         );
     }
 
+    /// Spec 0134: nothing on another layer stops you.
+    ///
+    /// **The first of the three lists**, and the one the back door was
+    /// about. Spec 0133's place stands on the arcade's own x and z now, so
+    /// if `standing_on` ever stopped asking the layer you would walk into
+    /// the village while wading, and into the water while in the hall.
+    ///
+    /// Asked of sources rather than of the whole lists. The copy of spec
+    /// 0064's room is that room turned about its own middle, and a piece
+    /// of it symmetric about that middle maps onto itself: two layers
+    /// legitimately sharing a box, which a plain disjointness test would
+    /// call a leak. So this takes what only one world has.
+    #[test]
+    fn nothing_on_another_layer_stops_you() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (near, far) = elysium::shores(reaches);
+        let theirs = vec![("the near shore", near), ("the garden's shore", far)];
+        let ours: Vec<(&str, Aabb)> = village::solid(reaches)
+            .into_iter()
+            .take(3)
+            .map(|box_| ("the village", box_))
+            .chain(
+                pond::solid(reaches)
+                    .into_iter()
+                    .take(2)
+                    .map(|box_| ("the pond", box_)),
+            )
+            .collect();
+
+        game.at = elysium::at(reaches);
+
+        let here = game.standing_on();
+
+        for (which, box_) in &ours {
+            assert!(
+                here.contains(box_),
+                "{} is not in the arcade's own list, so this proves nothing",
+                which
+            );
+        }
+
+        for (which, box_) in &theirs {
+            assert!(
+                !here.contains(box_),
+                "{} stops you in the arcade, on a layer it is not on",
+                which
+            );
+        }
+
+        game.layer = layers::ELYSIUM;
+
+        let there = game.standing_on();
+
+        for (which, box_) in &theirs {
+            assert!(
+                there.contains(box_),
+                "{} is not in its own layer's list, so this proves nothing",
+                which
+            );
+        }
+
+        for (which, box_) in &ours {
+            assert!(
+                !there.contains(box_),
+                "{} stops you in spec 0133's place, on a layer it is not on",
+                which
+            );
+        }
+    }
+
     /// Spec 0134: the hour is the layer's, not the building's.
     ///
     /// **What `elysium::it_is_morning_everywhere_in_it` used to hold.**

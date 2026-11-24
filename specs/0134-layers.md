@@ -130,13 +130,23 @@ Part of this is built. The ones marked unbuilt have no test yet.
 - The field is unbounded on its own layer, exactly as it was before this
   spec. — `tests::you_cannot_walk_behind_the_building`
 
-Unbuilt:
+- Nothing on another layer stops you, which is the list the back door was
+  about. — `tests::nothing_on_another_layer_stops_you`
 
-- A body on one layer does not collide with anything on
-  another. — `layers::tests::nothing_on_another_layer_stops_you`
+### Not built yet
+
+Both of the remaining two are built and neither is held directly. They are
+the other two of the three lists, and what the spec warns about is a list
+leaking on its own, so holding them indirectly is holding the wrong thing.
+
+What stops them being written is that both are assembled inside `draw`,
+which wants a renderer: the lamps are a `Vec` built inline there, and what
+is drawn can only be read back off a `Scene` that a GPU filled. The lamps
+want lifting into their own method first, the way `draw_the_sky` was.
+
 - Nothing on another layer is
-  drawn. — `layers::tests::nothing_on_another_layer_is_drawn`
-- No lamp lights across layers. — `layers::tests::no_lamp_reaches_another_layer`
+  drawn. — `tests::nothing_on_another_layer_is_drawn`
+- No lamp lights across layers. — `tests::no_lamp_reaches_another_layer`
 
 ### Verified by hand
 

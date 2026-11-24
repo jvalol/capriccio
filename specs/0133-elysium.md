@@ -260,7 +260,7 @@ still marked unbuilt have no test yet and are what is left.
 - Its horizon stands inside the sky, where it can be
   drawn. — `elysium::tests::the_horizon_stands_no_further_out_than_the_fields`
 
-Unbuilt:
+### Not built yet
 
 - The way in is the sphere, and nothing else in the building opens
   it. — `elysium::tests::only_the_sphere_lets_you_in`
