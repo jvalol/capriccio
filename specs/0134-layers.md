@@ -94,11 +94,11 @@ what you hear, and what the map shows. Each of those asking in its own way
 is how a lamp ends up lighting a room on another layer. One predicate,
 called by all five.
 
-The fifth was written here as an open question and found later in a
-photograph: `media/village.png` of 2026-11-24 has an empty map panel in it,
-and the panel was empty only because that camera stood away from the hall's
-rooms. Four was the count of the lists somebody had thought of, which is
-not the same as the count of the lists.
+The fifth was written here as an open question and left that way while the
+other four were gated, which is how a list stays uncounted: it had a
+paragraph of its own and was still not on the list. Four was the count of
+the lists somebody had thought of, which is not the same as the count of
+the lists.
 
 **The two layers stand on the same x and z.** Spec 0133 placed its world
 600 metres south and argued the distance at length; on a layer the distance
@@ -108,7 +108,9 @@ walked out of. It is also what made the last three leaks findable: a lamp
 600 metres away is culled by its own range and a voice by `CARRIES`, so each
 of the lists was quietly right for the wrong reason until the two worlds
 shared their coordinates. The map was the one that stayed wrong after they
-did, because being away from a room looks the same as having no room.
+did, and it is the one no picture would have shown: a map with nothing in
+it looks the same as a map of nowhere, so only a test asking it on a layer
+could tell them apart.
 
 **You change layer only where something says so.** Today that is spec
 0133's sphere and nothing else. Walking does not change it, falling does

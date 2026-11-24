@@ -8152,12 +8152,18 @@ impl Arcade {
     /// The map in the corner, which is the fifth list a layer governs.
     ///
     /// Spec 0134 named four and asked what the map did as an open
-    /// question. This is the answer: it drew the arcade's plan wherever
-    /// you stood. `self.floors` is the building's, picked by height
-    /// alone, so the village got the hall's rooms whenever it happened to
-    /// stand over them, and the empty panel in `media/village.png` on
-    /// 2026-11-24 was that camera being away from them rather than the
-    /// map knowing anything.
+    /// question. This is the answer: it never asked. `self.floors` is the
+    /// building's, picked by height alone, so spec 0133's shore drew the
+    /// hall's plan from the moment the two layers were put on the same x
+    /// and z.
+    ///
+    /// **Found by reading this after the voice was gated, and not by
+    /// looking.** It was looked for in `media/village.png`, whose map
+    /// panel is empty, and that picture turned out to be the field's own
+    /// village on layer nought, where the panel is empty because nobody
+    /// outdoors is on a storey. No published picture ever showed this.
+    /// What shows it is the test, which draws three runs of the building
+    /// in a place the building is not.
     fn draw_the_map(&self, geometry: &mut Geometry) {
         use blitzkit::geometry::quad::Quad;
 
@@ -19434,15 +19440,13 @@ mod tests {
     ///
     /// **The fifth list**, which the spec had left as an open question
     /// rather than a list at all. `draw_the_map` reads `self.floors` by
-    /// height and never asked which world you were in, so the village
-    /// drew the building's plan wherever it stood over it.
+    /// height and never asked which world you were in.
     ///
-    /// The first half of this is what makes the second half mean
-    /// anything, and it is also the whole evidence for the claim in
-    /// `draw_the_map`'s comment: the same position, same height, same
-    /// everything draws the hall's rooms on layer nought. Only the layer
-    /// differs between the two halves, so only the layer can be what
-    /// silences it.
+    /// The first half is what makes the second half mean anything, and it
+    /// is the whole evidence for the claim in `draw_the_map`'s comment:
+    /// the same position, same height, same everything draws the hall's
+    /// rooms on layer nought. Only the layer differs between the two
+    /// halves, so only the layer can be what silences it.
     #[test]
     fn no_map_is_drawn_on_another_layer() {
         let mut game = Arcade::new();
