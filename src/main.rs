@@ -1108,6 +1108,18 @@ struct Arcade {
     /// stands. Spec 0040.
     sward: Option<MeshId>,
     turf: Option<TextureId>,
+    /// Spec 0133's sand, and a plane apiece for the two shores.
+    ///
+    /// **Two meshes because a tiled plane carries its counts in its
+    /// corners.** The shores are 150 by 6 and 150 by 75, so one mesh
+    /// scaled to both would wear the same number of tiles over twelve
+    /// times the ground.
+    elysium_sand: Option<TextureId>,
+    elysium_shores: [Option<MeshId>; 2],
+    /// Spec 0133's water, simulated, and the mesh its surface is written
+    /// to each frame. The pond beside it works the same way.
+    elysium_sea: blitzkit::water::Water,
+    elysium_sea_mesh: Option<MeshId>,
     saplings: Vec<MeshId>,
     /// The plaster on the field's own wall, which is tiled where the
     /// garden's is one picture a wall. Spec 0040.
@@ -1802,6 +1814,10 @@ impl Arcade {
             trunks: Vec::new(),
             sward: None,
             turf: None,
+            elysium_sand: None,
+            elysium_shores: [None; 2],
+            elysium_sea: elysium::sea(reaches),
+            elysium_sea_mesh: None,
             saplings: Vec::new(),
             render: None,
             rendered: vec![None, None],
@@ -9160,6 +9176,15 @@ impl Game for Arcade {
         if let Some(mesh) = self.pond_mesh {
             renderer.update_mesh(mesh, &self.pool_in_the_garden.surface());
         }
+
+        // and spec 0133's, only while you are over there: rewriting a
+        // thousand nodes a frame for water six hundred metres away is a
+        // bill nobody can see, which is `SEES`'s argument again.
+        if let Some(mesh) = self.elysium_sea_mesh {
+            if elysium::drawn(self.room.reaches, self.looking_from()) {
+                renderer.update_mesh(mesh, &self.elysium_sea.surface());
+            }
+        }
         if let Some(mesh) = self.pond_field_mesh {
             renderer.update_mesh(
                 mesh,
@@ -9483,6 +9508,19 @@ impl Game for Arcade {
             field::GROUND_REACH * 2.0 / field::TILE,
         ))));
         self.turf = Some(renderer.add_texture(&field::turf(0x51E7)));
+        // and spec 0133's shores, which were two untextured boxes
+        self.elysium_sand = Some(renderer.add_texture(&elysium::sand(0x5A4D)));
+
+        let (near, far) = elysium::shores(self.room.reaches);
+
+        for (n, shore) in [near, far].iter().copied().enumerate() {
+            let size = shore.size();
+            let counts = glam::vec2(size.x, size.z) / elysium::SAND_TILE;
+
+            self.elysium_shores[n] = Some(renderer.add_mesh(&room::tiled_plane(counts)));
+        }
+
+        self.elysium_sea_mesh = Some(renderer.add_water_mesh(&self.elysium_sea.surface()));
         // and the building's own outward walls, which until spec 0041 flew
         // round them were the colour of the rooms' insides.
         //
@@ -10530,6 +10568,10 @@ impl Game for Arcade {
         }
         self.pond_in_the_field.step(dt);
 
+        if elysium::drawn(self.room.reaches, self.looking_from()) {
+            self.elysium_sea.step(dt);
+        }
+
         // the swing between lined up and in orbit, per spec 0015. Three
         // seconds, and it runs from wherever it has got to: caught halfway
         // and sent back, it goes back from halfway. A toggle that jumps here
@@ -11193,6 +11235,14 @@ impl Game for Arcade {
                 self.since,
                 self.looking_from(),
                 self.ball_fold(),
+                match (self.elysium_sand, self.elysium_shores) {
+                    (Some(sand), [Some(near), Some(far)]) => Some(elysium::Ground {
+                        sand,
+                        shores: [near, far],
+                        sea: self.elysium_sea_mesh,
+                    }),
+                    _ => None,
+                },
                 glass::Meshes {
                     cube,
                     sphere: self.globe_mesh,

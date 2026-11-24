@@ -823,7 +823,16 @@ pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.30);
 /// before anything else does, which is why the ground is nearly white rather
 /// than a green somebody has to look at twice.
 pub const SHORE: Vec4 = vec4(0.82, 0.78, 0.68, 1.0);
-pub const SHALLOWS: Vec4 = vec4(0.38, 0.72, 0.74, 0.42);
+/// The water between the two shores.
+///
+/// **Deeper than it was, because the sand under it is nearly white.** At
+/// 0.42 alpha over `SHORE` the two summed to a pale wash and the whole
+/// crossing read as mist rather than water: it was a flat quad then, and
+/// a flat quad hides that. With a real surface on it the shading is
+/// visible and so is the washing out. Still see-through, since the whole
+/// argument for this water is that it is shallow and you walk in it, but
+/// carrying enough of its own colour to be a colour.
+pub const SHALLOWS: Vec4 = vec4(0.26, 0.58, 0.62, 0.64);
 /// The stone of spec 0133's colonnade, and the steps it stands on.
 ///
 /// **Its own value against the sand.** The first build drew the columns in
@@ -831,6 +840,20 @@ pub const SHALLOWS: Vec4 = vec4(0.38, 0.72, 0.74, 0.42);
 /// was the ground standing up: nothing separated a shaft from the beach
 /// behind it. Cooler and a shade lighter, which is quarried stone beside
 /// sand and is also the only thing here that is not warm.
+/// Sand the water has been over, along both of spec 0133's shores.
+///
+/// Darker and a shade cooler than `SHORE`, which is what wet sand is.
+/// Not much darker: a hard dark band is a painted line, and the thing it
+/// has to stop being is a line.
+pub const WET_SAND: Vec4 = vec4(0.63, 0.61, 0.56, 1.0);
+
+/// How tight the highlight on spec 0133's water is.
+///
+/// **A pinpoint, like the pond's.** A broad highlight on a hundred and
+/// fifty metres of open water with a morning sun is a lit band across the
+/// whole of it that turns when you do. The pond draws its surface at 420
+/// for the same reason and this is its number.
+pub const WET: f32 = 420.0;
 pub const RUIN: Vec4 = vec4(0.87, 0.86, 0.83, 1.0);
 /// And what is in shadow under it: the steps, the bases, the fallen drums.
 ///

@@ -468,6 +468,30 @@ pub fn shades(reaches: f32, at_: Vec3) -> bool {
 /// see. `glass::SEES` does the same for the ball.
 pub const SEES: f32 = 320.0;
 
+/// Whether this place is being drawn at all, from where the eye is.
+///
+/// **Asked once.** The drawing gates on [`SEES`], and the water's surface
+/// has to be stepped and written on exactly the frames it is drawn on or
+/// you arrive at a sheet that stopped moving somewhere else. Those were
+/// two conditions, this one and `holds`, which agree over most of the
+/// ground and not all of it: two lists of one thing drift.
+pub fn drawn(reaches: f32, eye: Vec3) -> bool {
+    eye.distance(at(reaches)) <= SEES
+}
+
+/// The sand and the planes it is laid on, where the renderer has them.
+///
+/// Its own struct for `glass::Meshes`'s reason: one more parameter on a
+/// draw that is already at the count clippy will take.
+#[derive(Clone, Copy)]
+pub struct Ground {
+    pub sand: blitzkit::renderer::scene::TextureId,
+    /// One plane apiece, near shore then far, each with its own tile count.
+    pub shores: [blitzkit::renderer::scene::MeshId; 2],
+    /// The water's own surface, which the renderer rebuilds every frame.
+    pub sea: Option<blitzkit::renderer::scene::MeshId>,
+}
+
 /// Draws it: the shores, the water, and the copy of the glass room.
 ///
 /// **The room is `glass::draw` again, moved.** It was a loop over
@@ -485,13 +509,12 @@ pub fn draw(
     since: f32,
     eye: Vec3,
     fold: crate::glass::Fold,
+    ground_: Option<Ground>,
     meshes: crate::glass::Meshes,
 ) {
     use blitzkit::mesh::Transform;
 
-    let middle = at(reaches);
-
-    if eye.distance(middle) > SEES {
+    if !drawn(reaches, eye) {
         return;
     }
 
@@ -499,7 +522,17 @@ pub fn draw(
     let column = meshes.column;
     let (near, far) = shores(reaches);
 
-    for piece in [ground(reaches), near, bed(reaches), far] {
+    // **The slabs sink a hair and the sand is laid on their true top.**
+    // A textured plane at the same height as the box's own face is two
+    // exposed faces in one plane, which is the fault this building has
+    // found seven times. Dropping the box instead of lifting the plane
+    // keeps the ground you walk on where `solid` says it is.
+    let sunk = match ground_ {
+        Some(_) => 0.03,
+        None => 0.0,
+    };
+
+    for piece in [ground(reaches), bed(reaches)] {
         scene.push_material(
             cube,
             &Transform::at(piece.center()).with_scale(piece.size()),
@@ -508,18 +541,68 @@ pub fn draw(
         );
     }
 
+    for piece in [near, far] {
+        let size = piece.size();
+
+        scene.push_material(
+            cube,
+            &Transform::at(piece.center() - Vec3::Y * sunk).with_scale(size),
+            crate::aim::SHORE,
+            crate::aim::MATTE,
+        );
+    }
+
+    // the wet band each side of it, laid on the sand
+    for strip in waterline(reaches) {
+        scene.push_material(
+            cube,
+            &Transform::at(strip.center()).with_scale(strip.size()),
+            crate::aim::WET_SAND,
+            crate::aim::MATTE,
+        );
+    }
+
+    if let Some(ground_) = ground_ {
+        for (plane, piece) in ground_.shores.iter().copied().zip([near, far]) {
+            let size = piece.size();
+
+            scene.push_textured(
+                plane,
+                ground_.sand,
+                &Transform::at(vec3(piece.center().x, piece.max.y, piece.center().z))
+                    .with_scale(vec3(size.x, 1.0, size.z)),
+                crate::aim::SHORE,
+                // no highlight, for the field ground's reason: a broad one
+                // on a hundred and fifty metres of sand with the sun low is
+                // a lit path down the middle that turns with you.
+                crate::aim::VOID,
+            );
+        }
+    }
+
     crate::glass::draw(scene, reaches, since, fold, placing(reaches), meshes);
 
     // and the water over the bed, which is the only thing here that is not
-    // a thing you stand on
-    let (surface, size) = water(reaches);
+    // a thing you stand on. Drawn from `sea`'s own surface where the
+    // renderer has it, per spec 0103: a quad is a lid.
+    match ground_.and_then(|g| g.sea) {
+        Some(mesh) => scene.push_material(
+            mesh,
+            &Transform::at(Vec3::ZERO),
+            crate::aim::SHALLOWS,
+            crate::aim::WET,
+        ),
+        None => {
+            let (surface, size) = water(reaches);
 
-    scene.push_material(
-        cube,
-        &Transform::at(surface).with_scale(vec3(size.x, 0.02, size.y)),
-        crate::aim::SHALLOWS,
-        crate::aim::MATTE,
-    );
+            scene.push_material(
+                cube,
+                &Transform::at(surface).with_scale(vec3(size.x, 0.02, size.y)),
+                crate::aim::SHALLOWS,
+                crate::aim::MATTE,
+            );
+        }
+    }
 
     // and the colonnade on the far shore, which is the garden
     let Some(column) = column else {
@@ -664,6 +747,139 @@ pub const ARCHITRAVE_DEEP: f32 = 1.12;
 /// with gaps between them is a column that came apart where its courses
 /// were.
 pub const DRUMS: usize = 5;
+
+/// How wide the wet strip is where each shore meets the water.
+pub const WETTED: f32 = 1.3;
+
+/// Those two strips, one along each shore's water edge.
+///
+/// **Because a shore is not an edge.** Sand meeting water on a ruled line
+/// is a floor plan; what says water has been here is a band of darker
+/// ground beside it that is not quite the same shape as the water. This
+/// is drawn flat and untextured on purpose: wet sand is smoother than dry
+/// and takes the grain out of it, so the one place here that wants no
+/// texture is this.
+pub fn waterline(reaches: f32) -> [Aabb; 2] {
+    let (near, far) = shores(reaches);
+    // proud by a hair, per the note on the sand: a strip at the shore's own
+    // height is two exposed faces in one plane
+    let up = 0.006;
+
+    [
+        Aabb::new(
+            vec3(near.min.x, near.max.y, near.min.z),
+            vec3(near.max.x, near.max.y + up, near.min.z + WETTED),
+        ),
+        Aabb::new(
+            vec3(far.min.x, far.max.y, far.max.z - WETTED),
+            vec3(far.max.x, far.max.y + up, far.max.z),
+        ),
+    ]
+}
+
+/// The water, as the engine simulates it.
+///
+/// **One account of it.** [`water`] says where the still surface is and
+/// how far it reaches, which is what `wading` and the tests ask; this is
+/// that, handed to `blitzkit::water::Water` so the surface has a shape.
+/// It was one flat quad of a single colour, which from the shore was a
+/// sheet of painted glass with a ruled edge.
+///
+/// **Sixty-four cells along a hundred and fifty metres**, which is a step
+/// of a little over two. That is coarse for a wave and right for this:
+/// spec 0133 calls this water a distance rather than an object, you are
+/// never looking into it, and the fine detail of a surface is the chop,
+/// which shades rather than moves. The pond spends seventy-two cells on
+/// thirty metres because you stand over it.
+pub const SEA_CELLS: u32 = 64;
+/// Slower and longer than the pond's, which is what a width of water does
+/// against a basin: `pond::RUNS` is 1.9 over thirty metres.
+pub const SEA_RUNS: f32 = 2.6;
+pub const SEA_SETTLES: f32 = 0.62;
+/// Rougher than the pond's `CALM` and short of the engine's own `CHOP`,
+/// because this is open and shallow and the sun is on it.
+pub const SEA_CHOP: f32 = 0.52;
+
+pub fn sea(reaches: f32) -> blitzkit::water::Water {
+    let (middle, size) = water(reaches);
+    let mut sea = blitzkit::water::Water::new(middle, size, DEEP, SEA_CELLS);
+
+    sea.damping = SEA_SETTLES;
+    sea.speed = SEA_RUNS;
+    sea.chop = SEA_CHOP;
+
+    sea
+}
+
+/// How big one tile of the shore's sand is, and the texture's own size.
+///
+/// **Because a cube's face wears one tile however big the face is.** The
+/// two shores are boxes 150 metres by 75 and by 6, drawn as boxes, so the
+/// whole of each was a single untextured span: the flattest thing in the
+/// frame, and the reason a hard straight line is all that separated the
+/// sand from the water. Laid as a plane with its own tile count, per
+/// `room::tiled_plane`, a metre and a half of sand is a metre and a half
+/// of sand wherever it is.
+///
+/// **Four metres, which is `field::TILE`'s number for `field::TILE`'s
+/// reason.** At 1.6 the shore wore ninety-odd copies of one square across
+/// its width and read as a grid: a tiling texture shows its tile at the
+/// distance where one tile is a few pixels, and the only cure that costs
+/// nothing is fewer of them.
+pub const SAND: u32 = 128;
+pub const SAND_TILE: f32 = 4.0;
+
+/// Sand, as a tiling texture.
+///
+/// **Grains and not strokes.** `field::turf` lays short strokes every way
+/// at once because that is what grass does to the light; sand has no
+/// direction, so this is specks over a ground with a little drift of
+/// darker and lighter in patches, which is what keeps a tiled plane from
+/// reading as a grid at a distance.
+pub fn sand(seed: u32) -> blitzkit::texture::TextureData {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+    let roll = |n: u32| (n % 10_000) as f32 / 10_000.0;
+
+    let under = [206u8, 196, 176];
+    let mut pixels = Vec::with_capacity((SAND * SAND * 4) as usize);
+
+    // the ground, with a slow drift over it so the tile has large shapes in
+    // it as well as small ones. Two sines of different periods, which do not
+    // repeat against each other inside one tile but do at its edge.
+    for n in 0..SAND * SAND {
+        let (x, z) = ((n % SAND) as f32, (n / SAND) as f32);
+        let turn = std::f32::consts::TAU / SAND as f32;
+        let drift = ((x * turn * 2.0).sin() * (z * turn).cos()
+            + (x * turn).cos() * (z * turn * 3.0).sin())
+            * 0.014;
+
+        for one in under {
+            pixels.push(((one as f32) * (1.0 + drift)).clamp(0.0, 255.0) as u8);
+        }
+
+        pixels.push(255);
+    }
+
+    // and the grains
+    for _ in 0..SAND * SAND / 5 {
+        let x = (roll(next()) * SAND as f32) as u32;
+        let z = (roll(next()) * SAND as f32) as u32;
+        let lit = 0.84 + roll(next()) * 0.3;
+        let at = ((z.min(SAND - 1) * SAND + x.min(SAND - 1)) * 4) as usize;
+
+        for (n, one) in under.iter().enumerate() {
+            pixels[at + n] = ((*one as f32) * lit).clamp(0.0, 255.0) as u8;
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(SAND, SAND, pixels)
+}
 
 /// How far back from the water's edge the colonnade stands.
 ///
