@@ -239,8 +239,8 @@ still marked unbuilt have no test yet and are what is left.
   there. — `elysium::tests::the_glass_takes_you_through_and_back`
 - The sun is up over it, whatever hour the building is
   at. — `elysium::tests::the_sun_stands_well_up_over_elysium`
-- And that hour holds everywhere in it, including the room you land
-  in. — `elysium::tests::it_is_morning_everywhere_in_it`
+- And that hour is the layer's, so the building's clock does not move
+  it. — `tests::the_hour_is_the_layers_and_not_the_buildings`
 - You cross water to reach the garden, and cannot walk round
   it. — `elysium::tests::the_water_is_crossed_and_not_skirted`
 - Crossing slows you to a wade the way the baths
@@ -249,8 +249,8 @@ still marked unbuilt have no test yet and are what is left.
   foot to the garden. — `elysium::tests::the_crossing_takes_about_twenty_seconds`
 - The stair comes down on the near shore and not in the
   water. — `elysium::tests::the_stair_comes_down_on_the_near_shore`
-- The field sows nothing on its ground, its water or its
-  shores. — `elysium::tests::the_field_sows_nothing_here`
+- The field is not here at all, being on another layer, so nothing it
+  sows can land here. — `tests::only_the_sphere_changes_the_layer`
 - The colonnade stands across the way in, on dry
   ground. — `elysium::tests::the_colonnade_stands_across_the_way_in_on_dry_ground`
 - It reads as a ruin rather than as a pattern of

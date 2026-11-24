@@ -5,10 +5,18 @@
 
 ## Goal
 
-A fourth coordinate, `w`, so that two places can stand on the same ground
-without a boundary between them. The arcade is one layer and spec 0133's
-place is another. What stops you, what is drawn and what lights you is what
-shares your layer, and nothing else is considered.
+A fourth coordinate, `w`, so that two places can share three of their
+coordinates and still be two places. The arcade is one layer and spec
+0133's place is another. What stops you, what is drawn and what lights you
+is what shares your layer, and nothing else is considered.
+
+**Not the same ground in two states.** Jake, on a picture of the two and
+a sloppy sentence under it: *what does "the same ground in the morning"
+mean, they should differ by the w value.* A point at `w = 0` and a point
+at `w = 1` are different points, as far apart as any two, and the ground
+at one is not the ground at the other wearing different light. Thinking of
+it the other way is what leads to wanting `w` to blend, or to asking what
+a body at `w = 0.4` stands on. There is no such body.
 
 ## Why there is no other way
 
@@ -108,21 +116,27 @@ The value here is subtractive, and the list is the argument.
 
 ## Acceptance criteria
 
-Nothing is built. These are the claims a build has to hold up, and the names
-are what the tests will be called.
+Part of this is built. The ones marked unbuilt have no test yet.
+
+- Anything that does not ask about a layer is in the
+  arcade. — `layers::tests::what_does_not_ask_is_in_the_arcade`
+- The glass takes you across and back and nowhere
+  else. — `layers::tests::across_and_across_again_is_where_you_started`
+- Spec 0133's sphere changes which layer you are on, and walking in any
+  direction for a minute does
+  not. — `tests::only_the_sphere_changes_the_layer`
+- Each layer keeps its own hour, so the building's clock does not move spec
+  0133's morning. — `tests::the_hour_is_the_layers_and_not_the_buildings`
+- The field is unbounded on its own layer, exactly as it was before this
+  spec. — `tests::you_cannot_walk_behind_the_building`
+
+Unbuilt:
 
 - A body on one layer does not collide with anything on
   another. — `layers::tests::nothing_on_another_layer_stops_you`
-- Nothing on another layer is drawn. — `layers::tests::nothing_on_another_layer_is_drawn`
+- Nothing on another layer is
+  drawn. — `layers::tests::nothing_on_another_layer_is_drawn`
 - No lamp lights across layers. — `layers::tests::no_lamp_reaches_another_layer`
-- Walking in any direction, for as long as you like, does not change which
-  layer you are on. — `layers::tests::you_cannot_walk_off_a_layer`
-- Spec 0133's sphere changes it, and is the only thing
-  that does. — `layers::tests::only_the_sphere_changes_the_layer`
-- Each layer keeps its own hour, so spec 0133's morning does not need a
-  branch. — `layers::tests::a_layer_keeps_its_own_hour`
-- The field is unbounded on its own layer, exactly as it was before this
-  spec. — `tests::you_cannot_walk_behind_the_building`
 
 ### Verified by hand
 

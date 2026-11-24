@@ -17,14 +17,6 @@
 use blitzkit::collision::Aabb;
 use glam::{vec2, vec3, Vec2, Vec3};
 
-/// How far south of the building it stands.
-///
-/// **Past everything, with room to spare.** The field's ground reaches
-/// `field::GROUND_REACH`, 160, and is thinned rather than ended past it. Six
-/// hundred is nearly four times that, so nothing of the field is near this
-/// and nothing of this is in the field.
-pub const OUT: f32 = 600.0;
-
 /// How wide the water is, and how deep you stand in it.
 ///
 /// **Thirty-five, which is twenty seconds.** `SPEED` is 4.2 and
@@ -54,7 +46,13 @@ pub const SHORE: f32 = 6.0;
 /// Where the middle of the whole place is: the water's middle, on the line
 /// you walk in on.
 pub fn at(reaches: f32) -> Vec3 {
-    vec3(crate::glass::stair_foot(reaches).x, 0.0, OUT)
+    let foot = placing(reaches).of(crate::glass::stair_foot(reaches));
+
+    // out from the stair's foot by the near shore and half the water, which
+    // is what puts `shores`' near edge under that foot. It was a constant
+    // six hundred metres south; a layer has no south, so this is where the
+    // stair the turn leaves you at comes down.
+    vec3(foot.x, 0.0, foot.z - SHORE - ACROSS * 0.5)
 }
 
 /// The ground, which is this place's own and reaches past everything on it.
@@ -157,9 +155,7 @@ pub fn solid(reaches: f32, at_: Vec3) -> Vec<Aabb> {
     // found it in the cellar, two of the route's places walled off by a
     // sheet of Elysium. The rest of this list is fixed geometry six
     // hundred metres away and wants no such test.
-    if holds(reaches, at_) {
-        out.push(ground(at_));
-    }
+    out.push(ground(at_));
 
     out.extend(
         crate::glass::solid(reaches)
@@ -205,15 +201,22 @@ pub fn solid(reaches: f32, at_: Vec3) -> Vec<Aabb> {
 /// the distance between the two places, so a change to that room is a change
 /// to this one and there is no second account of it to drift.
 pub fn placing(reaches: f32) -> crate::glass::Placed {
-    let foot = crate::glass::stair_foot(reaches);
-    let (near, _) = shores(reaches);
+    let room = crate::glass::inside(reaches);
+    let middle = room.center();
 
-    // Twice the axis rather than a distance, per `glass::Placed`: the two
-    // numbers are what carry the room's stair foot onto the near shore's
-    // own edge, and the turn does the rest.
+    // **Half a turn about the room's own middle, and no distance at all.**
+    // It carried a shift of 580 metres, which is what put this place six
+    // hundred metres south of the building; on its own layer, per spec
+    // 0134, it stands exactly where spec 0064's room stands. Twice the axis
+    // rather than a distance, per `glass::Placed`, so `of` is a reflection
+    // and its own inverse.
+    //
+    // The turn is still here and still earns its place: it is what puts the
+    // copy's stairwell at the end you are already looking at, so nothing
+    // rotates when you come through.
     crate::glass::Placed {
         turned: true,
-        shift: vec3(foot.x * 2.0, 0.0, near.max.z + foot.z),
+        shift: vec3(middle.x * 2.0, 0.0, middle.z * 2.0),
     }
 }
 
@@ -400,38 +403,6 @@ pub fn swelling(through: f32) -> f32 {
     1.0 + (SWELLS - 1.0) * through.clamp(0.0, 1.0).powi(2)
 }
 
-/// Whether you are in this place at all, which is what decides whose
-/// ground is under you and whose sky is over you.
-///
-/// **Asked of where you are and of nothing else.** There is no flag saying
-/// which world you are in, for the reason [`through`] gives: both stand in
-/// the world at once and your own position is the answer. This is that
-/// question written down once so that the ground, the sky and the field all
-/// read the same one.
-///
-/// Generous past the edges, because the horizon is part of being somewhere:
-/// a shore whose grass turns back into the field's ten metres out is a
-/// shore in a field.
-pub fn holds(reaches: f32, at_: Vec3) -> bool {
-    let middle = at(reaches);
-
-    // **Still a box, and a box has an edge you can walk out of.** This and
-    // `ground` were the same 150 metres, so the edge of what held you and
-    // the edge of what held you up were one line, and a step over it put
-    // you in the arcade's field at night. The ground follows you now,
-    // which takes the drop away, and the line is still there.
-    //
-    // Making this everything past a line instead was tried and reverted.
-    // The field is unbounded in z on purpose and its own walks go out to
-    // z 1019: `tests::you_cannot_walk_behind_the_building` and
-    // `tests::the_clip_walks_the_whole_route` both failed, naming the
-    // spot, because a half plane here takes the field's wall away out
-    // there. Two unbounded worlds cannot share a direction, so the
-    // boundary has to be handled rather than removed, and which way is a
-    // question about this place and not about arithmetic.
-    (at_.x - middle.x).abs() < BROAD && (at_.z - middle.z).abs() < BROAD
-}
-
 /// The hour it is here, always.
 ///
 /// **Morning, and it does not move.** The building runs a day in
@@ -454,60 +425,6 @@ pub fn holds(reaches: f32, at_: Vec3) -> bool {
 /// with the shadows still long enough to have a direction, and short of the
 /// hour with no shape to it.
 pub const MORNING: f32 = 0.17;
-
-/// How far past its own edge this keeps the field's scatter off.
-///
-/// A tree is `field::TREE_TALL` and leans, so a clearing that stops at the
-/// shore's edge still has branches over it.
-pub const CLEARS: f32 = 8.0;
-
-/// Whether a spot in the field is one this place keeps clear of trees.
-///
-/// **Because the field's scatter has never known anything is there.**
-/// `field::open` keeps trees out of the building and out of nothing else,
-/// which is the hole the bridge found when one grew through its runestone,
-/// and the village after it. This is the third, and the first picture of
-/// this place had trees standing in the water.
-///
-/// **Always, and not only once you can get here.** The bridge's own note
-/// says why: a clearing that appears the moment somebody finds the way in
-/// is trees vanishing, which is worse to watch than trees in a lake. Here
-/// it costs nothing to say always, because nobody is ever standing in the
-/// field six hundred metres south to see either.
-pub fn shades(reaches: f32, at_: Vec3) -> bool {
-    let middle = at(reaches);
-    let (near, far) = shores(reaches);
-    // **And over the room, which this used to stop short of.** The far
-    // edge was the shore's, and the copy stands back from the shore: the
-    // strip of ground under it was open for the field to sow, and a trunk
-    // there has a room on top of it. It was the same gap before the copy
-    // was turned, on the other side of the shore.
-    let room = placing(reaches).box_of(crate::glass::inside(reaches));
-    let back = room.max.z.max(near.max.z);
-
-    (at_.x - middle.x).abs() < BROAD * 0.5 + CLEARS
-        && at_.z > far.min.z - CLEARS
-        && at_.z < back + CLEARS
-}
-
-/// How near you have to be for any of it to be drawn.
-///
-/// **Six hundred metres away, so never from the building.** Nothing here is
-/// ever in the same frame as anything there, which is the whole arrangement,
-/// so drawing it while you are in the arcade is a bill for pixels nobody can
-/// see. `glass::SEES` does the same for the ball.
-pub const SEES: f32 = 320.0;
-
-/// Whether this place is being drawn at all, from where the eye is.
-///
-/// **Asked once.** The drawing gates on [`SEES`], and the water's surface
-/// has to be stepped and written on exactly the frames it is drawn on or
-/// you arrive at a sheet that stopped moving somewhere else. Those were
-/// two conditions, this one and `holds`, which agree over most of the
-/// ground and not all of it: two lists of one thing drift.
-pub fn drawn(reaches: f32, eye: Vec3) -> bool {
-    eye.distance(at(reaches)) <= SEES
-}
 
 /// The sand and the planes it is laid on, where the renderer has them.
 ///
@@ -548,10 +465,6 @@ pub fn draw(
     meshes: crate::glass::Meshes,
 ) {
     use blitzkit::mesh::Transform;
-
-    if !drawn(reaches, eye) {
-        return;
-    }
 
     let cube = meshes.cube;
     let column = meshes.column;
@@ -1407,43 +1320,6 @@ mod tests {
         }
     }
 
-    /// Spec 0133: standing anywhere in this place, it is morning here and
-    /// the building's own hour is somewhere else.
-    ///
-    /// **Including inside the copy of the glass room**, which is the spot
-    /// you arrive at and the one place it would be easy to miss: the room
-    /// stands over the near shore rather than on the water, so a `holds`
-    /// drawn round the water alone would leave whoever just came through
-    /// standing in the building's night. Jake's recording of exactly that,
-    /// 2026-11-23: emptiness on the other side.
-    #[test]
-    fn it_is_morning_everywhere_in_it() {
-        let reaches = reaches();
-        let middle = at(reaches);
-        let foot = placing(reaches).of(crate::glass::stair_foot(reaches));
-        let (near, far) = shores(reaches);
-
-        for (which, spot) in [
-            ("the water", middle),
-            ("the near shore", vec3(middle.x, 0.0, near.min.z)),
-            ("the far shore", vec3(middle.x, 0.0, far.max.z)),
-            ("the stair's foot", foot),
-            ("the room over it", foot + vec3(0.0, crate::glass::UP, 0.0)),
-        ] {
-            assert!(
-                holds(reaches, spot),
-                "{} is not held by this place, so the building's hour follows you there",
-                which
-            );
-        }
-
-        // and the building itself is not
-        assert!(
-            !holds(reaches, crate::glass::stair_foot(reaches)),
-            "the building is held by this place, so its own day would stop"
-        );
-    }
-
     /// Spec 0133: the colonnade stands on the far shore, across the way
     /// you walk in, and every column of it is on dry ground.
     ///
@@ -1518,64 +1394,17 @@ mod tests {
         );
     }
 
-    /// Spec 0133: nothing the field sows stands in this place.
-    ///
-    /// **The third time this building has had to say it.** `field::open`
-    /// keeps the scatter out of the building and out of nothing else, so a
-    /// tree grew through the bridge's runestone, then through the village,
-    /// and the first picture of this place had them standing in the water.
-    ///
-    /// Asked over the whole thing and a margin, because a tree is
-    /// `field::TREE_TALL` and leans.
-    #[test]
-    fn the_field_sows_nothing_here() {
-        let reaches = reaches();
-        let (near, far) = shores(reaches);
-        let middle = at(reaches);
-
-        for z in [near.min.z, near.max.z, middle.z, far.min.z, far.max.z] {
-            for x in [middle.x - BROAD * 0.5, middle.x, middle.x + BROAD * 0.5] {
-                let spot = vec3(x, 0.0, z);
-
-                assert!(
-                    shades(reaches, spot),
-                    "the field may sow a tree at {:?}, which is in the water or on a shore",
-                    spot
-                );
-            }
-        }
-
-        // and the ground the room stands on, which this stopped short of
-        let room = placing(reaches).box_of(crate::glass::inside(reaches));
-
-        for (which, z) in [("the stair's end", room.min.z), ("the far end", room.max.z)] {
-            let spot = vec3(middle.x, 0.0, z);
-
-            assert!(
-                shades(reaches, spot),
-                "the field may sow a tree at {}, {:?}, which is under the room",
-                which,
-                spot
-            );
-        }
-
-        // and it stops: a clearing the size of the field is a field with no
-        // trees in it
-        let away = vec3(middle.x, 0.0, far.min.z - CLEARS - 20.0);
-
-        assert!(
-            !shades(reaches, away),
-            "the clearing reaches {:?}, which is well past the far shore",
-            away
-        );
-    }
-
     /// Spec 0133: the copy of the glass room stands over the near shore, so
     /// its stair comes down on this side of the water.
     ///
-    /// **And the whole place is far enough from the building that neither
-    /// is on the other's horizon**, which is what lets this one have its own
-    /// sky at all.
+    /// **It used to hold the distance as well**, asserting the stair foot
+    /// was further from spec 0064's than `field::GROUND_REACH`, because
+    /// what kept the two places off each other's horizon was six hundred
+    /// metres of field. Spec 0134 took that over: they are a layer apart,
+    /// which is not a distance, and the two stair feet now share their x
+    /// and z exactly. That assertion failed the moment the place moved,
+    /// which is the gate saying the design changed rather than the code
+    /// breaking.
     #[test]
     fn the_stair_comes_down_on_the_near_shore() {
         let reaches = reaches();
@@ -1593,10 +1422,6 @@ mod tests {
         assert!(
             foot.z > middle.z + size.y * 0.5,
             "the stair lands in the water"
-        );
-        assert!(
-            (foot.z - crate::glass::stair_foot(reaches).z).abs() > crate::field::GROUND_REACH,
-            "this place is inside the field's own reach"
         );
     }
 

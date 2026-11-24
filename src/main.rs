@@ -5836,10 +5836,15 @@ impl Arcade {
     /// is", the drawn half moved to `in_the_deep` and this half stayed
     /// where it was. See the note on `outdoors` in `before_frame`.
     fn standing_on(&self) -> Vec<Aabb> {
-        // **One world's boxes, per spec 0134.** What stops you is what is on
-        // your layer and nothing else, which is how two places stand on the
-        // same ground without a boundary: spec 0133's had one, drawn at 150
-        // metres, and a step over it put you in the arcade's field at night.
+        // **One world's boxes, per spec 0134.** What stops you is what is
+        // on your layer and nothing else, which is how two places share
+        // three coordinates and stay two places: spec 0133's had a
+        // boundary, drawn at 150 metres, and a step over it put you in the
+        // arcade's field at night.
+        //
+        // Not one ground in two states. A box at `w = 1` and a box at
+        // `w = 0` are no more in each other's way than two boxes a mile
+        // apart, which is why this is an equality and not a distance.
         //
         // The shape is spec 0021's. Inside the tesseract the walk is handed
         // `tesseract::solid_in_a_cell` rather than this list, for the same
@@ -7449,6 +7454,192 @@ impl Arcade {
             aim::BROOM,
             aim::MATTE,
         );
+    }
+
+    /// The sky this layer stands under: its dome, the moon, the sun and
+    /// the cloud over the pair of them.
+    ///
+    /// **Lifted out of the garden's own drawing**, where it was nested
+    /// because the garden was the first room with a sky in it. Spec 0134
+    /// needs it somewhere a layer can reach: the arcade draws it on its
+    /// way through the garden and spec 0133's place draws it and nothing
+    /// else, and a sky written twice is the fault this building has
+    /// written down under a dozen names.
+    ///
+    /// Everything in here reads `sky_clock`, which is the layer's own
+    /// hour, so moving it changed nothing about what it draws.
+    fn draw_the_sky(&self, scene: &mut Scene) {
+        // the sky, which is one sky and is drawn where you stand.
+        //
+        // **It was two.** Spec 0010 sprang a vault nineteen metres
+        // across over the garden, which is a sky from underneath and a
+        // blue bubble sitting on the roof from out in spec 0040's
+        // field. The field had a second one of its own, so the garden
+        // and the field, which are one outdoors with one sun and one
+        // day over them, had two skies with two rims and two scales,
+        // and each could be seen from under the other.
+        //
+        // One, round the eye. The same cloud all day with the day taken
+        // out from behind it, per spec 0019, and a strike lighting the
+        // whole of it, per spec 0016: what you see of lightning from
+        // under a storm is the deck going white, and the cloud's own
+        // shape is a better picture of it than any patch.
+        //
+        // **Handed over as a backdrop rather than placed.** It was
+        // pushed like any other mesh, at a scale this file chose, and
+        // only while you stood out under it. Both of those were wrong
+        // and the second hid the first.
+        //
+        // Standing anywhere with a roof over you, the sky over the
+        // garden was black: you see a sky from the doorway you are
+        // looking through, not from the square metre your feet are on,
+        // and walking in and out of cover made it flash. Underneath
+        // that, the scale: 22 here against the mesh's own 19 across is
+        // a 209 metre dome, and indoors the far plane is 100, so every
+        // vertex of it was clipped. Opening the gate alone showed
+        // nothing, which is what made this take all morning.
+        //
+        // The renderer sizes it now, because the far plane is the
+        // renderer's and this file could not see it.
+        // The engine's spec 0086.
+        //
+        // **Asked with the same question the field is drawn by**, which
+        // is `sees_outdoors`: whether there is any of the outdoors on
+        // the screen at all. `draw_the_field` and `draw_the_outside`
+        // both turn on it and this is the sky over both of them, so a
+        // question of its own here is a third account of one thing.
+        //
+        // It has had two already. `in_the_deep` is `z` past the door
+        // and the space behind the wall is drawn on `behind::inside`,
+        // so for the camera in `what_is_behind_the_wall_is_drawn` those
+        // disagreed and that room got the solar system and a sky behind
+        // it at once. Gating on `behind::in_the_room` fixed that one
+        // room and left the solar system out past it uncovered: every
+        // staged shot of a planet came back with a cloudy daylight sky
+        // over half the frame, which is what `media/screenshot.png`
+        // would have become the next time anybody refreshed it.
+        // `sees_outdoors` is false out there, because `in_the_deep` is
+        // the first half of it.
+        // The sky itself, which is now the colour and nothing else:
+        // the cloud comes after the moon and the sun, per spec 0099.
+        if let (Some(dome), Some(wash)) = (self.dome, self.wash) {
+            if self.sees_outdoors {
+                let clock = self.sky_clock();
+                let sky = garden::overhead(clock).sky;
+
+                scene.backdrop(
+                    dome,
+                    wash,
+                    garden::gives_off(garden::skylit(clock).truncate() * sky, clock).extend(1.0),
+                    900.0,
+                );
+            }
+        }
+
+        // **And a moon in it, hung off the eye like the sky is.** Jake
+        // asked for one. It is drawn rather than painted into the
+        // storm because the storm's picture drifts across the dome,
+        // per spec 0019, and a moon that drifts with the weather is
+        // a cloud.
+        //
+        // Out of doors only. At two hundred and thirty metres it is
+        // well inside `field::sees` and so never clipped, and well
+        // outside anything in the field, so nothing out there stands
+        // in front of it; indoors it would be hanging inside the
+        // building.
+        if let (Some(ball), Some(face)) = (self.moon, self.moon_face) {
+            let showing = moon::showing(self.sky_clock());
+
+            if showing > 0.01 && self.in_the_open() {
+                let out = moon::at(self.sky_clock());
+                let eye = self.looking_from();
+                let off = moon::off(eye);
+                let hung = eye + out * off;
+
+                scene.push_textured(
+                    ball,
+                    face,
+                    // **And turned to look back down the way it hangs.**
+                    // The light on its face is baked for a face that
+                    // points at you, per `moon::face`, and the real one
+                    // keeps the same side to us anyway.
+                    &Transform::at(hung)
+                        .with_rotation(moon::turned(-out))
+                        .with_scale(Vec3::splat(moon::wide(off))),
+                    moon::lit(self.sky_clock()),
+                    aim::VOID,
+                );
+            }
+        }
+
+        // **And a sun, hung off the eye on the same shell.** Jake,
+        // 2026-11-13: the sun right now doesn't have a presence in the
+        // sky but the moon does, i think it'd be interesting to put a
+        // real sun in the sky.
+        //
+        // Where it is comes off `garden::sun_at`, which is the
+        // direction the light already travels, negated. The thing you
+        // can see and the thing that casts the shadows are one thing:
+        // there is no second angle here to drift from the first.
+        //
+        // No texture and no highlight. A sun has no features and
+        // nothing lights it, so what is wanted is a flat disc past one
+        // in every channel, which `garden::sunlit_disc` is.
+        if let Some(ball) = self.sun {
+            let showing = garden::sun_showing(self.sky_clock());
+
+            if showing > 0.01 && self.in_the_open() {
+                let eye = self.looking_from();
+                let off = moon::off(eye);
+                let hung = eye + garden::sun_at(self.sky_clock()) * off;
+
+                scene.push_plain(
+                    ball,
+                    &Transform::at(hung).with_scale(Vec3::splat(garden::sun_wide(off))),
+                    garden::sunlit_disc(self.sky_clock()),
+                );
+            }
+        }
+
+        // **And the cloud over the pair of them.** Spec 0099. Jake:
+        // the moon still appears to be in front of the clouds. It was,
+        // and it had to be, because the sky was one opaque thing at the
+        // far plane and a moon has to be nearer than that to be drawn
+        // at all. The deck hangs at `DECK_FAR`, inside the bodies.
+        //
+        // One deck most of the time and two while the weather turns,
+        // the old dissolving into the new. The alpha is each one's
+        // share and the tint is shared, because a tint apiece would
+        // tint the dissolve twice.
+        //
+        // **The flash is on the cloud and not on the sky**, which is
+        // what spec 0016 says is lighting up: not the bolt but a mile
+        // of cloud lit from inside. On the backdrop it lit a clear
+        // night sky, which is a flash with nothing to flash in.
+        if let (Some(mesh), true) = (self.cloud_deck, self.sees_outdoors) {
+            let overhead = garden::overhead(self.sky_clock());
+            // **The flash added after the tint and not before it.**
+            // It is its own light on the cloud rather than a share of
+            // the cloud's colour: multiplied in, a storm's dark deck
+            // put out its own lightning.
+            let lit = garden::gives_off(
+                garden::skylit(self.sky_clock()).truncate() * overhead.cloud
+                    + self.flashed().truncate(),
+                self.sky_clock(),
+            );
+            let hung = Transform::at(self.looking_from())
+                .with_scale(Vec3::splat(garden::deck_scale(self.looking_from())));
+
+            for (which, share) in overhead.decks {
+                if share <= 0.004 {
+                    continue;
+                }
+
+                if let Some(picture) = self.skies.get(which).copied() {
+                    scene.push_textured(mesh, picture, &hung, lit.extend(share), aim::VOID);
+                }
+            }
+        }
     }
 
     /// What this frame cost, in the corner, behind F. Spec 0056.
@@ -9224,7 +9415,7 @@ impl Game for Arcade {
         // thousand nodes a frame for water six hundred metres away is a
         // bill nobody can see, which is `SEES`'s argument again.
         if let Some(mesh) = self.elysium_sea_mesh {
-            if elysium::drawn(self.room.reaches, self.looking_from()) {
+            if self.layer == layers::ELYSIUM {
                 renderer.update_mesh(mesh, &self.elysium_sea.surface());
             }
         }
@@ -10619,7 +10810,7 @@ impl Game for Arcade {
         }
         self.pond_in_the_field.step(dt);
 
-        if elysium::drawn(self.room.reaches, self.looking_from()) {
+        if self.layer == layers::ELYSIUM {
             self.elysium_sea.step(dt);
         }
 
@@ -11174,6 +11365,47 @@ impl Game for Arcade {
         // nook has boards of its own over every inch of its floor, and the
         // corner of the rectangle the nook does not reach came out past the
         // nook's end wall and lay on the garden's gravel.
+        // **And spec 0134's other world, which is the whole of what is
+        // drawn there.** The shape is spec 0021's: that room branches at
+        // the top of this function and returns, because the eight cells are
+        // the same cube drawn eight ways and there is nothing of the hall
+        // to draw while you are in one. The same holds here, with a sky,
+        // which is why `draw_the_sky` had to come out of the garden first.
+        //
+        // After the light and before the carpet, so the sun, the fill and
+        // the storm's flash are all worked out once for whichever world
+        // this is.
+        if self.layer == layers::ELYSIUM {
+            self.draw_the_sky(scene);
+
+            elysium::draw(
+                scene,
+                self.room.reaches,
+                self.since,
+                self.looking_from(),
+                self.ball_fold(),
+                match (self.elysium_sand, self.elysium_shores) {
+                    (Some(sand), [Some(near), Some(far)]) => Some(elysium::Ground {
+                        sand,
+                        shores: [near, far],
+                        sea: self.elysium_sea_mesh,
+                        hill: self.hill,
+                        beyond: self.elysium_beyond,
+                    }),
+                    _ => None,
+                },
+                glass::Meshes {
+                    cube,
+                    sphere: self.globe_mesh,
+                    baluster: self.baluster,
+                    sconce: self.sconce,
+                    column: self.column,
+                },
+            );
+
+            return;
+        }
+
         let hall = self.room.floors()[0];
         let laid = Transform::at(vec3(hall.center().x, 0.0, hall.center().z)).with_scale(vec3(
             hall.size().x,
@@ -11270,35 +11502,6 @@ impl Game for Arcade {
                 glass::Meshes {
                     cube,
                     sphere: seen.then_some(self.globe_mesh).flatten(),
-                    baluster: self.baluster,
-                    sconce: self.sconce,
-                    column: self.column,
-                },
-            );
-
-            // and spec 0133's place, six hundred metres south: the two
-            // shores, the water between them and the copy of this room
-            // standing over the near one. Drawn from the same boxes it is
-            // walked on, and only while you are near enough to see it.
-            elysium::draw(
-                scene,
-                self.room.reaches,
-                self.since,
-                self.looking_from(),
-                self.ball_fold(),
-                match (self.elysium_sand, self.elysium_shores) {
-                    (Some(sand), [Some(near), Some(far)]) => Some(elysium::Ground {
-                        sand,
-                        shores: [near, far],
-                        sea: self.elysium_sea_mesh,
-                        hill: self.hill,
-                        beyond: self.elysium_beyond,
-                    }),
-                    _ => None,
-                },
-                glass::Meshes {
-                    cube,
-                    sphere: self.globe_mesh,
                     baluster: self.baluster,
                     sconce: self.sconce,
                     column: self.column,
@@ -12056,178 +12259,7 @@ impl Game for Arcade {
         // it. The sky first, because everything else in here is seen against
         // it.
         {
-            // the sky, which is one sky and is drawn where you stand.
-            //
-            // **It was two.** Spec 0010 sprang a vault nineteen metres
-            // across over the garden, which is a sky from underneath and a
-            // blue bubble sitting on the roof from out in spec 0040's
-            // field. The field had a second one of its own, so the garden
-            // and the field, which are one outdoors with one sun and one
-            // day over them, had two skies with two rims and two scales,
-            // and each could be seen from under the other.
-            //
-            // One, round the eye. The same cloud all day with the day taken
-            // out from behind it, per spec 0019, and a strike lighting the
-            // whole of it, per spec 0016: what you see of lightning from
-            // under a storm is the deck going white, and the cloud's own
-            // shape is a better picture of it than any patch.
-            //
-            // **Handed over as a backdrop rather than placed.** It was
-            // pushed like any other mesh, at a scale this file chose, and
-            // only while you stood out under it. Both of those were wrong
-            // and the second hid the first.
-            //
-            // Standing anywhere with a roof over you, the sky over the
-            // garden was black: you see a sky from the doorway you are
-            // looking through, not from the square metre your feet are on,
-            // and walking in and out of cover made it flash. Underneath
-            // that, the scale: 22 here against the mesh's own 19 across is
-            // a 209 metre dome, and indoors the far plane is 100, so every
-            // vertex of it was clipped. Opening the gate alone showed
-            // nothing, which is what made this take all morning.
-            //
-            // The renderer sizes it now, because the far plane is the
-            // renderer's and this file could not see it.
-            // The engine's spec 0086.
-            //
-            // **Asked with the same question the field is drawn by**, which
-            // is `sees_outdoors`: whether there is any of the outdoors on
-            // the screen at all. `draw_the_field` and `draw_the_outside`
-            // both turn on it and this is the sky over both of them, so a
-            // question of its own here is a third account of one thing.
-            //
-            // It has had two already. `in_the_deep` is `z` past the door
-            // and the space behind the wall is drawn on `behind::inside`,
-            // so for the camera in `what_is_behind_the_wall_is_drawn` those
-            // disagreed and that room got the solar system and a sky behind
-            // it at once. Gating on `behind::in_the_room` fixed that one
-            // room and left the solar system out past it uncovered: every
-            // staged shot of a planet came back with a cloudy daylight sky
-            // over half the frame, which is what `media/screenshot.png`
-            // would have become the next time anybody refreshed it.
-            // `sees_outdoors` is false out there, because `in_the_deep` is
-            // the first half of it.
-            // The sky itself, which is now the colour and nothing else:
-            // the cloud comes after the moon and the sun, per spec 0099.
-            if let (Some(dome), Some(wash)) = (self.dome, self.wash) {
-                if self.sees_outdoors {
-                    let clock = self.sky_clock();
-                    let sky = garden::overhead(clock).sky;
-
-                    scene.backdrop(
-                        dome,
-                        wash,
-                        garden::gives_off(garden::skylit(clock).truncate() * sky, clock)
-                            .extend(1.0),
-                        900.0,
-                    );
-                }
-            }
-
-            // **And a moon in it, hung off the eye like the sky is.** Jake
-            // asked for one. It is drawn rather than painted into the
-            // storm because the storm's picture drifts across the dome,
-            // per spec 0019, and a moon that drifts with the weather is
-            // a cloud.
-            //
-            // Out of doors only. At two hundred and thirty metres it is
-            // well inside `field::sees` and so never clipped, and well
-            // outside anything in the field, so nothing out there stands
-            // in front of it; indoors it would be hanging inside the
-            // building.
-            if let (Some(ball), Some(face)) = (self.moon, self.moon_face) {
-                let showing = moon::showing(self.sky_clock());
-
-                if showing > 0.01 && self.in_the_open() {
-                    let out = moon::at(self.sky_clock());
-                    let eye = self.looking_from();
-                    let off = moon::off(eye);
-                    let hung = eye + out * off;
-
-                    scene.push_textured(
-                        ball,
-                        face,
-                        // **And turned to look back down the way it hangs.**
-                        // The light on its face is baked for a face that
-                        // points at you, per `moon::face`, and the real one
-                        // keeps the same side to us anyway.
-                        &Transform::at(hung)
-                            .with_rotation(moon::turned(-out))
-                            .with_scale(Vec3::splat(moon::wide(off))),
-                        moon::lit(self.sky_clock()),
-                        aim::VOID,
-                    );
-                }
-            }
-
-            // **And a sun, hung off the eye on the same shell.** Jake,
-            // 2026-11-13: the sun right now doesn't have a presence in the
-            // sky but the moon does, i think it'd be interesting to put a
-            // real sun in the sky.
-            //
-            // Where it is comes off `garden::sun_at`, which is the
-            // direction the light already travels, negated. The thing you
-            // can see and the thing that casts the shadows are one thing:
-            // there is no second angle here to drift from the first.
-            //
-            // No texture and no highlight. A sun has no features and
-            // nothing lights it, so what is wanted is a flat disc past one
-            // in every channel, which `garden::sunlit_disc` is.
-            if let Some(ball) = self.sun {
-                let showing = garden::sun_showing(self.sky_clock());
-
-                if showing > 0.01 && self.in_the_open() {
-                    let eye = self.looking_from();
-                    let off = moon::off(eye);
-                    let hung = eye + garden::sun_at(self.sky_clock()) * off;
-
-                    scene.push_plain(
-                        ball,
-                        &Transform::at(hung).with_scale(Vec3::splat(garden::sun_wide(off))),
-                        garden::sunlit_disc(self.sky_clock()),
-                    );
-                }
-            }
-
-            // **And the cloud over the pair of them.** Spec 0099. Jake:
-            // the moon still appears to be in front of the clouds. It was,
-            // and it had to be, because the sky was one opaque thing at the
-            // far plane and a moon has to be nearer than that to be drawn
-            // at all. The deck hangs at `DECK_FAR`, inside the bodies.
-            //
-            // One deck most of the time and two while the weather turns,
-            // the old dissolving into the new. The alpha is each one's
-            // share and the tint is shared, because a tint apiece would
-            // tint the dissolve twice.
-            //
-            // **The flash is on the cloud and not on the sky**, which is
-            // what spec 0016 says is lighting up: not the bolt but a mile
-            // of cloud lit from inside. On the backdrop it lit a clear
-            // night sky, which is a flash with nothing to flash in.
-            if let (Some(mesh), true) = (self.cloud_deck, self.sees_outdoors) {
-                let overhead = garden::overhead(self.sky_clock());
-                // **The flash added after the tint and not before it.**
-                // It is its own light on the cloud rather than a share of
-                // the cloud's colour: multiplied in, a storm's dark deck
-                // put out its own lightning.
-                let lit = garden::gives_off(
-                    garden::skylit(self.sky_clock()).truncate() * overhead.cloud
-                        + self.flashed().truncate(),
-                    self.sky_clock(),
-                );
-                let hung = Transform::at(self.looking_from())
-                    .with_scale(Vec3::splat(garden::deck_scale(self.looking_from())));
-
-                for (which, share) in overhead.decks {
-                    if share <= 0.004 {
-                        continue;
-                    }
-
-                    if let Some(picture) = self.skies.get(which).copied() {
-                        scene.push_textured(mesh, picture, &hung, lit.extend(share), aim::VOID);
-                    }
-                }
-            }
+            self.draw_the_sky(scene);
 
             if let Some(ground) = self.ground {
                 for ((bed, size), gravel) in garden::beds(self.room.reaches)
@@ -19097,6 +19129,56 @@ mod tests {
             was,
             game.at,
             game.forward()
+        );
+    }
+
+    /// Spec 0134: the hour is the layer's, not the building's.
+    ///
+    /// **What `elysium::it_is_morning_everywhere_in_it` used to hold.**
+    /// That one asked a 150 metre box whether a spot was in spec 0133's
+    /// place, and checked five spots inside it. The box is gone: the hour
+    /// comes off the layer, so there is no everywhere to check and the
+    /// claim is about the coordinate instead.
+    ///
+    /// Asked at one position on both layers, because the position is now
+    /// the thing that does not matter.
+    #[test]
+    fn the_hour_is_the_layers_and_not_the_buildings() {
+        let mut game = Arcade::new();
+
+        game.since = 7.25;
+
+        let at_home = game.sky_clock();
+
+        assert!(
+            (at_home - 7.25).abs() < 1e-4,
+            "the arcade's hour is {} rather than its own clock",
+            at_home
+        );
+
+        game.layer = layers::ELYSIUM;
+
+        let over_there = game.sky_clock();
+        let morning = garden::when(elysium::MORNING);
+
+        assert!(
+            (over_there - morning).abs() < 1e-4,
+            "spec 0133's hour is {} rather than its morning at {}",
+            over_there,
+            morning
+        );
+        assert!(
+            garden::sun_up(over_there) > 0.8,
+            "and the sun is not up at it"
+        );
+
+        // and the building's clock does not move it
+        game.since = 1903.5;
+
+        assert!(
+            (game.sky_clock() - morning).abs() < 1e-4,
+            "the building's clock moved spec 0133's hour to {}",
+            game.sky_clock()
         );
     }
 
