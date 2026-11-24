@@ -85,6 +85,12 @@ pub const OPTIONS: Options = Options {
             says: "print where you are standing, twice a second, on stderr",
         },
         Asked {
+            name: "--layer",
+            also: "",
+            takes: "<0 or 1>",
+            says: "stand in spec 0133's place rather than the arcade: a coordinate like the three --pose takes, and the one world a pose alone cannot reach",
+        },
+        Asked {
             name: "--fullscreen",
             also: "",
             takes: "",

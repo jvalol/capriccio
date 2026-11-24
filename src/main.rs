@@ -384,7 +384,10 @@ fn forgetting() -> bool {
 /// means starting again and saving as you go, which is what its own note
 /// says.
 fn a_diagnostic() -> bool {
-    done_already() || flying() || blitzkit::one_argument("--pose").is_some()
+    done_already()
+        || flying()
+        || blitzkit::one_argument("--pose").is_some()
+        || blitzkit::one_argument("--layer").is_some()
 }
 
 /// Whether this run flies rather than walks. `--fly`.
@@ -519,6 +522,30 @@ fn starting_hour() -> Option<f32> {
 /// rather than fought with.
 fn posed_at() -> Option<Pose> {
     read_pose(&blitzkit::one_argument("--pose")?)
+}
+
+/// Which layer this run stands on. `--layer 1`. Spec 0134.
+///
+/// **The fifth of the set, after `--fly`, `--pose`, `--at` and `--cost`.**
+/// Those put a camera at a place, at an hour, with a readout. A layer is a
+/// coordinate like the other three and `--pose` carries three of them, so
+/// without this there is one world a staged picture cannot be taken in:
+/// spec 0133's place is reached by walking into a sphere, and nothing a
+/// flag can say puts you on the far side of it.
+///
+/// That is not hypothetical. Every picture of that place taken on
+/// 2026-11-23 was `--fly --pose`, and the layer went in the same evening
+/// and took the method with it. The walk-the-building note makes this
+/// argument for the other flags: the slow part of finding a fault is
+/// getting to where you can see it.
+///
+/// Unknown numbers are the arcade, so a typo is the world you expected
+/// rather than a run with no ground in it.
+fn layered() -> layers::Layer {
+    match blitzkit::one_argument("--layer").as_deref().map(str::trim) {
+        Some("1") => layers::ELYSIUM,
+        _ => layers::ARCADE,
+    }
 }
 
 /// Whether the frame readout opens with the building rather than waiting for
@@ -10132,6 +10159,11 @@ impl Game for Arcade {
 
         // where to stand, if this run was told. Spec 0013's diagnostics.
         if first {
+            // and which world, per spec 0134. Before the pose, because
+            // `stand` is a position and a layer is which set of them it is
+            // a position in.
+            self.layer = layered();
+
             if let Some(pose) = posed_at() {
                 self.stand(pose);
             }
