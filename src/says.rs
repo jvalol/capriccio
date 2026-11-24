@@ -85,6 +85,12 @@ pub const OPTIONS: Options = Options {
             says: "print where you are standing, twice a second, on stderr",
         },
         Asked {
+            name: "--windowed",
+            also: "",
+            takes: "",
+            says: "open in a window rather than on the whole screen",
+        },
+        Asked {
             name: "--cost",
             also: "",
             takes: "",

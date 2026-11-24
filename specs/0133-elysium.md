@@ -50,6 +50,13 @@ Reached through the sphere, this place is nowhere you can see the building
 from, and nowhere the building can see. The rule protects against two skies
 in one view, and there is no view that holds both. So it may have its own.
 
+**And its own is cheaper than this spec first assumed.** The sky is not a
+dome standing in the world. `Scene::backdrop` hangs it off the eye, gated by
+`sees_outdoors`, so a second sky is the backdrop drawn with other colours
+while you are here rather than a second piece of geometry at a safe distance.
+Distance is still wanted, so that nothing of one place is in frame with the
+other, but it is not what makes the sky possible.
+
 **That is a decision and not a detail.** Spec 0055 asks that whoever builds a
 second sky do it on purpose. This is that, taken on the one ground that makes
 it safe, and it is the first thing to re-examine if this place ever becomes
@@ -106,9 +113,17 @@ metres from the nook's far wall to this room, and the one thing nobody does
 in a building is walk back down a stair they have just come up to see whether
 it still goes where it went. Here it does not.
 
-**The room is the same room.** Nothing is built for the other state of it.
-You are turned about, the stair is in front of you instead of behind, and the
-only thing that has changed is what is at the bottom of it.
+**The room is the same room to walk through, and two rooms to build.** The
+glass room stands over the nook and its stair comes down into the nook, so
+one piece of world cannot give that stair two bottoms. What is built is a
+second copy of the room, elsewhere, whose stair goes down to the shore, and
+the sphere moves you between them while the effect is covering the screen.
+Valhalla is the precedent: a whole place built somewhere else and walked to.
+
+Said plainly because the first draft of this spec claimed nothing was built
+for the other state, which was a claim about what you experience written as
+though it were a claim about the geometry. You experience one room turned
+about. What exists is two.
 
 **The effect is the sphere's own index.** `Scene::lens` takes one, which is
 how spec 0064 makes glass and how spec 0122 reads `glass::MIRROR`. Driving it

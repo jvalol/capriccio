@@ -814,6 +814,16 @@ pub const SAUNA_STOVE: Vec4 = vec4(0.15, 0.14, 0.14, 1.0);
 /// Alpha under one, so spec 0018 of the engine draws it see-through and the
 /// basin under it shows. A pool you cannot see into is a blue lid.
 pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.30);
+/// Spec 0133's place: the shore you land on, the water you cross, and the
+/// copy of the glass room standing over it.
+///
+/// **Pale and warm against everything else here.** This building is night,
+/// firelight and neon; that one is a morning. The first frame has to say so
+/// before anything else does, which is why the ground is nearly white rather
+/// than a green somebody has to look at twice.
+pub const SHORE: Vec4 = vec4(0.82, 0.78, 0.68, 1.0);
+pub const SHALLOWS: Vec4 = vec4(0.38, 0.72, 0.74, 0.42);
+pub const FAR_ROOM: Vec4 = vec4(0.70, 0.69, 0.66, 1.0);
 pub const WATER_HOT: Vec4 = vec4(0.32, 0.56, 0.60, 0.45);
 /// The sauna's glass, and the steam over hot water.
 ///

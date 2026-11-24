@@ -12,6 +12,7 @@ mod cellar;
 mod clock;
 mod cradle;
 mod display;
+mod elysium;
 mod field;
 mod garden;
 mod gate;
@@ -75,6 +76,13 @@ use room::Room;
 
 /// Where you stand, how fast, and how far you see.
 const RADIUS: f32 = 0.45;
+
+/// How little you have to have moved, with the keys still down, to count as
+/// pushing against something rather than walking.
+///
+/// A millimetre in a frame. At `SPEED` you cover seventy of those in a
+/// sixtieth of a second, so anything actually walking is two orders off it.
+const STUCK: f32 = 0.001;
 /// How far past the building the fill is given to work in, per spec 0049 of
 /// the engine.
 ///
@@ -834,6 +842,12 @@ struct Arcade {
     /// Whether that map is up. On, because it is a HUD and the point of one
     /// is that it is there; N puts it away.
     showing_map: bool,
+    /// Where spec 0133's glass is taking you, set the frame you push into
+    /// it and acted on once the walk is over.
+    ///
+    /// Held rather than done on the spot because `gone` is asked where you
+    /// would end up and is not the place that moves you.
+    went_through: Option<Vec3>,
     /// The sheet each of that plan's three storeys is cut on, per spec
     /// 0115. Kept for the same reason as the plan: it goes through the
     /// same mapping and so walks the same colliders.
@@ -1643,6 +1657,7 @@ impl Arcade {
             plan_lips,
             floors,
             showing_map: true,
+            went_through: None,
             plan_says: Vec::new(),
             bank: None,
             spin,
@@ -2736,6 +2751,24 @@ impl Arcade {
         } else {
             self.gone(wish, pace, dt)
         };
+
+        // **And spec 0133's glass, which moves you instead.** `gone` says
+        // where the walk would leave you and sets this when the walk left
+        // you nowhere because you were pushing into the sphere. The copy of
+        // the room is identical, so the move is the offset and a half turn:
+        // the stair you came up is behind you there and in front of you
+        // here, which is the whole of what you see change.
+        if let Some(off) = self.went_through.take() {
+            let (at, falling) = (self.at + off, 0.0);
+
+            self.at = at;
+            self.eye = at.y;
+            self.falling = falling;
+            self.yaw += std::f32::consts::PI;
+            self.let_go();
+
+            return 0.0;
+        }
         // the ride is not walking, so it takes no steps. Spec 0004 reads this
         // for the footfalls and `went` is all it reads.
         let went = if riding || flight {
@@ -3094,6 +3127,17 @@ impl Arcade {
     /// A method rather than three lines in `update`, so a test can ask it.
     fn pace(&self) -> f32 {
         let own = if self.running() { SPEED * RUNS } else { SPEED };
+
+        // **And spec 0133's crossing, which wades at the baths' own rate.**
+        // Two waters and one account of what wading does to you: the number
+        // is `spa::WADE` either way, and what differs is which water you are
+        // standing in. A second rate here would be a second thing to keep
+        // in step with the first.
+        let own = if elysium::wading(self.room.reaches, self.at) {
+            own * spa::WADE
+        } else {
+            own
+        };
 
         // and the bridge carries you up itself, per `bridge::CARRIES`
         spa::pace(self.room.reaches, self.at, own)
@@ -5707,6 +5751,13 @@ impl Arcade {
         out.extend(bridge::solid(self.room.reaches, self.deck_reaches));
         out.extend(gate::solid(self.room.reaches, &self.trail, self.gate));
         out.extend(valhalla::solid(self.room.reaches, &self.trail));
+        // and spec 0133's place, six hundred metres south, which belongs
+        // here for the same reason Valhalla does: it is somewhere you
+        // stand and it is not the building. Put inside `Room::solid`
+        // first, and then inside `building` before that, it made the
+        // building six hundred metres long and took the plan's sheet, the
+        // map's cut, the nook's benches and sixteen pictures with it.
+        out.extend(elysium::solid(self.room.reaches));
         // and spec 0068's village, which is out in the field and so is there
         // whatever the trail says: nothing was answered to earn it
         out.extend(village::solid(self.room.reaches));
@@ -8050,7 +8101,18 @@ impl Arcade {
         // is the arithmetic it always was under frame nought. The planner
         // keeps the frame walk, because a route is still planned over
         // whatever floors it is given.
-        walk::walk(
+        // **Spec 0133's glass, which is a crossing and not a slide.** The
+        // tesseract above does the same: you walk at a thing, and instead
+        // of sliding along it the frame changes under you. Here the thing
+        // is the sphere, and what it does is swap you for the copy of this
+        // room six hundred metres south and turn you about.
+        //
+        // Asked here rather than in the key handler because walking into
+        // it *is* the gesture: you are still holding forward, the plinth is
+        // not letting you anywhere, and the ball is what you are looking
+        // at. Standing and looking is not walking, which is what leaves
+        // spec 0064's exhibit alone.
+        let went = walk::walk(
             self.at,
             going,
             self.falling,
@@ -8064,8 +8126,22 @@ impl Arcade {
             // over it went by in the same frame, so the flight out of the
             // cellar went past at better than three units a second upwards.
             self.climbs <= 0.0,
-        )
+        );
+
+        // and the glass, if you are still pushing into it and it is what
+        // you are looking at. `went.0` is where the walk left you, so this
+        // asks whether the walk got you nowhere.
+        if going.length_squared() > 1e-6 && went.0.distance(self.at) < STUCK {
+            if let Some(off) =
+                elysium::through(self.room.reaches, self.looking_from(), self.facing())
+            {
+                self.went_through = Some(off);
+            }
+        }
+
+        went
     }
+
     /// Everything you can be holding down, let go of at once.
     ///
     /// One list, because the four that walk you and the four that turn you
@@ -8657,6 +8733,17 @@ impl Game for Arcade {
     /// The engine opens an ordinary window unless a game says otherwise,
     /// because pong is a rectangle and does not want one.
     fn opening(&self) -> blitzkit::Opening {
+        // **`--windowed`, which is what taking a picture of this needs.**
+        // A borderless fullscreen window goes on its own macOS space, and
+        // `CGWindowListCopyWindowInfo` does not list it from another one,
+        // so `screencapture -l` cannot find it at all: the whole
+        // screenshot path went dark the afternoon this building asked for
+        // the display. Nothing else notices, which is why it is a flag and
+        // not a change of mind.
+        if blitzkit::asked_for("--windowed") {
+            return blitzkit::Opening::Window;
+        }
+
         blitzkit::Opening::WholeScreen
     }
 
@@ -10887,6 +10974,12 @@ impl Game for Arcade {
                     column: self.column,
                 },
             );
+
+            // and spec 0133's place, six hundred metres south: the two
+            // shores, the water between them and the copy of this room
+            // standing over the near one. Drawn from the same boxes it is
+            // walked on, and only while you are near enough to see it.
+            elysium::draw(scene, self.room.reaches, self.looking_from(), cube);
 
             // and spec 0122's globe beside the ball, drawn whether or not
             // the ball is being traced: the two are separate things and a
@@ -18622,6 +18715,51 @@ mod tests {
             game.pitch.abs() < 0.01,
             "it walked the leg at {:.0} degrees off the level",
             game.pitch.to_degrees()
+        );
+    }
+
+    /// Spec 0133: walking at the sphere takes you through it.
+    ///
+    /// **The one this was missing.** `elysium::through` was tested on its
+    /// own and the push was tested nowhere, which is the half Jake found by
+    /// walking up to the glass and arriving nowhere. A threshold is two
+    /// things agreeing: what you are looking at, and that you are still
+    /// trying to walk into it.
+    #[test]
+    fn walking_at_the_sphere_takes_you_through_it() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        // standing in front of it on the stair's side, facing the glass
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        // yaw nought faces -z, which is from here towards the ball
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        // walk at it until the plinth stops you, then keep walking
+        let wish = game.forward();
+        let was = game.at;
+
+        for _ in 0..240 {
+            let (next, falling) = game.gone(wish, SPEED, 1.0 / 60.0);
+            game.at = next;
+            game.eye = next.y;
+            game.falling = falling;
+
+            if game.went_through.is_some() {
+                break;
+            }
+        }
+
+        assert!(
+            game.went_through.is_some(),
+            "walked from {:?} to {:?}, facing {:?}, and the glass did nothing",
+            was,
+            game.at,
+            game.forward()
         );
     }
 

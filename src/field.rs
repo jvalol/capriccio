@@ -635,6 +635,7 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // loop already works out and a second reckoning of it is a second
         // number for one thing.
         if crate::bridge::shades(reaches, at)
+            || crate::elysium::shades(reaches, at)
             || crate::village::shades(reaches, at)
             || crate::village::along_the_path(reaches, at)
             || crate::pond::crowds(reaches, at, reach)
@@ -691,6 +692,7 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // from leaning over it. What is on its islands is the islands' own
         // leaf fall.
         if crate::village::shades(reaches, at)
+            || crate::elysium::shades(reaches, at)
             || crate::village::on_the_way(reaches, at)
             || crate::bridge::banked(reaches, at)
             || crate::bridge::on_the_ledger(reaches, at)
