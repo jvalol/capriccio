@@ -225,7 +225,7 @@ carpet torn into bands. Here the seam is crossed level and one number does.
 - Every lamp is over a panel rather than on the ceiling. — `mirrors::tests::every_lamp_sits_over_a_panel`
 - The leaning glass stays off the wall and inside the frame. — `mirrors::tests::the_leaning_glass_clears_both_the_wall_and_the_frame`
 - No two pieces of one frame sit in the same place. — `mirrors::tests::no_two_pieces_of_a_frame_overlap`
-- The lamp over the way through has wall behind it. — `mirrors::tests::the_lamp_over_the_way_through_is_on_wall`
+- The way through is lit, without a lamp of its own. — `room::tests::the_way_through_is_lit_by_the_room`
 - The corridor reaches into no other room. — `mirrors::tests::the_corridor_is_clear_of_every_other_room`
 - Nothing is built against the west wall, which would be two walls in one plane. — `mirrors::tests::nothing_is_built_against_the_west_wall`
 

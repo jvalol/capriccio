@@ -213,35 +213,66 @@ machinery is wanted: it is a measured crossing, not an horizon.
 
 ## Acceptance criteria
 
-Nothing is built. These are the claims a build has to hold up, and the names
-are what the tests will be called.
+Much of this is built now, so these name the tests that hold it. The ones
+still marked unbuilt have no test yet and are what is left.
 
-- The way in is the sphere, and nothing else in the building opens
-  it. — `elysium::tests::only_the_sphere_lets_you_in`
-- Standing at the glass and looking at it does not take you through, however
-  long you stand. — `elysium::tests::looking_at_it_is_not_going_through_it`
+- Standing beside the glass, or looking at it from across the room, is not
+  going through it. — `elysium::tests::standing_beside_it_is_not_going_through_it`
 - Walking at it while it is what you are looking at
-  does. — `elysium::tests::pushing_into_the_glass_takes_you_through`
-- Coming through leaves you in the same room with the stair in front of
-  you. — `elysium::tests::the_stair_is_ahead_of_you_on_the_far_side`
-- The stair goes down to the nook on one side of it and to Elysium on the
-  other. — `elysium::tests::the_same_stair_has_two_bottoms`
+  does. — `tests::walking_at_the_sphere_takes_you_through_it`
+- And walking straight at it with a hand on the mouse, which is how anybody
+  would. — `tests::it_goes_through_walking_straight_at_it_while_drifting`
+- The fold starts on the step you take at it, not when the plinth stops
+  you. — `tests::the_fold_starts_on_the_step_and_not_on_the_plinth`
+- And it survives a frame that goes the wrong way, which is what a body
+  jittering against the plinth
+  does. — `tests::the_crossing_survives_a_frame_of_jitter`
+- Once started it finishes on its own, with nothing held
+  down. — `tests::walking_into_it_takes_you_with_nothing_held_down`
+- The room swaps at the top of the fold, with the frame
+  covered. — `tests::the_room_swaps_behind_the_black`
+- The glass winds from a mirror into a lens on the way
+  across. — `elysium::tests::the_glass_turns_from_a_mirror_into_a_lens`
+- And is its own tint at rest, so none of this dims spec 0064's
+  room. — `elysium::tests::the_glass_is_itself_until_you_walk_into_it`
 - The way back is the way in read backwards, so nobody can be stranded
-  there. — `elysium::tests::the_sphere_lets_you_out_the_way_it_let_you_in`
-- Nothing of the building is visible from inside it, and nothing of it from
-  the building, which is what its own sky
-  rests on. — `elysium::tests::neither_place_can_see_the_other`
-- It is in daylight whatever hour the building is
-  at. — `elysium::tests::it_is_morning_whenever_you_arrive`
-- There is nobody in it. — `elysium::tests::nobody_is_in_it`
+  there. — `elysium::tests::the_glass_takes_you_through_and_back`
+- The sun is up over it, whatever hour the building is
+  at. — `elysium::tests::the_sun_stands_well_up_over_elysium`
+- And that hour holds everywhere in it, including the room you land
+  in. — `elysium::tests::it_is_morning_everywhere_in_it`
 - You cross water to reach the garden, and cannot walk round
   it. — `elysium::tests::the_water_is_crossed_and_not_skirted`
-- The garden is in sight from the head of the stair, with the water between
-  you and it. — `elysium::tests::you_see_it_across_the_water_from_the_top`
 - Crossing slows you to a wade the way the baths
   do. — `elysium::tests::the_crossing_is_waded_at_the_baths_own_pace`
 - The crossing is about twenty seconds of wading, walked from the stair's
   foot to the garden. — `elysium::tests::the_crossing_takes_about_twenty_seconds`
+- The stair comes down on the near shore and not in the
+  water. — `elysium::tests::the_stair_comes_down_on_the_near_shore`
+- The field sows nothing on its ground, its water or its
+  shores. — `elysium::tests::the_field_sows_nothing_here`
+- The colonnade stands across the way in, on dry
+  ground. — `elysium::tests::the_colonnade_stands_across_the_way_in_on_dry_ground`
+- It reads as a ruin rather than as a pattern of
+  gaps. — `elysium::tests::the_colonnade_is_a_ruin_and_not_a_pattern`
+- Its second row is down in different places from its first, so the gaps
+  have something behind them. — `elysium::tests::you_cannot_see_through_both_rows_at_once`
+- Its horizon stands inside the sky, where it can be
+  drawn. — `elysium::tests::the_horizon_stands_no_further_out_than_the_fields`
+
+Unbuilt:
+
+- The way in is the sphere, and nothing else in the building opens
+  it. — `elysium::tests::only_the_sphere_lets_you_in`
+- Coming through leaves you with the stair in front of
+  you. — `elysium::tests::the_stair_is_ahead_of_you_on_the_far_side`
+- The stair goes down to the nook on one side of it and to here on the
+  other. — `elysium::tests::the_same_stair_has_two_bottoms`
+- Nothing of the building is visible from here and nothing of here from the
+  building. — `elysium::tests::neither_place_can_see_the_other`
+- There is nobody in it. — `elysium::tests::nobody_is_in_it`
+- The garden is in sight from the head of the stair, with the water between
+  you and it. — `elysium::tests::you_see_it_across_the_water_from_the_top`
 
 ### Verified by hand
 
