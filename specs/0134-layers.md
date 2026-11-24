@@ -1,6 +1,6 @@
 # 0134 Layers
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-23
 
 ## Goal
@@ -93,6 +93,15 @@ four lists at once: what you walk into, what is drawn, what lights you, and
 what you hear. Each of those asking in its own way is how a lamp ends up
 lighting a room on another layer. One predicate, called by all four.
 
+**The two layers stand on the same x and z.** Spec 0133 placed its world
+600 metres south and argued the distance at length; on a layer the distance
+is doing no work, so it was given up. *Neither place can see the other* now
+holds by construction rather than by being far off, which is what cannot be
+walked out of. It is also what made the last three leaks findable: a lamp
+600 metres away is culled by its own range and a voice by `CARRIES`, so each
+of the four lists was quietly right for the wrong reason until the two
+worlds shared their coordinates.
+
 **You change layer only where something says so.** Today that is spec
 0133's sphere and nothing else. Walking does not change it, falling does
 not change it, and there is no edge that changes it.
@@ -116,7 +125,7 @@ The value here is subtractive, and the list is the argument.
 
 ## Acceptance criteria
 
-Part of this is built. The ones marked unbuilt have no test yet.
+All four lists ask the layer. The fourth was the last and is below.
 
 - Anything that does not ask about a layer is in the
   arcade. — `layers::tests::what_does_not_ask_is_in_the_arcade`
@@ -135,23 +144,11 @@ Part of this is built. The ones marked unbuilt have no test yet.
 
 - No lamp lights across layers, which is the list that was
   leaking. — `tests::no_lamp_reaches_another_layer`
-
-### Not built yet
-
-The third list is held only indirectly, which is the wrong thing to hold:
-what this spec warns about is a list leaking on its own, and the lamps
-proved that is not hypothetical.
-
-**It wants something the engine does not expose.** What is drawn can only
-be read back off a `Scene` a renderer filled, and `Scene::batches` is
-private. Six read-backs are public, `outlines`, `point_lights`,
-`spot_lights`, `mirrors`, `glass_surfaces` and `lenses`, and none of them
-gives the instances. So this needs either a seventh accessor in blitzkit,
-which is a published crate and its own decision, or a different way of
-asking.
-
-- Nothing on another layer is
-  drawn. — `tests::nothing_on_another_layer_is_drawn`
+- Nothing on another layer is drawn, read off a filled scene and not off
+  the code that fills
+  it. — `tests::nothing_on_another_layer_is_drawn`
+- No voice of the building sounds on another layer, which is the fourth
+  list. — `tests::no_voice_reaches_another_layer`
 
 ### Verified by hand
 
@@ -163,20 +160,12 @@ asking.
 
 ## Open questions
 
-**Does spec 0133's place move onto the arcade's own ground?** It is 600
-metres south today and its geometry is placed off that. On a layer it could
-stand at the same x and z, which is the whole of what a tesseract means
-here, and it would make *neither place can see the other* true by
-construction rather than by distance. Spec 0133 argues that distance at
-length, so this supersedes an argument rather than filling a gap. It also
-makes `glass::Placed` simpler, since the shift falls away and only the turn
-is left.
-
 **What does the minimap do?** Spec 0132 draws the floor you are on. A layer
 is a second axis of the same question.
 
-**Is sound a fourth list or does it come for free?** The three visible ones
-are certain. The sound system has not been read with this in mind.
+**What does spec 0133's place sound like?** The fourth list is gated, so
+it is quiet: a layer with no voice of its own borrows none. A shore with
+water on it has a sound and this one does not make it yet.
 
 ## Out of scope
 

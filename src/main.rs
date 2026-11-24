@@ -547,13 +547,22 @@ fn posed_at() -> Option<Pose> {
 /// argument for the other flags: the slow part of finding a fault is
 /// getting to where you can see it.
 ///
-/// Unknown numbers are the arcade, so a typo is the world you expected
+/// **Nothing when the flag is absent**, like `posed_at` beside it, rather
+/// than the arcade. Returning a layer either way meant the first frame
+/// assigned one whatever was asked, which overwrites a layer set any other
+/// way: a renderer test that stood a game on spec 0133's layer had it put
+/// back to the arcade before anything was drawn, and the test counted the
+/// village in both worlds.
+///
+/// An unknown number is the arcade, so a typo is the world you expected
 /// rather than a run with no ground in it.
-fn layered() -> layers::Layer {
-    match blitzkit::one_argument("--layer").as_deref().map(str::trim) {
-        Some("1") => layers::ELYSIUM,
+fn layered() -> Option<layers::Layer> {
+    let said = blitzkit::one_argument("--layer")?;
+
+    Some(match said.trim() {
+        "1" => layers::ELYSIUM,
         _ => layers::ARCADE,
-    }
+    })
 }
 
 /// Whether the frame readout opens with the building rather than waiting for
@@ -3436,6 +3445,17 @@ impl Arcade {
             return;
         }
 
+        // **Nothing in here asks about the layer, and three things used to.**
+        // The ground, the trees and the horizon each had their own guard
+        // against spec 0133's place, written the afternoon before that
+        // place had a layer. `draw` branches and returns before this is
+        // called, so all three were unreachable: three accounts of one
+        // thing, and the kind that goes on looking right because the
+        // answer is the same.
+        //
+        // Found by a control that did not bite. Taking `draw`'s branch out
+        // left the test passing, because these were doing the work.
+
         // the walls up there that the sky can see, which is what
         // `Room::outside` asks the building for.
         if let Some(mesh) = self.wall_quad {
@@ -4126,15 +4146,6 @@ impl Arcade {
             return;
         }
 
-        // **Not in spec 0133's place, which has ground of its own.** The
-        // field's slab follows you wherever you are and knows about the
-        // building and nothing else, so it was laying grass under the shore
-        // and round the water: Jake's first picture of it is a tray on a
-        // lawn.
-        if self.layer == layers::ELYSIUM {
-            return;
-        }
-
         // the ground, snapped to its own grass so that walking moves the
         // ground under you rather than carrying it with you
         if let (Some(sward), Some(turf)) = (self.sward, self.turf) {
@@ -4160,11 +4171,7 @@ impl Arcade {
         //
         // Before the trees, because it stands behind everything out here and
         // a thing at infinity is drawn first.
-        //
-        // **And not in spec 0133's place**, which has its own: that ring is
-        // `aim::FAR_HILL`, a night blue, and a ninth of it is towers. A
-        // city at the edge of a morning with nobody in it.
-        if let (Some(hill), false) = (self.hill, self.layer == layers::ELYSIUM) {
+        if let Some(hill) = self.hill {
             for far in field::horizon(self.at) {
                 scene.push_material(
                     hill,
@@ -4177,20 +4184,6 @@ impl Arcade {
                     aim::DULL,
                 );
             }
-        }
-
-        // **And none of it in spec 0133's place.** The field sows round
-        // wherever you are standing, and `elysium::shades` keeps it off the
-        // shores and the water but not off the ground beyond them, so a
-        // trunk out there stands in mid air with nothing under it.
-        //
-        // Not the dark spike. I wrote that cause in here first and then
-        // checked it: the spike outlived this change, and listing every box
-        // in `elysium::solid` found no spike among them. It is the copied
-        // room, which is still the blocking model this file's neighbour
-        // says it is. This is its own small fault and worth keeping out.
-        if self.layer == layers::ELYSIUM {
-            return;
         }
 
         // the trees, which are three meshes stood many times
@@ -7504,12 +7497,39 @@ impl Arcade {
         }
     }
 
+    /// Which of the rooms with a voice you hear, if any.
+    ///
+    /// **Lifted out of `draw` for the reason `lamps` was.** Spec 0134 names
+    /// what you hear as the fourth of the four lists a layer governs, and
+    /// when the other three had been gated this one was still answering
+    /// from a position alone.
+    ///
+    /// The voices are handed in rather than read off `self.voices`, which
+    /// holds nothing until the audio files load. A test that read the field
+    /// would be asking an empty list, and an empty list answers None on
+    /// every layer whether or not anything here is right.
+    fn voice_heard(&self, ear: Vec3, places: &[(noise::Room, noise::Sounds)]) -> Option<usize> {
+        // **The building's voices are the building's.** `noise::room_at`
+        // answers from x, y and z and knows nothing of a layer, so the
+        // moment spec 0133's place took the arcade's own coordinates its
+        // sand over the hall's footprint heard the hall. A layer with no
+        // voice of its own is quiet rather than borrowing one.
+        if self.layer != layers::ARCADE {
+            return None;
+        }
+
+        // the voice of the room you are in, which is not the same as the
+        // nearest voice: the baths are under the garden, and the tub was
+        // nearer to most of the garden than anything the garden had.
+        noise::nearest(ear, noise::room_at(self.room.reaches, self.at), places)
+    }
+
     /// Every lamp that could light what you can see, and which of them
     /// cast shadows.
     ///
     /// **Lifted out of `draw`**, where it was built inline over nearly
-    /// four hundred lines. Spec 0134 calls what lights you one of three
-    /// lists a layer governs and warns that the three leak one at a time,
+    /// four hundred lines. Spec 0134 calls what lights you one of four
+    /// lists a layer governs and warns that they leak one at a time,
     /// and a list assembled inside a function that wants a GPU cannot be
     /// asked anything without one.
     ///
@@ -10794,7 +10814,9 @@ impl Game for Arcade {
             // and which world, per spec 0134. Before the pose, because
             // `stand` is a position and a layer is which set of them it is
             // a position in.
-            self.layer = layered();
+            if let Some(layer) = layered() {
+                self.layer = layer;
+            }
 
             if let Some(pose) = posed_at() {
                 self.stand(pose);
@@ -11144,10 +11166,7 @@ impl Game for Arcade {
                 .map(|(room, sounds, _)| (*room, *sounds))
                 .collect();
 
-            // the voice of the room you are in, which is not the same as the
-            // nearest voice: the baths are under the garden, and the tub was
-            // nearer to most of the garden than anything the garden had.
-            let heard = noise::nearest(ear, noise::room_at(self.room.reaches, self.at), &places);
+            let heard = self.voice_heard(ear, &places);
             // picked and bent the way a footstep is, or five pieces in a
             // fixed order is a bar of five beats. Spec 0009.
             self.pieced = self.pieced.wrapping_add(1);
@@ -16218,6 +16237,34 @@ mod tests {
         standing_at(at, looking_at, done, None)
     }
 
+    /// The same, on a given layer. Spec 0134.
+    ///
+    /// **Because a pose cannot reach the far side of a sphere**, which is
+    /// `--layer`'s argument and holds in a test for the same reason: the
+    /// only way into spec 0133's place is walking into glass, and a
+    /// renderer test does not walk.
+    fn standing_on_layer(
+        at: Vec3,
+        looking_at: Vec3,
+        layer: layers::Layer,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        move |renderer| {
+            let (mut arcade, mut geometry, mut text, sound) = built(renderer, false);
+
+            arcade.layer = layer;
+
+            posed(
+                &mut arcade,
+                &mut geometry,
+                &mut text,
+                &sound,
+                renderer,
+                at,
+                looking_at,
+            )
+        }
+    }
+
     /// The same, at an hour of the garden's day rather than at whatever one a
     /// fresh game opens on.
     ///
@@ -19186,6 +19233,84 @@ mod tests {
         );
     }
 
+    /// Spec 0134: nothing on another layer is drawn.
+    ///
+    /// **The last of the three lists, and the only one that wants a GPU.**
+    /// What stops you and what lights you are arithmetic; what is drawn can
+    /// only be read off a `Scene` a renderer filled. `Scene::instances` was
+    /// added to the engine for this, there having been six read-backs and
+    /// none of them the ordinary instances.
+    ///
+    /// Nothing at all on a machine with no adapter, which is a skip rather
+    /// than a failure, the same as the engine's pictures.
+    ///
+    /// The village, because it is the arcade's, large, and nowhere near
+    /// spec 0064's room, which is the one thing both layers draw. Looked at
+    /// from a spot that has it in frame, so an absence is the layer and not
+    /// the frustum: the same camera finds it on one layer and not the
+    /// other.
+    #[test]
+    fn nothing_on_another_layer_is_drawn() {
+        let reaches = reaches();
+        let all = village::solid(reaches);
+        let middle =
+            all.iter().fold(Vec3::ZERO, |sum, box_| sum + box_.center()) / all.len() as f32;
+        let from = middle + vec3(34.0, 2.0, 0.0);
+        // **Only the part of it that is off the ground.** Spec 0133's place
+        // stands on the arcade's own x and z now and its ground follows
+        // you, so a box drawn round the village's footprint has that sand
+        // in it: the first go at this counted 171 things and every one of
+        // them was Elysium's own floor. What is three metres up is the
+        // village and nothing else, its copy of spec 0064's room being
+        // over the nook.
+        // **Counted off the ground, which the first go was not.** Spec
+        // 0133's place stands on the arcade's own x and z now and its
+        // ground follows you, so anything inside the village's footprint
+        // includes that sand: the first count was 171 and every one was
+        // Elysium's own floor. Filtering the boxes by height does not work
+        // either, a wall's box starting at the ground. What is three
+        // metres up inside those boxes is the village, Elysium having
+        // nothing but flat ground here and its copy of spec 0064's room
+        // standing over the nook.
+        const OFF_THE_GROUND: f32 = 3.0;
+
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
+        else {
+            return;
+        };
+
+        let standing_in_the_village = |scene: &Scene| -> usize {
+            scene
+                .instances()
+                .filter(|one| {
+                    let at = vec3(one.model[3][0], one.model[3][1], one.model[3][2]);
+
+                    at.y > OFF_THE_GROUND && all.iter().any(|box_| box_.contains_point(at))
+                })
+                .count()
+        };
+
+        let (here, _) = standing_on_layer(from, middle, layers::ARCADE)(&mut renderer);
+        let ours = standing_in_the_village(&here);
+
+        let (there, _) = standing_on_layer(from, middle, layers::ELYSIUM)(&mut renderer);
+        let theirs = standing_in_the_village(&there);
+
+        assert!(
+            ours > 0,
+            "the arcade draws nothing standing in its own village, seen from \
+             {:?}, so this proves nothing",
+            from
+        );
+        assert_eq!(
+            theirs, 0,
+            "spec 0133's place draws {} things standing in the arcade's \
+             village, on a layer the village is not on",
+            theirs
+        );
+    }
+
     /// Spec 0134: no lamp lights across layers.
     ///
     /// **The third list, and the one that was leaking.** The arcade's
@@ -19241,6 +19366,46 @@ mod tests {
             !there.is_empty(),
             "nothing lights spec 0133's place at all, which is the fault \
              the copy's bays were added for"
+        );
+    }
+
+    /// Spec 0134: no voice of the building reaches another layer.
+    ///
+    /// **The fourth list**, and the last to be gated. `noise::room_at`
+    /// answers from a position, so while spec 0133's place was six hundred
+    /// metres south it happened to be right: nothing of the building was
+    /// within reach of those coordinates. Moving that place onto the
+    /// arcade's own ground made every one of its rooms audible from the
+    /// sand above it, which is the same fault the lamps had and found the
+    /// same way.
+    ///
+    /// The voices are handed in because `self.voices` is empty until the
+    /// audio loads, and `nearest` answers None on an empty list whatever
+    /// the layer. Taken from `room_at` itself, so whichever room the game
+    /// starts in is the one the list holds.
+    #[test]
+    fn no_voice_reaches_another_layer() {
+        let mut game = Arcade::new();
+        let ear = game.looking_from();
+        let places = [(
+            noise::room_at(game.room.reaches, game.at),
+            noise::Sounds::Everywhere,
+        )];
+
+        assert_eq!(
+            game.voice_heard(ear, &places),
+            Some(0),
+            "the arcade cannot hear the room it starts in, so this proves \
+             nothing"
+        );
+
+        game.layer = layers::ELYSIUM;
+
+        assert_eq!(
+            game.voice_heard(ear, &places),
+            None,
+            "a room of the building sounds in spec 0133's place, on a layer \
+             that room is not on"
         );
     }
 
