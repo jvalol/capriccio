@@ -151,6 +151,34 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             .map(|box_| place.box_of(box_)),
     );
 
+    // **And the colonnade, which you could walk through.** It was drawn and
+    // not stood: fifteen columns you passed straight into, which is the one
+    // fault that cannot be argued as a first build. The steps are here too,
+    // because a platform you do not step up onto is a painting of one.
+    //
+    // The architrave is five metres up with nothing here that climbs, so it
+    // is in this list for the same reason the walls are: what you see and
+    // what stops you come off one list or they come apart.
+    out.extend(stylobate(reaches));
+    out.extend(architraves(reaches));
+
+    let wide = COLUMN_WIDE + BASE_OUT * 2.0;
+
+    for (n, (stood, upright)) in columns(reaches).into_iter().enumerate() {
+        out.push(Aabb::from_center_size(
+            stood + Vec3::Y * BASE_TALL * 0.5,
+            vec3(wide, BASE_TALL, wide),
+        ));
+
+        match upright {
+            true => out.push(Aabb::from_center_size(
+                stood + Vec3::Y * (COLUMN_TALL * 0.5 + BASE_TALL * 0.5),
+                vec3(COLUMN_WIDE, COLUMN_TALL - BASE_TALL, COLUMN_WIDE),
+            )),
+            false => out.extend(drums(stood, n)),
+        }
+    }
+
     out
 }
 
@@ -498,32 +526,81 @@ pub fn draw(
         return;
     };
 
-    for (stood, upright) in colonnade(reaches) {
-        let turned = match upright {
-            true => (
-                stood + Vec3::Y * COLUMN_TALL * 0.5,
-                glam::Quat::IDENTITY,
-                vec3(COLUMN_WIDE, COLUMN_TALL, COLUMN_WIDE),
+    let block = |scene: &mut blitzkit::renderer::scene::Scene, box_: Aabb, tint| {
+        scene.push_material(
+            cube,
+            &Transform::at(box_.center()).with_scale(box_.size()),
+            tint,
+            crate::aim::MATTE,
+        );
+    };
+
+    // the steps it is set on, then what stands on them
+    for step in stylobate(reaches) {
+        block(scene, step, crate::aim::RUIN_SHADE);
+    }
+
+    for (n, (stood, upright)) in columns(reaches).into_iter().enumerate() {
+        // **The base is there either way.** A fallen column leaves its
+        // footing: a bare patch in the run says nothing fell, it says
+        // somebody forgot to draw one.
+        let wide = COLUMN_WIDE + BASE_OUT * 2.0;
+
+        block(
+            scene,
+            Aabb::from_center_size(
+                stood + Vec3::Y * BASE_TALL * 0.5,
+                vec3(wide, BASE_TALL, wide),
             ),
-            // **A fallen one lies along the row and half buried.** A
-            // cylinder laid on grass with its whole face showing reads as a
-            // pipe somebody put down; sunk a little it reads as something
-            // that has been there a while.
-            false => (
-                stood + Vec3::Y * COLUMN_WIDE * 0.34,
-                glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
-                vec3(COLUMN_WIDE, COLUMN_TALL * 0.78, COLUMN_WIDE),
-            ),
-        };
+            crate::aim::RUIN_SHADE,
+        );
+
+        if !upright {
+            for drum in drums(stood, n) {
+                scene.push_material(
+                    column,
+                    &Transform::at(drum.center())
+                        .with_rotation(glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2))
+                        .with_scale(vec3(COLUMN_WIDE, drum.size().x, COLUMN_WIDE)),
+                    crate::aim::RUIN_SHADE,
+                    crate::aim::MATTE,
+                );
+            }
+
+            continue;
+        }
+
+        let shaft = COLUMN_TALL - BASE_TALL - CAPITAL_TALL;
 
         scene.push_material(
             column,
-            &Transform::at(turned.0)
-                .with_rotation(turned.1)
-                .with_scale(turned.2),
-            crate::aim::SHORE,
-            crate::aim::MATTE,
+            &Transform::at(stood + Vec3::Y * (BASE_TALL + shaft * 0.5)).with_scale(vec3(
+                COLUMN_WIDE,
+                shaft,
+                COLUMN_WIDE,
+            )),
+            crate::aim::RUIN,
+            // no highlight on a turned shaft, for `glass::draw_the_room`'s
+            // reason: a point lamp on a cylinder bands every one of them at
+            // its own height.
+            crate::aim::VOID,
         );
+
+        let capital = COLUMN_WIDE + CAPITAL_OUT * 2.0;
+
+        block(
+            scene,
+            Aabb::from_center_size(
+                stood + Vec3::Y * (COLUMN_TALL - CAPITAL_TALL * 0.5),
+                vec3(capital, CAPITAL_TALL, capital),
+            ),
+            crate::aim::RUIN,
+        );
+    }
+
+    // and what it still carries across the top
+    for span in architraves(reaches) {
+        block(scene, span, crate::aim::RUIN);
     }
 }
 
@@ -542,6 +619,51 @@ pub const COLUMN_TALL: f32 = 5.4;
 pub const COLUMN_WIDE: f32 = 0.78;
 pub const COLUMN_APART: f32 = 4.6;
 pub const COLUMNS: usize = 15;
+
+/// What a column is made of, which is four things and not one.
+///
+/// **A shaft on its own is a post.** The first build stood fifteen bare
+/// cylinders of the shore's own colour on the shore's own sand, and from
+/// the water they read as a fence: nothing under them to say they were
+/// set, nothing over them to say they carried anything. Jake, looking at
+/// that from halfway across: the other side of the sphere needs filling
+/// out.
+///
+/// These are the pieces the eye reads a column by. The shaft keeps the
+/// lathe; the rest are blocks, which is what they are in stone.
+pub const BASE_TALL: f32 = 0.42;
+pub const BASE_OUT: f32 = 0.17;
+pub const CAPITAL_TALL: f32 = 0.40;
+pub const CAPITAL_OUT: f32 = 0.23;
+
+/// The stepped platform the whole run is set on.
+///
+/// **Because a building begins below the floor you walk on.** A column
+/// rising straight out of sand has been dropped there. Three steps say
+/// somebody levelled this ground first, and they give the run a line along
+/// its foot that reads from across the water, where a column at that
+/// distance is four pixels wide and its footing is the only thing with any
+/// length to it.
+pub const STEPS: usize = 3;
+pub const STEP_RISE: f32 = 0.26;
+pub const STEP_TREAD: f32 = 0.52;
+
+/// What survives across the top, where anything does.
+///
+/// **Some of it and not all.** A full entablature is a building in repair
+/// and this one is not; none of it is a row of posts again. What carries
+/// is a handful of runs with gaps torn in them, which is the shape that
+/// says there was once a roof here without claiming there still is.
+pub const ARCHITRAVE_TALL: f32 = 0.74;
+pub const ARCHITRAVE_DEEP: f32 = 1.12;
+
+/// How many pieces a fallen column lies in.
+///
+/// **It broke, it did not topple.** A whole cylinder on the ground is a
+/// pipe somebody put down, which is the note already in this file; drums
+/// with gaps between them is a column that came apart where its courses
+/// were.
+pub const DRUMS: usize = 5;
 
 /// How far back from the water's edge the colonnade stands.
 ///
@@ -564,6 +686,158 @@ pub fn standing(n: usize) -> bool {
 ///
 /// A fallen one lies where it stood, along the row, which is where a column
 /// goes when it goes: outward would be a column somebody pushed.
+/// How far behind the front row the second one stands, and how many of it
+/// there are.
+///
+/// **Because one row is a fence however well it is built.** With the
+/// columns given their bases and capitals the run read as architecture and
+/// still had nothing behind it: between every pair you saw sand to the
+/// horizon, so the whole far side was one line deep. A second row two bays
+/// back puts a standing column in most of those gaps, and walking changes
+/// which, which is the only thing that says depth without saying it.
+///
+/// Two bays and not one. At one the two rows read as a thick wall; at two
+/// there is room to be between them, which is what a peristyle is for.
+pub const ROWS_BACK: f32 = COLUMN_APART * 2.0;
+
+/// Which of the back row are standing.
+///
+/// **Offset from the front's gaps on purpose.** The front is down at 3, 4,
+/// 9 and 12; if the back were down in the same places you would see
+/// through both at once and the second row would have bought nothing. What
+/// it is down at instead is a different run of the same shape.
+pub fn behind_standing(n: usize) -> bool {
+    !matches!(n, 1 | 6 | 7 | 13)
+}
+
+/// The back row itself, set out like the front and two bays behind it.
+pub fn behind(reaches: f32) -> Vec<(Vec3, bool)> {
+    colonnade(reaches)
+        .into_iter()
+        .enumerate()
+        .map(|(n, (stood, _))| {
+            (
+                vec3(stood.x, stood.y, stood.z - ROWS_BACK),
+                behind_standing(n),
+            )
+        })
+        .collect()
+}
+
+/// Both rows, which is what everything that draws or stands on them wants.
+pub fn columns(reaches: f32) -> Vec<(Vec3, bool)> {
+    let mut out = colonnade(reaches);
+
+    out.extend(behind(reaches));
+    out
+}
+
+/// How high the colonnade's own floor stands over the shore.
+///
+/// Named once because the steps, the columns, the fallen drums and the
+/// boxes you walk into all need it, and five places saying `STEPS as f32 *
+/// STEP_RISE` is five places to get it wrong one at a time.
+pub fn stands_on() -> f32 {
+    STEPS as f32 * STEP_RISE
+}
+
+/// The stepped platform, widest at the bottom.
+///
+/// Each step oversails the one above by [`STEP_TREAD`] on every side, so
+/// the run has a moulded foot rather than an edge.
+pub fn stylobate(reaches: f32) -> Vec<Aabb> {
+    let stood = colonnade(reaches);
+    let (first, last) = (stood[0].0, stood[COLUMNS - 1].0);
+    let half = COLUMN_WIDE * 0.5 + BASE_OUT + STEP_TREAD;
+
+    (0..STEPS)
+        .map(|n| {
+            // the bottom step is the widest, so the count runs the other way
+            let out = (STEPS - n) as f32 * STEP_TREAD;
+            let low = n as f32 * STEP_RISE;
+
+            Aabb::new(
+                // back far enough for the second row, which stands on this
+                // too: a platform that stopped at the front row would leave
+                // the row behind it rising out of sand
+                vec3(
+                    first.x - half - out,
+                    low - 0.4,
+                    first.z - half - out - ROWS_BACK,
+                ),
+                vec3(last.x + half + out, low + STEP_RISE, last.z + half + out),
+            )
+        })
+        .collect()
+}
+
+/// Whether the run still carries its architrave over the bay that starts
+/// at column `n`.
+///
+/// **Only where both ends are up**, which is arithmetic rather than taste,
+/// and then not over all of those: the gaps are what keep it from reading
+/// as a building in repair.
+///
+/// **One long stretch and two fragments, not three goalposts.** The first
+/// pick took out bay 6, which is the middle of the only four-column run
+/// `standing` leaves: that split the one surviving piece into two single
+/// bays, and a lintel on two columns on its own is a gateway. Seen from
+/// the water it was three little arches in a row. The run 5 to 8 carries
+/// whole now, and what is dropped is at the ends, where a single bay reads
+/// as the last of something rather than as a thing in itself.
+pub fn carries(n: usize) -> bool {
+    standing(n) && standing(n + 1) && !matches!(n, 1 | 10)
+}
+
+/// What survives across the top of the run, bay by bay.
+pub fn architraves(reaches: f32) -> Vec<Aabb> {
+    let stood = colonnade(reaches);
+    let deep = ARCHITRAVE_DEEP * 0.5;
+    let top = stands_on() + COLUMN_TALL;
+
+    (0..COLUMNS - 1)
+        .filter(|n| carries(*n))
+        .map(|n| {
+            let (a, b) = (stood[n].0, stood[n + 1].0);
+
+            Aabb::new(
+                vec3(a.x, top, a.z - deep),
+                vec3(b.x, top + ARCHITRAVE_TALL, b.z + deep),
+            )
+        })
+        .collect()
+}
+
+/// A fallen column, lying along the run in pieces.
+///
+/// **Deterministic and not random.** The same stones are in the same
+/// places every run, which is what makes a ruin a place rather than a
+/// scatter: `n` is which column it was, and the two of them together pick
+/// the drift off a short table.
+pub fn drums(foot: Vec3, n: usize) -> Vec<Aabb> {
+    let shaft = COLUMN_TALL - BASE_TALL - CAPITAL_TALL;
+    let long = shaft / DRUMS as f32;
+    let radius = COLUMN_WIDE * 0.5;
+    // how far each drum rolled from where it would have landed, and how far
+    // it strayed across the run. A line of touching cylinders is a pipe cut
+    // into lengths; these fell.
+    let drift = [0.0, 0.14, -0.09, 0.26, 0.05, -0.17];
+    let stray = [0.0, -0.11, 0.18, -0.06, 0.13, 0.08];
+
+    (0..DRUMS)
+        .map(|k| {
+            let step = (k as f32 + 0.5) * long * 1.1;
+            let along = foot.x + radius + step + drift[(n + k) % drift.len()] * step;
+            let across = foot.z + stray[(n * 2 + k) % stray.len()];
+            // sunk, per the note on a cylinder laid on open ground
+            let middle = vec3(along, stands_on() + radius * 0.62, across);
+            let half = vec3(long * 0.5, radius, radius);
+
+            Aabb::new(middle - half, middle + half)
+        })
+        .collect()
+}
+
 pub fn colonnade(reaches: f32) -> Vec<(Vec3, bool)> {
     let middle = at(reaches);
     let (_, far) = shores(reaches);
@@ -574,7 +848,7 @@ pub fn colonnade(reaches: f32) -> Vec<(Vec3, bool)> {
             let along = n as f32 * COLUMN_APART - run * 0.5;
 
             (
-                vec3(middle.x + along, 0.0, far.max.z - COLONNADE_BACK),
+                vec3(middle.x + along, stands_on(), far.max.z - COLONNADE_BACK),
                 standing(n),
             )
         })
@@ -977,6 +1251,35 @@ mod tests {
             (foot.z - crate::glass::stair_foot(reaches).z).abs() > crate::field::GROUND_REACH,
             "this place is inside the field's own reach"
         );
+    }
+
+    /// The two rows are not down in the same places.
+    ///
+    /// **Which is the whole of what the second row buys.** It is there so
+    /// that the gaps in the front one have something standing behind them:
+    /// a back row down wherever the front is down would be a second fence
+    /// behind the first, visible from nowhere, and the far side would read
+    /// one line deep exactly as it did with one row.
+    ///
+    /// Asked of every bay rather than of the two lists, because the lists
+    /// are picked by hand and the point is what the pair of them leaves.
+    #[test]
+    fn you_cannot_see_through_both_rows_at_once() {
+        for n in 0..COLUMNS {
+            assert!(
+                standing(n) || behind_standing(n),
+                "column {} is down in both rows, so that bay is open to the \
+                 horizon and the back row bought nothing there",
+                n
+            );
+        }
+
+        // and the second row is a row, not a copy: some of it is down, or
+        // it is a wall behind a ruin
+        let down = (0..COLUMNS).filter(|n| !behind_standing(*n)).count();
+
+        assert!(down > 0, "nothing in the back row has fallen");
+        assert!(down < COLUMNS / 2, "more of the back row is down than up");
     }
 
     /// The ball is a mirror with a room in it until you walk into it.

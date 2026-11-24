@@ -824,6 +824,19 @@ pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.30);
 /// than a green somebody has to look at twice.
 pub const SHORE: Vec4 = vec4(0.82, 0.78, 0.68, 1.0);
 pub const SHALLOWS: Vec4 = vec4(0.38, 0.72, 0.74, 0.42);
+/// The stone of spec 0133's colonnade, and the steps it stands on.
+///
+/// **Its own value against the sand.** The first build drew the columns in
+/// `SHORE`, the shore's own colour, so from across the water a row of them
+/// was the ground standing up: nothing separated a shaft from the beach
+/// behind it. Cooler and a shade lighter, which is quarried stone beside
+/// sand and is also the only thing here that is not warm.
+pub const RUIN: Vec4 = vec4(0.87, 0.86, 0.83, 1.0);
+/// And what is in shadow under it: the steps, the bases, the fallen drums.
+///
+/// One value and not a second colour. A step reads by the line between its
+/// faces, and that line only exists if the two are not the same.
+pub const RUIN_SHADE: Vec4 = vec4(0.71, 0.70, 0.67, 1.0);
 /// The dark that opens in the glass while spec 0133's crossing runs.
 ///
 /// **Not quite nought in any channel.** Pure black takes the ambient and
