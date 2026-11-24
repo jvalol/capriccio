@@ -89,9 +89,16 @@ layer.
 
 **One place answers whether a thing is yours.** The fault this building
 keeps making is two lists of one thing, and a layer is a question asked by
-four lists at once: what you walk into, what is drawn, what lights you, and
-what you hear. Each of those asking in its own way is how a lamp ends up
-lighting a room on another layer. One predicate, called by all four.
+five lists at once: what you walk into, what is drawn, what lights you,
+what you hear, and what the map shows. Each of those asking in its own way
+is how a lamp ends up lighting a room on another layer. One predicate,
+called by all five.
+
+The fifth was written here as an open question and found later in a
+photograph: `media/village.png` of 2026-11-24 has an empty map panel in it,
+and the panel was empty only because that camera stood away from the hall's
+rooms. Four was the count of the lists somebody had thought of, which is
+not the same as the count of the lists.
 
 **The two layers stand on the same x and z.** Spec 0133 placed its world
 600 metres south and argued the distance at length; on a layer the distance
@@ -99,8 +106,9 @@ is doing no work, so it was given up. *Neither place can see the other* now
 holds by construction rather than by being far off, which is what cannot be
 walked out of. It is also what made the last three leaks findable: a lamp
 600 metres away is culled by its own range and a voice by `CARRIES`, so each
-of the four lists was quietly right for the wrong reason until the two
-worlds shared their coordinates.
+of the lists was quietly right for the wrong reason until the two worlds
+shared their coordinates. The map was the one that stayed wrong after they
+did, because being away from a room looks the same as having no room.
 
 **You change layer only where something says so.** Today that is spec
 0133's sphere and nothing else. Walking does not change it, falling does
@@ -125,7 +133,7 @@ The value here is subtractive, and the list is the argument.
 
 ## Acceptance criteria
 
-All four lists ask the layer. The fourth was the last and is below.
+All five lists ask the layer. The fifth was found last and is below.
 
 - Anything that does not ask about a layer is in the
   arcade. — `layers::tests::what_does_not_ask_is_in_the_arcade`
@@ -149,6 +157,9 @@ All four lists ask the layer. The fourth was the last and is below.
   it. — `tests::nothing_on_another_layer_is_drawn`
 - No voice of the building sounds on another layer, which is the fourth
   list. — `tests::no_voice_reaches_another_layer`
+- The map in the corner draws nothing on another layer, which is the fifth,
+  read off a filled geometry and not off the
+  code. — `tests::no_map_is_drawn_on_another_layer`
 
 ### Verified by hand
 
@@ -159,9 +170,6 @@ All four lists ask the layer. The fourth was the last and is below.
   from the arcade. — look both ways from both.
 
 ## Open questions
-
-**What does the minimap do?** Spec 0132 draws the floor you are on. A layer
-is a second axis of the same question.
 
 **What does spec 0133's place sound like?** The fourth list is gated, so
 it is quiet: a layer with no voice of its own borrows none. A shore with

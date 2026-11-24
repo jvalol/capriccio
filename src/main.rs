@@ -7500,7 +7500,7 @@ impl Arcade {
     /// Which of the rooms with a voice you hear, if any.
     ///
     /// **Lifted out of `draw` for the reason `lamps` was.** Spec 0134 names
-    /// what you hear as the fourth of the four lists a layer governs, and
+    /// what you hear as the fourth of the lists a layer governs, and
     /// when the other three had been gated this one was still answering
     /// from a position alone.
     ///
@@ -7528,7 +7528,7 @@ impl Arcade {
     /// cast shadows.
     ///
     /// **Lifted out of `draw`**, where it was built inline over nearly
-    /// four hundred lines. Spec 0134 calls what lights you one of four
+    /// four hundred lines. Spec 0134 calls what lights you one of the
     /// lists a layer governs and warns that they leak one at a time,
     /// and a list assembled inside a function that wants a GPU cannot be
     /// asked anything without one.
@@ -7546,8 +7546,8 @@ impl Arcade {
         // over there, spending a budget of sixty four on a beach.
         //
         // Found by lifting this out of `draw` to make it testable, which
-        // is what spec 0134 says the three lists are for: they leak one at
-        // a time, and two of them were right.
+        // is what spec 0134 says the lists are for: they leak one at a
+        // time, and the ones beside this were right.
         if self.layer == layers::ELYSIUM {
             return (self.lamps_over_there(eye), Vec::new());
         }
@@ -8149,10 +8149,28 @@ impl Arcade {
         ));
     }
 
+    /// The map in the corner, which is the fifth list a layer governs.
+    ///
+    /// Spec 0134 named four and asked what the map did as an open
+    /// question. This is the answer: it drew the arcade's plan wherever
+    /// you stood. `self.floors` is the building's, picked by height
+    /// alone, so the village got the hall's rooms whenever it happened to
+    /// stand over them, and the empty panel in `media/village.png` on
+    /// 2026-11-24 was that camera being away from them rather than the
+    /// map knowing anything.
     fn draw_the_map(&self, geometry: &mut Geometry) {
         use blitzkit::geometry::quad::Quad;
 
         if !self.showing_map {
+            return;
+        }
+
+        // **Nothing at all rather than an empty panel.** The same answer
+        // `voice_heard` gives: a layer with no map of its own borrows
+        // none, and does not show the frame of one either. A grey plate
+        // with a marker in it reads as a map that has broken, which is
+        // how this was found.
+        if self.layer != layers::ARCADE {
             return;
         }
 
@@ -19237,9 +19255,10 @@ mod tests {
 
     /// Spec 0134: nothing on another layer is drawn.
     ///
-    /// **The last of the three lists, and the only one that wants a GPU.**
-    /// What stops you and what lights you are arithmetic; what is drawn can
-    /// only be read off a `Scene` a renderer filled. `Scene::instances` was
+    /// **The only one of the lists that wants a GPU.** What stops you,
+    /// what lights you, what you hear and what the map shows are all
+    /// arithmetic; what is drawn can only be read off a `Scene` a renderer
+    /// filled. `Scene::instances` was
     /// added to the engine for this, there having been six read-backs and
     /// none of them the ordinary instances.
     ///
@@ -19411,9 +19430,44 @@ mod tests {
         );
     }
 
+    /// Spec 0134: the map in the corner does not draw another layer.
+    ///
+    /// **The fifth list**, which the spec had left as an open question
+    /// rather than a list at all. `draw_the_map` reads `self.floors` by
+    /// height and never asked which world you were in, so the village
+    /// drew the building's plan wherever it stood over it.
+    ///
+    /// The first half of this is what makes the second half mean
+    /// anything, and it is also the whole evidence for the claim in
+    /// `draw_the_map`'s comment: the same position, same height, same
+    /// everything draws the hall's rooms on layer nought. Only the layer
+    /// differs between the two halves, so only the layer can be what
+    /// silences it.
+    #[test]
+    fn no_map_is_drawn_on_another_layer() {
+        let mut game = Arcade::new();
+
+        let mut here = Geometry::new();
+        game.draw_the_map(&mut here);
+        assert!(
+            !here.runs().is_empty(),
+            "the arcade draws no map where it starts, so this proves nothing"
+        );
+
+        game.layer = layers::ELYSIUM;
+
+        let mut there = Geometry::new();
+        game.draw_the_map(&mut there);
+        assert!(
+            there.runs().is_empty(),
+            "the building's plan is drawn in spec 0133's place, {} runs of it",
+            there.runs().len()
+        );
+    }
+
     /// Spec 0134: nothing on another layer stops you.
     ///
-    /// **The first of the three lists**, and the one the back door was
+    /// **The first of the lists**, and the one the back door was
     /// about. Spec 0133's place stands on the arcade's own x and z now, so
     /// if `standing_on` ever stopped asking the layer you would walk into
     /// the village while wading, and into the water while in the hall.
