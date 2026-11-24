@@ -57,6 +57,23 @@ pub fn at(reaches: f32) -> Vec3 {
     vec3(crate::glass::stair_foot(reaches).x, 0.0, OUT)
 }
 
+/// The ground, which is this place's own and reaches past everything on it.
+///
+/// **Because the field's does not come here.** That slab follows you and
+/// knows about the building and nothing else, so it laid grass under the
+/// shore and round the water until it was told to keep out. Something has
+/// to be under you instead, and it has to reach further than you can see
+/// across, or the edge of it is the edge of the world.
+pub fn ground(reaches: f32) -> Aabb {
+    let middle = at(reaches);
+    let half = BROAD;
+
+    Aabb::new(
+        vec3(middle.x - half, -DEEP - 1.0, middle.z - half),
+        vec3(middle.x + half, -DEEP - 0.4, middle.z + half),
+    )
+}
+
 /// The near shore, where the stair comes down, and the far one the garden
 /// stands on. Each as its own slab.
 pub fn shores(reaches: f32) -> (Aabb, Aabb) {
@@ -120,7 +137,7 @@ pub fn wading(reaches: f32, at_: Vec3) -> bool {
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (near, far) = shores(reaches);
     let off = room_off(reaches);
-    let mut out = vec![near, bed(reaches), far];
+    let mut out = vec![ground(reaches), near, bed(reaches), far];
 
     out.extend(
         crate::glass::solid(reaches)
@@ -155,10 +172,15 @@ pub const AT_IT: f32 = 1.35;
 
 /// Which way the glass takes you from here, if you are at a sphere at all.
 ///
-/// `Some(off)` is the move that puts you in the other room: the building's
-/// sphere hands you [`room_off`] and this one hands you its negative, so the
-/// door works both ways and neither end needs to know which it is. `None` is
+/// `Some((off, middle))` is the move that puts you in the other room and
+/// the middle of the sphere you are looking into: the building's sphere
+/// hands you [`room_off`] and this one hands you its negative, so the door
+/// works both ways and neither end needs to know which it is. `None` is
 /// everywhere else in both buildings.
+///
+/// The middle comes back with it because the caller has to ask whether you
+/// are getting any closer to that glass, and working out which of the two
+/// you matched a second time is two accounts of one answer.
 ///
 /// **Which sphere you are at is the whole of the state.** There is no flag
 /// saying where you are, because there does not need to be one: both rooms
@@ -169,7 +191,7 @@ pub const AT_IT: f32 = 1.35;
 /// **Looking into it, and not merely near it.** The ray has to pass through
 /// the glass, which is what makes it the thing you are doing rather than the
 /// thing you walked past. Spec 0133.
-pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<Vec3> {
+pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<(Vec3, Vec3)> {
     let off = room_off(reaches);
     let (here, radius) = crate::glass::ball(reaches);
 
@@ -188,12 +210,78 @@ pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<Vec3> {
         }
 
         if (to - facing * along).length() <= radius {
-            return Some(way);
+            return Some((way, middle));
         }
     }
 
     None
 }
+
+/// How long pushing into the glass takes to carry you through, in seconds,
+/// and what the ball's index winds to on the way.
+///
+/// **Nothing is held down for it.** Walking into the glass starts it and it
+/// finishes on its own: no leaning, nothing to keep up and nothing to fail
+/// at. Jake, having tried two versions that asked him to hold: i don't
+/// think leaning is a mechanism that works, if i walk at it without
+/// stopping the transition should happen without delay.
+///
+/// So this is how long the room takes to fold away once you have walked
+/// into it, and not how long you have to keep at it. His log has the first
+/// version climbing to 0.89 and falling away, which is what leaning on
+/// something that does not give gets you.
+///
+/// `glass::INDEX` is -1, which engine spec 0098 draws as a mirror; a
+/// positive index bends what is behind it instead. Winding from one to the
+/// other is the room letting go of its own reflection and swallowing what
+/// is in front of it, which is the nearest thing in this engine to a hole
+/// opening, and it costs no pass, no target and no shader.
+pub const THROUGH: f32 = 0.7;
+
+pub const SWALLOWS: f32 = 2.4;
+
+/// What the ball's index is, a share `through` of the way into the
+/// crossing.
+///
+/// Eased so the first part of the push does little and the last of it does
+/// most: leaning on glass that gives way at once is a door, and this is
+/// meant to read as something resisting and then not.
+pub fn bending(through: f32) -> f32 {
+    let eased = through.clamp(0.0, 1.0).powi(3);
+
+    crate::glass::INDEX + (SWALLOWS - crate::glass::INDEX) * eased
+}
+
+/// Whether you are in this place at all, which is what decides whose
+/// ground is under you and whose sky is over you.
+///
+/// **Asked of where you are and of nothing else.** There is no flag saying
+/// which world you are in, for the reason [`through`] gives: both stand in
+/// the world at once and your own position is the answer. This is that
+/// question written down once so that the ground, the sky and the field all
+/// read the same one.
+///
+/// Generous past the edges, because the horizon is part of being somewhere:
+/// a shore whose grass turns back into the field's ten metres out is a
+/// shore in a field.
+pub fn holds(reaches: f32, at_: Vec3) -> bool {
+    let middle = at(reaches);
+
+    (at_.x - middle.x).abs() < BROAD && (at_.z - middle.z).abs() < BROAD
+}
+
+/// The hour it is here, always.
+///
+/// **Morning, and it does not move.** The building runs a day in
+/// `garden::DAY`, twenty seconds, and whatever hour you arrive at is
+/// whatever hour it is. Here it is one hour for ever, which is half of what
+/// makes this somewhere else: spec 0133 wants three differences visible in
+/// the first frame and this is the one you cannot miss.
+///
+/// A quarter of a day past dawn, which `garden::OPENS_AT` puts at 0.4 of
+/// it: high enough that the sun is up and the shadows are short, and short
+/// of noon, which is the hour with no shape to it.
+pub const MORNING: f32 = crate::garden::DAY * 0.55;
 
 /// How far past its own edge this keeps the field's scatter off.
 ///
@@ -255,7 +343,8 @@ pub fn draw(
     let (near, far) = shores(reaches);
 
     for piece in solid(reaches) {
-        let ground = piece == near || piece == far || piece == bed(reaches);
+        let ground =
+            piece == near || piece == far || piece == bed(reaches) || piece == ground(reaches);
 
         scene.push_material(
             cube,
@@ -372,8 +461,8 @@ mod tests {
         let at = vec3(here.x, here.y, here.z + 1.0);
         let into = (here - at).normalize();
 
-        let there = through(reaches, at, into).expect("the building's glass is a door");
-        let back = through(reaches, at + off, into).expect("the other one is too");
+        let (there, _) = through(reaches, at, into).expect("the building's glass is a door");
+        let (back, _) = through(reaches, at + off, into).expect("the other one is too");
 
         assert!(
             (there + back).length() < 1e-3,
@@ -427,6 +516,87 @@ mod tests {
         assert!(
             through(reaches, far, (here - far).normalize()).is_none(),
             "looking into it from across the room counts as being at it"
+        );
+    }
+
+    /// Spec 0133: the glass is a mirror until somebody leans on it, and a
+    /// lens by the time they are through.
+    ///
+    /// **Both ends, because either alone is a crossing that looks like a
+    /// cut.** Jake, on the first one: no wormhole or blackhole like visual
+    /// transformation. Engine spec 0098 draws an index at or under nought
+    /// as a mirror and a positive one as something that bends what is
+    /// behind it, so the sign changing is the room letting go of its own
+    /// reflection.
+    #[test]
+    fn the_glass_turns_from_a_mirror_into_a_lens() {
+        assert!(
+            (bending(0.0) - crate::glass::INDEX).abs() < 1e-6,
+            "untouched it is {:.2} and the room draws {:.2}",
+            bending(0.0),
+            crate::glass::INDEX
+        );
+        assert!(
+            bending(0.0) <= 0.0,
+            "untouched it is already bending rather than reflecting"
+        );
+        assert!(
+            bending(1.0) > 0.0,
+            "all the way through it is still a mirror at {:.2}",
+            bending(1.0)
+        );
+
+        // and it only ever goes one way on the trip in
+        let mut was = bending(0.0);
+
+        for n in 1..=10 {
+            let now = bending(n as f32 / 10.0);
+
+            assert!(
+                now >= was,
+                "it went back at {:.1}: {:.2} then {:.2}",
+                n,
+                was,
+                now
+            );
+            was = now;
+        }
+    }
+
+    /// Spec 0133: standing anywhere in this place, it is morning here and
+    /// the building's own hour is somewhere else.
+    ///
+    /// **Including inside the copy of the glass room**, which is the spot
+    /// you arrive at and the one place it would be easy to miss: the room
+    /// stands over the near shore rather than on the water, so a `holds`
+    /// drawn round the water alone would leave whoever just came through
+    /// standing in the building's night. Jake's recording of exactly that,
+    /// 2026-11-23: emptiness on the other side.
+    #[test]
+    fn it_is_morning_everywhere_in_it() {
+        let reaches = reaches();
+        let middle = at(reaches);
+        let foot = crate::glass::stair_foot(reaches) + room_off(reaches);
+        let (near, far) = shores(reaches);
+
+        for (which, spot) in [
+            ("the water", middle),
+            ("the near shore", vec3(middle.x, 0.0, near.min.z)),
+            ("the far shore", vec3(middle.x, 0.0, far.max.z)),
+            ("the stair's foot", foot),
+            ("the room over it", foot + vec3(0.0, crate::glass::UP, 0.0)),
+        ] {
+            assert!(
+                holds(reaches, spot),
+                "{} is not held by this place, so the building's hour follows you there",
+                which
+            );
+        }
+
+        // and the building itself is not
+        assert!(
+            !holds(reaches, crate::glass::stair_foot(reaches)),
+            "the building is held by this place, so its own day would stop"
         );
     }
 

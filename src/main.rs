@@ -80,9 +80,16 @@ const RADIUS: f32 = 0.45;
 /// How little you have to have moved, with the keys still down, to count as
 /// pushing against something rather than walking.
 ///
-/// A millimetre in a frame. At `SPEED` you cover seventy of those in a
-/// sixtieth of a second, so anything actually walking is two orders off it.
-const STUCK: f32 = 0.001;
+/// How little ground you have to be making toward a thing to count as
+/// pushing against it rather than walking at it.
+///
+/// A centimetre in a frame. At `SPEED` you cover seventy of those in a
+/// sixtieth of a second, so anything actually walking is seven times clear
+/// of it, and a body pressed against a face is well under: what this has to
+/// tolerate is the millimetre of jitter that comes out of resolving a body
+/// against a box every frame. A millimetre was the first number and it was
+/// too tight to hold for the second and a half spec 0133 asks for.
+const STUCK: f32 = 0.01;
 /// How far past the building the fill is given to work in, per spec 0049 of
 /// the engine.
 ///
@@ -842,12 +849,19 @@ struct Arcade {
     /// Whether that map is up. On, because it is a HUD and the point of one
     /// is that it is there; N puts it away.
     showing_map: bool,
-    /// Where spec 0133's glass is taking you, set the frame you push into
-    /// it and acted on once the walk is over.
+    /// Where spec 0133's glass is taking you, set the frame the push
+    /// finishes and acted on once the walk is over.
     ///
     /// Held rather than done on the spot because `gone` is asked where you
     /// would end up and is not the place that moves you.
     went_through: Option<Vec3>,
+    /// How far into that crossing you are, nought to one, which is what the
+    /// ball's index is wound by. Once it starts it runs to the end on its
+    /// own: there is nothing to hold down and nothing to let go of.
+    going_through: f32,
+    /// Which glass has hold of you, from the frame you walk into it until
+    /// it has put you through.
+    held_by: Option<Vec3>,
     /// The sheet each of that plan's three storeys is cut on, per spec
     /// 0115. Kept for the same reason as the plan: it goes through the
     /// same mapping and so walks the same colliders.
@@ -1658,6 +1672,8 @@ impl Arcade {
             floors,
             showing_map: true,
             went_through: None,
+            going_through: 0.0,
+            held_by: None,
             plan_says: Vec::new(),
             bank: None,
             spin,
@@ -4048,6 +4064,15 @@ impl Arcade {
             return;
         }
 
+        // **Not in spec 0133's place, which has ground of its own.** The
+        // field's slab follows you wherever you are and knows about the
+        // building and nothing else, so it was laying grass under the shore
+        // and round the water: Jake's first picture of it is a tray on a
+        // lawn.
+        if elysium::holds(self.room.reaches, self.at) {
+            return;
+        }
+
         // the ground, snapped to its own grass so that walking moves the
         // ground under you rather than carrying it with you
         if let (Some(sward), Some(turf)) = (self.sward, self.turf) {
@@ -5741,7 +5766,7 @@ impl Arcade {
     fn standing_on(&self) -> Vec<Aabb> {
         let mut out = self.room.solid();
 
-        if field::afoot(&out, self.at) {
+        if field::afoot(&out, self.at) && !elysium::holds(self.room.reaches, self.at) {
             out.extend(field::solid(self.room.reaches, self.at));
         }
 
@@ -8129,12 +8154,58 @@ impl Arcade {
         );
 
         // and the glass, if you are still pushing into it and it is what
-        // you are looking at. `went.0` is where the walk left you, so this
-        // asks whether the walk got you nowhere.
-        if going.length_squared() > 1e-6 && went.0.distance(self.at) < STUCK {
-            if let Some(off) =
+        // you are looking at.
+        //
+        // **How far you got the way you asked, and not how far you got.**
+        // This read the whole distance first, which means a body sliding
+        // along the plinth counts as walking: Jake, having had to come at
+        // the ball obliquely to get through, since dead on left him free to
+        // drift sideways and only a corner stopped him in both axes at
+        // once. A face you are pressed against takes your forward progress
+        // and leaves the rest, so forward progress is the thing to ask
+        // about.
+        let mut pushing = None;
+
+        if going.length_squared() > 1e-6 {
+            if let Some((off, middle)) =
                 elysium::through(self.room.reaches, self.looking_from(), self.facing())
             {
+                // **Are you getting any closer to that glass.** Not whether
+                // you moved, which a body sliding along a flat face does
+                // plenty of, and not progress along what you asked for,
+                // which has a sideways component of its own the moment your
+                // hand is on a mouse. The plinth takes everything that
+                // would close the gap and leaves the rest.
+                let closing = (went.0 - self.at).dot((middle - self.at).normalize_or_zero());
+
+                if closing < STUCK {
+                    pushing = Some(off);
+                }
+            }
+        }
+
+        // **And the crossing winds rather than happening.** Pushing drives
+        // it toward one and letting go lets it fall back, so leaning on the
+        // glass swallows the room and standing up again gives it back. Only
+        // at the far end does it move you.
+        // **Walking into it is the whole of it.** The first frame you push
+        // into the glass takes hold, and from there the room folds away on
+        // its own: nothing is held down, nothing can be let go of, and
+        // there is nothing to fail at halfway.
+        //
+        // Two versions before this asked you to lean. Jake, on both: i
+        // don't think leaning is a mechanism that works, if i walk at it
+        // without stopping the transition should happen without delay. His
+        // log had the first one climbing to 0.89 and falling away, which is
+        // what leaning on something that does not give gets you.
+        self.held_by = self.held_by.or(pushing);
+
+        if let Some(off) = self.held_by {
+            self.going_through += dt / elysium::THROUGH;
+
+            if self.going_through >= 1.0 {
+                self.going_through = 0.0;
+                self.held_by = None;
                 self.went_through = Some(off);
             }
         }
@@ -8541,6 +8612,25 @@ impl Arcade {
         self.wall_clock.unwrap_or_else(clock::now)
     }
 
+    /// What hour the sky and the sun are drawn at.
+    ///
+    /// **The building's own clock, unless you are in spec 0133's place.**
+    /// There it is `elysium::MORNING` and stays there, which is how that
+    /// place has its own daylight without a second sky existing anywhere:
+    /// `Scene::backdrop` hangs the sky off the eye, so what differs is the
+    /// hour it is drawn at and not the geometry.
+    ///
+    /// Read by everything that asks the time of day what colour it is, so
+    /// that the sun, the fill and the backdrop cannot disagree about which
+    /// world they are lighting.
+    fn sky_clock(&self) -> f32 {
+        if elysium::holds(self.room.reaches, self.at) {
+            return elysium::MORNING;
+        }
+
+        self.since
+    }
+
     fn facing(&self) -> Vec3 {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
@@ -8733,18 +8823,29 @@ impl Game for Arcade {
     /// The engine opens an ordinary window unless a game says otherwise,
     /// because pong is a rectangle and does not want one.
     fn opening(&self) -> blitzkit::Opening {
-        // **`--windowed`, which is what taking a picture of this needs.**
-        // A borderless fullscreen window goes on its own macOS space, and
-        // `CGWindowListCopyWindowInfo` does not list it from another one,
-        // so `screencapture -l` cannot find it at all: the whole
-        // screenshot path went dark the afternoon this building asked for
-        // the display. Nothing else notices, which is why it is a flag and
-        // not a change of mind.
+        // **A window the size of the screen, with the menu bar still on
+        // it.** Jake, 2026-11-23: full screen should be a cli option, but
+        // not the default. full screen window should be, with the smaller
+        // window an engine default if one of the others is not provided.
+        //
+        // `--fullscreen` hands the display over and takes the system's own
+        // furniture off it, which is `Opening::WholeScreen`. It is a flag
+        // rather than the default because a borderless fullscreen window
+        // gets its own macOS space: it cannot be photographed with
+        // `screencapture -l` from another one, and quitting is the only way
+        // back to whatever else you were doing.
+        //
+        // `--windowed` is the engine's own default, `Opening::Window`, for
+        // when you want the thing in a box beside something else.
+        if blitzkit::asked_for("--fullscreen") {
+            return blitzkit::Opening::WholeScreen;
+        }
+
         if blitzkit::asked_for("--windowed") {
             return blitzkit::Opening::Window;
         }
 
-        blitzkit::Opening::WholeScreen
+        blitzkit::Opening::Filled
     }
 
     /// Takes the cursor so the mouse can look, and gives it back when the
@@ -9960,6 +10061,26 @@ impl Game for Arcade {
                     self.standing_in
                 );
 
+                // **And what spec 0133's glass thinks is happening.** The
+                // crossing is three things agreeing and the swell only
+                // shows one of them, so watching it stall says nothing
+                // about which. This says whether the glass is in your line
+                // at all, how far the wind-up has got, and whether this
+                // place is holding you.
+                eprintln!(
+                    "  glass {}  through {:.2}  elysium {}",
+                    match elysium::through(self.room.reaches, self.looking_from(), self.facing()) {
+                        Some((off, middle)) => format!(
+                            "yes, {:.2} off its middle, taking you {:.0}",
+                            self.looking_from().distance(middle),
+                            off.z
+                        ),
+                        None => String::from("no"),
+                    },
+                    self.going_through,
+                    elysium::holds(self.room.reaches, self.at)
+                );
+
                 // and what the building has been given up, which is the one
                 // place spec 0036's record is read. Behind the same env var
                 // and on stderr, because the rule that spec sets is that
@@ -10806,9 +10927,10 @@ impl Game for Arcade {
         // none of them, which `room::outline` records as measured, so a sun
         // that swings and reddens and goes out changes the garden and nothing
         // else.
-        let (colour, strength) = garden::sunlit(self.since);
+        let clock = self.sky_clock();
+        let (colour, strength) = garden::sunlit(clock);
 
-        scene.light.direction = garden::sunlight(self.since);
+        scene.light.direction = garden::sunlight(clock);
         scene.light.color = colour;
         // and nothing at all in a room with no sky, per `Room::sees_the_sky`.
         // The sun cannot reach these rooms and the map cannot quite say so.
@@ -10966,6 +11088,7 @@ impl Game for Arcade {
                 scene,
                 &self.room,
                 self.since,
+                elysium::bending(self.going_through),
                 glass::Meshes {
                     cube,
                     sphere: seen.then_some(self.globe_mesh).flatten(),
@@ -11787,12 +11910,13 @@ impl Game for Arcade {
             // the cloud comes after the moon and the sun, per spec 0099.
             if let (Some(dome), Some(wash)) = (self.dome, self.wash) {
                 if self.sees_outdoors {
-                    let sky = garden::overhead(self.since).sky;
+                    let clock = self.sky_clock();
+                    let sky = garden::overhead(clock).sky;
 
                     scene.backdrop(
                         dome,
                         wash,
-                        garden::gives_off(garden::skylit(self.since).truncate() * sky, self.since)
+                        garden::gives_off(garden::skylit(clock).truncate() * sky, clock)
                             .extend(1.0),
                         900.0,
                     );
@@ -18760,6 +18884,146 @@ mod tests {
             was,
             game.at,
             game.forward()
+        );
+    }
+
+    /// Spec 0133: and it works walking straight at it, which is the way
+    /// anybody would.
+    ///
+    /// **The one Jake found by playing.** The first version asked whether
+    /// you had moved at all, and a body pressed against a flat face is free
+    /// to slide along it: dead on, any drift sideways read as walking and
+    /// the glass never fired, so the only way through was to jam yourself
+    /// into a corner of the plinth. This walks at it with a sideways push
+    /// the whole time, which is what a hand on a mouse does.
+    #[test]
+    fn it_goes_through_walking_straight_at_it_while_drifting() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        // forward, and a wobble to one side with it, which is what a hand
+        // on a mouse does. Not a constant shove: holding a third of your
+        // speed sideways for the second and a half this takes is strafing,
+        // and it walks you off the end of the plinth.
+        for n in 0..300 {
+            let drift = ((n as f32) / 9.0).sin() * 0.18;
+            let wish = (game.forward() + vec3(drift, 0.0, 0.0)).normalize();
+
+            let (next, falling) = game.gone(wish, SPEED, 1.0 / 60.0);
+            game.at = next;
+            game.eye = next.y;
+            game.falling = falling;
+
+            if game.went_through.is_some() {
+                break;
+            }
+        }
+
+        assert!(
+            game.went_through.is_some(),
+            "pushed into the glass while drifting and ended at {:?} with nothing happening",
+            game.at
+        );
+    }
+
+    /// Spec 0133: the crossing survives a frame that goes the wrong way.
+    ///
+    /// **The one that cost two recordings.** The wind-up fell back at the
+    /// rate it climbed, so one frame of jitter against the plinth undid a
+    /// frame of leaning and the swell could run for half a minute without
+    /// ever reaching the end. Jake, watching it: still not seeing what i
+    /// want. This pushes with every fourth frame thrown away.
+    #[test]
+    fn the_crossing_survives_a_frame_of_jitter() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        for n in 0..600 {
+            // every fourth frame, let go entirely
+            let wish = if n % 4 == 3 {
+                Vec3::ZERO
+            } else {
+                game.forward()
+            };
+            let (next, falling) = game.gone(wish, SPEED, 1.0 / 60.0);
+
+            game.at = next;
+            game.eye = next.y;
+            game.falling = falling;
+
+            if game.went_through.is_some() {
+                break;
+            }
+        }
+
+        assert!(
+            game.went_through.is_some(),
+            "leaning on it with a quarter of the frames dropped never got through; it reached {:.2}",
+            game.going_through
+        );
+    }
+
+    /// Spec 0133: walking into it takes you, with nothing held down.
+    ///
+    /// **Two versions asked you to lean and both were wrong.** Jake, on
+    /// them: i don't think leaning is a mechanism that works, if i walk at
+    /// it without stopping the transition should happen without delay. So
+    /// this walks into the glass and then stops dead, hands off, and the
+    /// crossing still happens.
+    #[test]
+    fn walking_into_it_takes_you_with_nothing_held_down() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        let mut hands_off = false;
+
+        for _ in 0..600 {
+            if game.going_through > 0.0 {
+                hands_off = true;
+            }
+
+            let wish = if hands_off {
+                Vec3::ZERO
+            } else {
+                game.forward()
+            };
+            let (next, falling) = game.gone(wish, SPEED, 1.0 / 60.0);
+
+            game.at = next;
+            game.eye = next.y;
+            game.falling = falling;
+
+            if game.went_through.is_some() {
+                break;
+            }
+        }
+
+        assert!(hands_off, "it never started, so this proves nothing");
+        assert!(
+            game.went_through.is_some(),
+            "let go the moment it started and it never took me; it reached {:.2}",
+            game.going_through
         );
     }
 

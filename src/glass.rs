@@ -1990,7 +1990,15 @@ pub struct Meshes {
     pub column: Option<MeshId>,
 }
 
-pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Meshes) {
+/// Draws the room, with the ball at whatever index it is holding.
+///
+/// **The index is handed in rather than read.** It is [`INDEX`] standing
+/// still, and spec 0133 winds it off that while somebody is pushing into
+/// the glass: an index at or under nought is a mirror and a positive one
+/// bends what is behind it, so winding between them is the room letting go
+/// of its reflection and swallowing the one in front of it. Nothing else
+/// in here cares what it is.
+pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, index: f32, meshes: Meshes) {
     let Meshes {
         cube,
         sphere,
@@ -2080,7 +2088,7 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
         sphere,
         &Transform::at(middle).with_scale(Vec3::splat(across * 2.0)),
         silvered(since),
-        INDEX,
+        index,
     );
 }
 

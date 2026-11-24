@@ -85,10 +85,16 @@ pub const OPTIONS: Options = Options {
             says: "print where you are standing, twice a second, on stderr",
         },
         Asked {
+            name: "--fullscreen",
+            also: "",
+            takes: "",
+            says: "take the whole display, with nothing of the system over it",
+        },
+        Asked {
             name: "--windowed",
             also: "",
             takes: "",
-            says: "open in a window rather than on the whole screen",
+            says: "open in a small window rather than filling the screen",
         },
         Asked {
             name: "--cost",
