@@ -35,6 +35,29 @@ dimension can't be added to support spaces existing on top of each other.
 The whole building can be a tesseract.* With a layer apiece, neither world
 needs a boundary, because they are not in each other's way.
 
+## What this building already calls w
+
+**Spec 0021 has a tesseract in it and it is implemented.** `tesseract.rs`
+owns `Axis::W` and Hinton's words for the two ways along it, ana and kata.
+That room is eight cells of one cube and its `w` picks which cell you are
+standing in; this spec's `w` picks which world. They are the same idea at
+two scales, and a reader who meets both should be told so rather than
+work it out.
+
+Nothing is shared between them in code. The tesseract room's cells are
+inside one room on one layer, and this coordinate does not reach into it.
+
+**And spec 0021 paid for a lesson that applies here.** Its cells were alike
+in everything but a word on a wall, so walking between them told you
+nothing: *a cell is a closed box with no landmark in it, and everything you
+can see inside one is stated relative to the frame you happen to be
+standing in.* Three fixes failed before a map worked.
+
+Two layers are not that, because they do not look alike: one is the arcade
+at night and the other is a morning with nobody in it, which is the whole
+of spec 0133. But if a third layer ever arrives that resembles another,
+0021's note is what it will cost.
+
 ## Behavior
 
 **Every body, collider, drawn thing and lamp is on exactly one layer**, named

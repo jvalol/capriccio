@@ -22,6 +22,7 @@ mod globe;
 mod gyro;
 mod kept;
 mod keys;
+mod layers;
 // **Allowed to be unused until the bench exists.** Spec 0050's cube is being
 // built state first: what a turn does to twenty pieces is provable without a
 // bench, a colour or a mesh, and none of those are decided yet. The allow
@@ -836,6 +837,13 @@ struct Arcade {
     /// Whether that map is up. On, because it is a HUD and the point of one
     /// is that it is there; N puts it away.
     showing_map: bool,
+    /// Which world you are standing in, per spec 0134.
+    ///
+    /// **The fourth coordinate.** It sits beside `at` rather than inside
+    /// it, so nothing in blitzkit and nothing that does not ask about a
+    /// layer has to change. Spec 0133's glass is the only thing that moves
+    /// it.
+    layer: layers::Layer,
     /// Whether spec 0133's glass has reached the top of its fold, set that
     /// frame and acted on once the walk is over.
     ///
@@ -1677,6 +1685,7 @@ impl Arcade {
             plan_lips,
             floors,
             showing_map: true,
+            layer: layers::ARCADE,
             went_through: false,
             going_through: 0.0,
             held_by: None,
@@ -2798,6 +2807,7 @@ impl Arcade {
             self.at = at;
             self.eye = at.y;
             self.falling = 0.0;
+            self.layer = self.layer.across();
             self.let_go();
 
             return 0.0;
@@ -4086,7 +4096,7 @@ impl Arcade {
         // building and nothing else, so it was laying grass under the shore
         // and round the water: Jake's first picture of it is a tray on a
         // lawn.
-        if elysium::holds(self.room.reaches, self.at) {
+        if self.layer == layers::ELYSIUM {
             return;
         }
 
@@ -4119,7 +4129,7 @@ impl Arcade {
         // **And not in spec 0133's place**, which has its own: that ring is
         // `aim::FAR_HILL`, a night blue, and a ninth of it is towers. A
         // city at the edge of a morning with nobody in it.
-        if let (Some(hill), false) = (self.hill, elysium::holds(reaches, self.at)) {
+        if let (Some(hill), false) = (self.hill, self.layer == layers::ELYSIUM) {
             for far in field::horizon(self.at) {
                 scene.push_material(
                     hill,
@@ -4144,7 +4154,7 @@ impl Arcade {
         // in `elysium::solid` found no spike among them. It is the copied
         // room, which is still the blocking model this file's neighbour
         // says it is. This is its own small fault and worth keeping out.
-        if elysium::holds(self.room.reaches, self.at) {
+        if self.layer == layers::ELYSIUM {
             return;
         }
 
@@ -5799,9 +5809,21 @@ impl Arcade {
     /// is", the drawn half moved to `in_the_deep` and this half stayed
     /// where it was. See the note on `outdoors` in `before_frame`.
     fn standing_on(&self) -> Vec<Aabb> {
+        // **One world's boxes, per spec 0134.** What stops you is what is on
+        // your layer and nothing else, which is how two places stand on the
+        // same ground without a boundary: spec 0133's had one, drawn at 150
+        // metres, and a step over it put you in the arcade's field at night.
+        //
+        // The shape is spec 0021's. Inside the tesseract the walk is handed
+        // `tesseract::solid_in_a_cell` rather than this list, for the same
+        // reason and by the same argument.
+        if self.layer == layers::ELYSIUM {
+            return elysium::solid(self.room.reaches, self.at);
+        }
+
         let mut out = self.room.solid();
 
-        if field::afoot(&out, self.at) && !elysium::holds(self.room.reaches, self.at) {
+        if field::afoot(&out, self.at) {
             out.extend(field::solid(self.room.reaches, self.at));
         }
 
@@ -5811,13 +5833,6 @@ impl Arcade {
         out.extend(bridge::solid(self.room.reaches, self.deck_reaches));
         out.extend(gate::solid(self.room.reaches, &self.trail, self.gate));
         out.extend(valhalla::solid(self.room.reaches, &self.trail));
-        // and spec 0133's place, six hundred metres south, which belongs
-        // here for the same reason Valhalla does: it is somewhere you
-        // stand and it is not the building. Put inside `Room::solid`
-        // first, and then inside `building` before that, it made the
-        // building six hundred metres long and took the plan's sheet, the
-        // map's cut, the nook's benches and sixteen pictures with it.
-        out.extend(elysium::solid(self.room.reaches, self.at));
         // and spec 0068's village, which is out in the field and so is there
         // whatever the trail says: nothing was answered to earn it
         out.extend(village::solid(self.room.reaches));
@@ -8714,7 +8729,7 @@ impl Arcade {
     /// that the sun, the fill and the backdrop cannot disagree about which
     /// world they are lighting.
     fn sky_clock(&self) -> f32 {
-        if elysium::holds(self.room.reaches, self.at) {
+        if self.layer == layers::ELYSIUM {
             return garden::when(elysium::MORNING);
         }
 
@@ -10183,7 +10198,7 @@ impl Game for Arcade {
                 // at all, how far the wind-up has got, and whether this
                 // place is holding you.
                 eprintln!(
-                    "  glass {}  through {:.2}  elysium {}",
+                    "  glass {}  through {:.2}  layer w {}",
                     match elysium::through(self.room.reaches, self.looking_from(), self.facing()) {
                         Some(middle) => format!(
                             "yes, {:.2} off its middle at {:.0}",
@@ -10193,7 +10208,7 @@ impl Game for Arcade {
                         None => String::from("no"),
                     },
                     self.going_through,
-                    elysium::holds(self.room.reaches, self.at)
+                    self.layer.w()
                 );
 
                 // and what the building has been given up, which is the one
@@ -14648,7 +14663,7 @@ impl Game for Arcade {
         // Only while you are over there, because the two rooms are six
         // hundred metres apart and a lamp in one is nothing in the other:
         // these would be ten shades spent on a room nobody can see.
-        if elysium::holds(self.room.reaches, self.at) {
+        if self.layer == layers::ELYSIUM {
             let place = elysium::placing(self.room.reaches);
 
             for at in glass::lamps(self.room.reaches) {
@@ -19050,6 +19065,83 @@ mod tests {
             was,
             game.at,
             game.forward()
+        );
+    }
+
+    /// Spec 0134: the glass changes which layer you are on, and walking
+    /// does not.
+    ///
+    /// **The back door, held shut.** Spec 0133's place was a box 150 metres
+    /// each way and its ground was a slab of the same size, so a step over
+    /// that line put you in the arcade's field at night. There is no line
+    /// now: what stops you is what is on your layer, and the only thing
+    /// that changes a layer is this glass.
+    ///
+    /// Walked through `aimed_and_moved` rather than `gone`, because the
+    /// crossing lands in the first and every other test of it drives the
+    /// second.
+    #[test]
+    fn only_the_sphere_changes_the_layer() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        assert_eq!(game.layer, layers::ARCADE, "a run does not start at home");
+
+        game.walking = [true, false, false, false];
+
+        for _ in 0..(60 * 8) {
+            game.aimed_and_moved(1.0 / 60.0);
+
+            if game.layer != layers::ARCADE {
+                break;
+            }
+        }
+
+        assert_eq!(
+            game.layer,
+            layers::ELYSIUM,
+            "walked into the glass from {:?} and stayed in the arcade",
+            at
+        );
+
+        // and then walked a long way in the open, with no glass anywhere
+        // near. You arrive inside the room, which is four walls and no
+        // distance, so this sets out from the garden's own shore: what used
+        // to happen out there is that an edge put you back in the
+        // building's world.
+        let (_, garden) = elysium::shores(reaches);
+        let was = vec3(garden.center().x, 0.0, garden.center().z);
+
+        game.at = was;
+        game.eye = was.y;
+        game.falling = 0.0;
+        game.let_go();
+        game.yaw = std::f32::consts::FRAC_PI_2;
+        game.walking = [true, false, false, false];
+
+        for _ in 0..(60 * 60) {
+            game.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            game.at.distance(was) > 60.0,
+            "the body did not get anywhere, so this proves nothing: {:?} to {:?}",
+            was,
+            game.at
+        );
+        assert_eq!(
+            game.layer,
+            layers::ELYSIUM,
+            "a minute's walk from {:?} to {:?} left spec 0133's place",
+            was,
+            game.at
         );
     }
 
