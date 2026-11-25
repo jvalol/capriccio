@@ -34,7 +34,7 @@ away once, for the site, on 2026-11-07. Nothing here trades it again.
 ## Where it is, which is nowhere
 
 **Through the sphere, and not across the field.** Spec 0064's room stands
-fifteen metres over the nook with one object in it: a glass sphere traced
+a storey over the nook, 3.5 metres by `glass::UP`, with one object in it: a glass sphere traced
 against the building's own geometry. You already see the whole building
 through it, bent. Going in is the one threshold this building has that needs
 no door, no key and no sign.
@@ -108,8 +108,8 @@ key; on time spent, which needs a counter spec 0036 forbids pointing at you.
 This is none of them. You walk at the glass, and the way back out of the room
 is the way on.
 
-**What it rewards is going back down.** Spec 0064's stair climbs fifteen
-metres from the nook's far wall to this room, and the one thing nobody does
+**What it rewards is going back down.** Spec 0064's stair climbs a storey
+from the nook's far wall to this room, fourteen risers and 3.5 metres, and the one thing nobody does
 in a building is walk back down a stair they have just come up to see whether
 it still goes where it went. Here it does not.
 
@@ -171,8 +171,8 @@ this is a draft. Jake's call, 2026-11-23.
 garden is across the water. Jake's call, 2026-11-23.
 
 **Because the phrase only reads if the water is between you and it.** A
-garden in daylight across water, seen from the head of a stair fifteen metres
-up, is a thing you walk down towards. Landing on the far side spends the
+garden in daylight across water, seen from the head of a stair a storey up,
+is a thing you walk down towards. Landing on the far side spends the
 water as scenery you have already passed, and the descent then descends
 towards nothing in particular.
 
@@ -260,19 +260,24 @@ still marked unbuilt have no test yet and are what is left.
 - Its horizon stands inside the sky, where it can be
   drawn. — `elysium::tests::the_horizon_stands_no_further_out_than_the_fields`
 
-### Not built yet
-
 - The way in is the sphere, and nothing else in the building opens
   it. — `elysium::tests::only_the_sphere_lets_you_in`
 - Coming through leaves you with the stair in front of
   you. — `elysium::tests::the_stair_is_ahead_of_you_on_the_far_side`
 - The stair goes down to the nook on one side of it and to here on the
-  other. — `elysium::tests::the_same_stair_has_two_bottoms`
+  other, and it is one stair. — `elysium::tests::the_same_stair_has_two_bottoms`
+- The garden is in sight from the head of the stair, with the water between
+  you and it. — `elysium::tests::you_see_it_across_the_water_from_the_top`
+
+### Not built yet
+
 - Nothing of the building is visible from here and nothing of here from the
   building. — `elysium::tests::neither_place_can_see_the_other`
 - There is nobody in it. — `elysium::tests::nobody_is_in_it`
-- The garden is in sight from the head of the stair, with the water between
-  you and it. — `elysium::tests::you_see_it_across_the_water_from_the_top`
+
+Spec 0134's `tests::nothing_on_another_layer_is_drawn` holds one direction
+of the first of those, the village being absent from here. The other
+direction, this place being absent from the building, has nothing on it.
 
 ### Verified by hand
 

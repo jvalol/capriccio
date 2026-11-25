@@ -8943,8 +8943,10 @@ impl Arcade {
         // **Spec 0133's glass, which is a crossing and not a slide.** The
         // tesseract above does the same: you walk at a thing, and instead
         // of sliding along it the frame changes under you. Here the thing
-        // is the sphere, and what it does is swap you for the copy of this
-        // room six hundred metres south and turn you about.
+        // is the sphere, and what it does is put you in the copy of this
+        // room, which stands on the same three coordinates on spec 0134's
+        // other layer. Nothing turns: the copy is what stands end for end,
+        // so its stairwell is already at the end you are looking at.
         //
         // Asked here rather than in the key handler because walking into
         // it *is* the gesture: you are still holding forward, the plinth is
@@ -9937,8 +9939,8 @@ impl Game for Arcade {
         }
 
         // and spec 0133's, only while you are over there: rewriting a
-        // thousand nodes a frame for water six hundred metres away is a
-        // bill nobody can see, which is `SEES`'s argument again.
+        // thousand nodes a frame for water on a layer you are not standing
+        // on is a bill nobody can see, which is `SEES`'s argument again.
         if let Some(mesh) = self.elysium_sea_mesh {
             if self.layer == layers::ELYSIUM {
                 renderer.update_mesh(mesh, &self.elysium_sea.surface());

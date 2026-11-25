@@ -1448,8 +1448,9 @@ pub fn draw_the_stair(
     sconce: MeshId,
 ) {
     // **Set out in the room's own numbers and drawn `off` from them.**
-    // Spec 0133 stands a copy of this room six hundred metres south, and
-    // it is this room: one list of pieces, drawn twice. Everything below
+    // Spec 0133 stands a copy of this room on its own layer, where it has
+    // the same three coordinates and is turned end for end, and it is this
+    // room: one list of pieces, drawn twice. Everything below
     // reads `reaches` as if it were at home, so a tread added here is a
     // tread on that stair and there is no second account to drift.
     let moved = |at: Vec3| Transform::at(place.of(at)).with_rotation(place.turn());
@@ -1655,8 +1656,9 @@ pub fn draw_the_room(
     column: Option<MeshId>,
 ) {
     // **Set out in the room's own numbers and drawn `off` from them.**
-    // Spec 0133 stands a copy of this room six hundred metres south, and
-    // it is this room: one list of pieces, drawn twice. Everything below
+    // Spec 0133 stands a copy of this room on its own layer, where it has
+    // the same three coordinates and is turned end for end, and it is this
+    // room: one list of pieces, drawn twice. Everything below
     // reads `reaches` as if it were at home, so a tread added here is a
     // tread on that stair and there is no second account to drift.
     let moved = |at: Vec3| Transform::at(place.of(at)).with_rotation(place.turn());
@@ -2120,8 +2122,9 @@ pub fn draw(
     } = meshes;
     let Fold { index, swell, dark } = fold;
     // **Set out in the room's own numbers and drawn `off` from them.**
-    // Spec 0133 stands a copy of this room six hundred metres south, and
-    // it is this room: one list of pieces, drawn twice. Everything below
+    // Spec 0133 stands a copy of this room on its own layer, where it has
+    // the same three coordinates and is turned end for end, and it is this
+    // room: one list of pieces, drawn twice. Everything below
     // reads `reaches` as if it were at home, so a tread added here is a
     // tread on that stair and there is no second account to drift.
     let moved = |at: Vec3| Transform::at(place.of(at)).with_rotation(place.turn());

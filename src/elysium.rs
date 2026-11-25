@@ -4,15 +4,18 @@
 //! whole place built elsewhere in the world and arrived at on foot. The
 //! glass room stands over the nook and its stair comes down into the nook,
 //! so one piece of world cannot give that stair two bottoms. What is here is
-//! a second copy of that room, a long way off, whose stair goes down to a
+//! a second copy of that room, on its own layer, whose stair goes down to a
 //! shore instead.
 //!
-//! **A long way off so that nothing of one place is in frame with the
-//! other.** Not for the sky's sake: `Scene::backdrop` hangs the sky off the
-//! eye rather than standing it in the world, so this place's own daylight is
-//! a colour drawn while you are here. The distance is so that nothing of the
-//! building is on this horizon and nothing of this is on the building's,
-//! which is the whole of what spec 0055 made one sky to protect.
+//! **On its own layer so that nothing of one place is in frame with the
+//! other.** It was six hundred metres south for that, and spec 0134 made it
+//! a fourth coordinate instead: the two stand on the same three and are
+//! nowhere near each other all the same. Not for the sky's sake either:
+//! `Scene::backdrop` hangs the sky off the eye rather than standing it in
+//! the world, so this place's own daylight is a colour drawn while you are
+//! here. What the separation is for is that nothing of the building is on
+//! this horizon and nothing of this is on the building's, which is the
+//! whole of what spec 0055 made one sky to protect.
 
 use blitzkit::collision::Aabb;
 use glam::{vec2, vec3, Vec2, Vec3};
@@ -150,11 +153,11 @@ pub fn solid(reaches: f32, at_: Vec3) -> Vec<Aabb> {
 
     // **The ground that follows you only follows you here.** It is a slab
     // three hundred metres across centred on wherever you are standing,
-    // which is right out here and is a floor through the building at a
-    // metre down everywhere else: `tests::the_clip_walks_the_whole_route`
+    // which is this place's own floor and is a floor through the building
+    // at a metre down everywhere else: `tests::the_clip_walks_the_whole_route`
     // found it in the cellar, two of the route's places walled off by a
-    // sheet of Elysium. The rest of this list is fixed geometry six
-    // hundred metres away and wants no such test.
+    // sheet of Elysium. The rest of this list is fixed geometry on a layer
+    // the building is not on, and wants no such test.
     out.push(ground(at_));
 
     out.extend(
@@ -1121,6 +1124,205 @@ mod tests {
 
     fn reaches() -> f32 {
         crate::room::Room::of(crate::games()).reaches
+    }
+
+    /// Spec 0133: one stair, and two places for it to come down in.
+    ///
+    /// **What is actually held is that there is one stair.** Every box of
+    /// spec 0064's room is in [`solid`] moved, `glass::solid` being the
+    /// only account of it, so a tread added to that stair is a tread on
+    /// this one. A second account would pass every other test in this file
+    /// and come apart one tread at a time, which is the fault this
+    /// building has written down under a dozen names.
+    #[test]
+    fn the_same_stair_has_two_bottoms() {
+        let reaches = reaches();
+        let place = placing(reaches);
+        let over_there = solid(reaches, place.of(crate::glass::stair_foot(reaches)));
+        let room = crate::glass::solid(reaches);
+
+        assert!(
+            !room.is_empty(),
+            "that room is nothing, so this proves nothing"
+        );
+
+        for box_ in room {
+            let want = place.box_of(box_);
+
+            assert!(
+                over_there.iter().any(|one| {
+                    (one.min - want.min).length() < 1e-3 && (one.max - want.max).length() < 1e-3
+                }),
+                "the room's box at {:?} has no copy over here",
+                box_.min
+            );
+        }
+
+        // and the two bottoms, which is what one stair buys
+        let ours = crate::glass::stair_foot(reaches);
+        let theirs = place.of(ours);
+        let (nook_at, nook_size) = crate::room::nook_floor(reaches);
+        let nook = Aabb::from_center_size(
+            vec3(nook_at.x, 1.0, nook_at.z),
+            vec3(nook_size.x, 2.0, nook_size.z),
+        );
+
+        assert!(
+            nook.contains_point(vec3(ours.x, 1.0, ours.z)),
+            "the arcade's bottom tread is at {:?}, which is not in the nook",
+            ours
+        );
+        assert!(
+            shores(reaches)
+                .0
+                .contains_point(vec3(theirs.x, -DEEP * 0.5, theirs.z)),
+            "this one's bottom tread is at {:?}, which is not on the near shore",
+            theirs
+        );
+        assert!(
+            ours.distance(theirs) > crate::glass::SPAN * 0.5,
+            "the two bottoms are {:.1} apart, which is one place and not two",
+            ours.distance(theirs)
+        );
+    }
+
+    /// Spec 0133: coming through leaves you with the stair in front of you.
+    ///
+    /// **Which is the whole of why the copy stands end for end.** Walking
+    /// at the glass means you came from the stair, so it is behind you;
+    /// `Placed::of` is a reflection, so the way to a point of the room is
+    /// negated by the crossing and what was behind is ahead. Nothing turns
+    /// at the threshold and nothing needs to. A copy that was slid rather
+    /// than turned leaves the stair behind you on both sides, which is the
+    /// version this replaced.
+    #[test]
+    fn the_stair_is_ahead_of_you_on_the_far_side() {
+        let reaches = reaches();
+        let place = placing(reaches);
+        let (ball, radius) = crate::glass::ball(reaches);
+        let head = crate::glass::stair_head(reaches);
+        let flat = |way: Vec3| vec3(way.x, 0.0, way.z).normalize();
+        let facing = flat(ball - head);
+        // at the plinth, having walked from the stair at the glass
+        let at = ball - facing * (radius + AT_IT * 0.5);
+        let ahead = |from: Vec3, to: Vec3| flat(to - from).dot(facing);
+
+        assert!(
+            ahead(at, head) < -0.5,
+            "the stair you came up is {:.2} off your back, so this proves nothing",
+            ahead(at, head)
+        );
+        assert!(
+            through(reaches, at, facing).is_some(),
+            "standing at {:?} is not walking into the glass, so this proves nothing",
+            at
+        );
+
+        let over = place.of(at);
+
+        assert!(
+            ahead(over, place.of(head)) > 0.5,
+            "coming through leaves the stair {:.2} off your line rather than ahead of you",
+            ahead(over, place.of(head))
+        );
+    }
+
+    /// Spec 0133: the sphere is the way in and nothing else is.
+    ///
+    /// **Swept rather than argued.** `standing_beside_it_is_not_going
+    /// _through_it` holds the four ways to be at the glass and miss it;
+    /// this one asks the rest of the building, where the answer has to be
+    /// no from every spot in every direction. A door that opens anywhere
+    /// else is spec 0036's rule broken, since somebody who never finds the
+    /// trail would find this.
+    #[test]
+    fn only_the_sphere_lets_you_in() {
+        let reaches = reaches();
+        let place = placing(reaches);
+        let room = crate::glass::inside(reaches);
+        let rooms = [room, place.box_of(room)];
+        let mut opened = 0;
+
+        for step in 0..8 {
+            let turn = step as f32 * std::f32::consts::FRAC_PI_4;
+            let facing = vec3(turn.sin(), 0.0, -turn.cos());
+
+            for x in -30..=30 {
+                for z in -30..=30 {
+                    for up in [crate::EYE, crate::glass::UP + crate::EYE] {
+                        let at = vec3(x as f32 * 2.0, up, z as f32 * 2.0);
+                        // **The room's own footprint and not `AT_IT`
+                        // again.** Asking whether a spot is inside the
+                        // reach the door itself uses is asking the door
+                        // what it just did, and would pass however far
+                        // that reach were widened. Either copy of spec
+                        // 0064's room is a bound this test does not set.
+                        let in_the_room = rooms.iter().any(|one| {
+                            at.x >= one.min.x
+                                && at.x <= one.max.x
+                                && at.z >= one.min.z
+                                && at.z <= one.max.z
+                        });
+
+                        match through(reaches, at, facing) {
+                            None => continue,
+                            Some(_) => assert!(
+                                in_the_room,
+                                "the glass opens at {:?} facing {:?}, which is \
+                                 outside both copies of the room it stands in",
+                                at, facing
+                            ),
+                        }
+
+                        opened += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            opened > 0,
+            "the glass opens nowhere on this sweep, so it proves nothing"
+        );
+    }
+
+    /// Spec 0133: the garden is in sight from the head of the stair, with
+    /// the water between you and it.
+    ///
+    /// **Both halves or the phrase does not read.** Landing on the far
+    /// side spends the water as scenery you have already passed, and a
+    /// garden you cannot see from the top is a descent towards nothing in
+    /// particular. In sight is the camera's own half angle, 30 degrees of
+    /// a `fov_y` of 60, with the view level: looking down is not needed.
+    #[test]
+    fn you_see_it_across_the_water_from_the_top() {
+        let reaches = reaches();
+        let place = placing(reaches);
+        let eye = place.of(crate::glass::stair_head(reaches)) + Vec3::Y * crate::EYE;
+        let (_, far) = shores(reaches);
+        // where the garden starts, which is the near edge of its shore and
+        // the steepest thing you have to look down at
+        let starts = vec3(far.center().x, 0.0, far.max.z);
+        let down = (eye.y - starts.y).atan2((starts - eye).truncate().distance(eye.truncate()));
+
+        assert!(
+            down < 30f32.to_radians(),
+            "the garden starts {:.0} degrees below level, where half the view is 30",
+            down.to_degrees()
+        );
+
+        let (middle, size) = water(reaches);
+        let over_the_water = (1..40).any(|n| {
+            let along = eye + (starts - eye) * (n as f32 / 40.0);
+
+            (along.x - middle.x).abs() <= size.x * 0.5 && (along.z - middle.z).abs() <= size.y * 0.5
+        });
+
+        assert!(
+            over_the_water,
+            "nothing between the stair at {:?} and the garden at {:?} is water",
+            eye, starts
+        );
     }
 
     /// Spec 0133: the crossing is about twenty seconds of wading.
