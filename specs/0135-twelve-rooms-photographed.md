@@ -26,26 +26,43 @@ which is the hall, and the hall is the least surprising room in it.
 
 ## Which twelve
 
-The hall, the nook, the cellar, the baths, the garden, the gallery, the back
-room, the hall of mirrors, the imaginarium, the way up, the glass room, and
-Valhalla's hall.
+The hall, the nook, the cellar, the baths, the garden, the pond in it, the
+gallery, the back room, the hall of mirrors, the glass room, Valhalla's hall,
+and the tesseract room.
 
 **Places you stand in**, which is the whole of the rule. What it leaves out
 is everything framed to make a test fail rather than to be looked at: what is
-behind the wall is nearly black on purpose, the clock, the readout and the
-register are instrument panels, and the skies, the sun and the moon are one
-object against a backdrop.
+behind the wall is nearly black on purpose, and the clock, the readout, the
+skies, the sun and the moon are one object against a backdrop.
 
 **And not the village**, which is out of doors and already has a published
-picture of its own.
+picture of its own. The field, the horizon and the steading go with it.
+
+**The garden twice, which is deliberate.** One is the room from its way in
+and one is the pond, which is the thing people stand and look at. They are
+the two pictures of it that are not the same picture.
+
+**Not the imaginarium and not the way up, because they do not exist.** Jake
+parked them, the hotel and the register with them, on 2026-11-11, under
+`src/parked/`: every room here that works puts its idea in the world and
+those three put the idea in your head first. This spec named both of them in
+its first draft, off a contact sheet of `tests/rooms`, where
+`imaginarium.png`, `wayup.png` and `register.png` are still sitting with no
+test that reads them. They are leftovers of the parking, and a picture file
+is not evidence that a room is in the building.
+
+**The tesseract gets the building's first picture test of it.** It is a room
+you stand in, it is live, and `tesseract::posed` is its pose already, so what
+is missing is the test, which this spec's own design says is where a pose
+belongs.
 
 ## One pose, read twice
 
 This is the whole of the design and the rest is plumbing.
 
 Each room's camera is named once, in `rooms::shot`, and both the picture test
-and the staged shot read it. The poses exist already and each was argued
-over: the nook is shot along its length because across it is a grey slab once
+and the staged shot read it. Eleven of the twelve poses exist already and
+each was argued over: the nook is shot along its length because across it is a grey slab once
 the parapet is up, the hall of mirrors stands with its feet on the floor
 because a pose passing `EYE` as `at.y` puts the camera at twice eye height
 and photographs the ceiling, and the back room is at the rig rather than
@@ -90,9 +107,14 @@ read badly at 1200, and the answer to one that does is to move it in the one
 place both readers share, which is a change to this spec's own design rather
 than a thing it has to get right first time.
 
-**The other rooms.** What is behind the wall, the tesseract, the theatre and
-the shapes each have a pose already and are left out by the rule above, not
-by an oversight. A thirteenth tile is a line in `rooms::shot`.
+**The other rooms.** What is behind the wall and the shapes each have a pose
+already and are left out by the rule above, not by an oversight. A thirteenth
+tile is a line in `rooms::shot`.
+
+**The three orphan references.** `imaginarium.png`, `wayup.png` and
+`register.png` are read by nothing. Whether a parked room keeps its last
+picture is a question about parking rather than about this, and deleting
+them is a line of its own.
 
 **The village and Valhalla's bridge.** Out of doors, and the one grid this
 adds is of rooms.
