@@ -1,6 +1,6 @@
 # 0135 Twelve rooms, photographed
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-25
 
 ## Goal
@@ -84,6 +84,23 @@ across, which is the layout that script holds for the other two.
 **Where it is shown.** The site's `/docs/xanadu` page, under the clip. The
 engine's own readme is the engine's shop window and this is one game's
 rooms, so it does not go there.
+
+**And where the tiles live, which is not where a published picture
+lives.** `media/rooms/<slug>.png`, a folder down. `./check-listings` asks
+that every file in a repo's `media` be shown somewhere on the site or it
+will rot unseen, and eleven pictures that are only ever seen inside a grid
+would each have failed that. They are not an exception to the rule: a tile
+is shown, in the grid, and the grid is checked like any other picture. The
+folder says which kind of thing they are and the check walks past a
+directory. The hall is the one that is both, its tile being the building's
+own `media/screenshot.png`.
+
+**An hour and a sky, for a room that has one.** A day here is twenty
+seconds and a run that names no hour opens at nought, which is dawn on day
+one, and day one is a storm: the garden and the pond came back as two dark
+pictures of a wet morning. Spec 0071 pinned an hour, a sky and a long day
+for the village's shot and this is that again, reading the same numbers
+rather than a second pair that happens to match.
 
 ## Acceptance criteria
 

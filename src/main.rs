@@ -44,6 +44,7 @@ mod plasma;
 mod pond;
 mod roofing;
 mod room;
+mod rooms;
 mod says;
 mod sign;
 mod spa;
@@ -354,6 +355,13 @@ fn staged() -> bool {
 /// that has been done.
 fn done_already() -> bool {
     blitzkit::asked_for("--done")
+        // **Or the room being staged is one you only reach at the end.**
+        // Valhalla's hall is the one: a photographer standing in it on a
+        // fresh game stands in a hall the bridge has not risen to. Spec
+        // 0135, and the flag stays the one account of what answered means.
+        || staged_as()
+            .and_then(|slug| rooms::of(room::Room::of(games()).reaches, &slug))
+            .is_some_and(|shot| shot.at_the_end)
 }
 
 /// Whether this run opens with nothing answered, whatever the building
@@ -454,11 +462,16 @@ fn how_long_a_day_is() -> f32 {
         .and_then(|said| said.trim().parse().ok())
         .unwrap_or(match (filming(), staged_in_the_village()) {
             (true, _) => tour::FILM_DAY,
-            // and the same job for the one staged shot with a sky in it,
+            // and the same job for a staged shot with a sky in it,
             // which is five seconds of staging rather than a minute of
-            // film. Spec 0071.
+            // film. Spec 0071, and spec 0135 for the rooms that are open
+            // to the sky: at twenty seconds a day the sun moves while the
+            // photographer is standing there.
             (_, true) => village::SHOT_DAY,
-            _ => garden::DAY,
+            _ => match staged_room(room::Room::of(games()).reaches).and_then(|shot| shot.when) {
+                Some(_) => village::SHOT_DAY,
+                None => garden::DAY,
+            },
         })
 }
 
@@ -497,7 +510,13 @@ fn starting_hour() -> Option<f32> {
             garden::under(village::SHOT_AT, village::SHOT_SKY)
                 .unwrap_or_else(|| garden::when(village::SHOT_AT)),
         ),
-        None => None,
+        // **And the same for a room with a sky in it.** Spec 0135. The
+        // garden and the pond are open to it, and a run that names no
+        // hour opens at nought, which is dawn on day one and day one is
+        // a storm: both came out as dark pictures of a wet morning.
+        None => staged_room(room::Room::of(games()).reaches)
+            .and_then(|shot| shot.when)
+            .map(|(at, sky)| garden::under(at, sky).unwrap_or_else(|| garden::when(at))),
     }
 }
 
@@ -775,7 +794,15 @@ fn shots() -> Vec<(String, String)> {
     // the village. Spec 0018 is parked, so the hall takes `screenshot.png`:
     // its pose was already in this file, kept for its reasoning, with no file
     // on the site to go in.
-    let mut out = vec![(HALL.to_owned(), "media/screenshot.png".to_owned())];
+    // **The rooms are spec 0135's list and not a second one here.** Each
+    // of those is a pose the picture tests read as well, so a room cannot
+    // be published from a spot nobody tested. The hall is in it and keeps
+    // `media/screenshot.png`, which is the file the site and both readmes
+    // already point at.
+    let mut out: Vec<(String, String)> = rooms::shots(room::Room::of(games()).reaches)
+        .into_iter()
+        .map(|shot| (shot.slug.to_owned(), shot.file.to_owned()))
+        .collect();
 
     // and the village, which is the one shot of this building that is not
     // the solar system behind its wall. Spec 0071.
@@ -785,6 +812,14 @@ fn shots() -> Vec<(String, String)> {
     ));
 
     out
+}
+
+/// The room this run is staging, if it is staging one that has a pose.
+///
+/// **Read where the camera is set and where the trail is read**, which are
+/// two places and one question.
+fn staged_room(reaches: f32) -> Option<rooms::Shot> {
+    rooms::of(reaches, &staged_as()?)
 }
 
 /// How far back from the cabinet the staged shot stands, and how far out of
@@ -1674,6 +1709,10 @@ impl Arcade {
         // the tesseract's pose needs somewhere in the building to come back
         // down to.
         let doorway = room.doorway();
+        // **Where a room spec 0135 photographs puts the camera.** Read
+        // once, and used for the place, the turn and the tilt, which are
+        // three readings of one pose.
+        let staged_pose = staged_room(reaches).and_then(|shot| shot.pose);
         // worked out before `room` is moved into the struct below.
         //
         // **The hall's, which is the only staged shot now.** It was four
@@ -1726,17 +1765,26 @@ impl Arcade {
             blew: 0.0,
             stirred: 0.0,
             steamy: 0.0,
-            at: match (
-                staged_at_the_shapes() || staged_in_the_back_room(),
-                staged_in_the_tesseract(),
-                staged(),
-            ) {
-                (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).0,
-                (true, _, _) => posed_at_the_shapes(reaches).0,
-                (_, true, _) => tesseract::posed().0,
-                (_, _, true) if staged_in_the_village() => village::posed(reaches).0,
-                (_, _, true) => posed_at,
-                _ => doorway,
+            // **A room spec 0135 photographs poses the camera first.**
+            // One pose, read here and by the picture test that holds the
+            // same room, so the published picture and the tested one
+            // cannot be of two different places. The arms below are the
+            // shots that are not rooms: the shapes, the tesseract's mode,
+            // the village and `--pose`.
+            at: match staged_pose {
+                Some((at, _)) => at,
+                None => match (
+                    staged_at_the_shapes() || staged_in_the_back_room(),
+                    staged_in_the_tesseract(),
+                    staged(),
+                ) {
+                    (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).0,
+                    (true, _, _) => posed_at_the_shapes(reaches).0,
+                    (_, true, _) => tesseract::posed().0,
+                    (_, _, true) if staged_in_the_village() => village::posed(reaches).0,
+                    (_, _, true) => posed_at,
+                    _ => doorway,
+                },
             },
             standing_in: 0,
             rolling: Vec3::Y,
@@ -1988,25 +2036,31 @@ impl Arcade {
             window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
-            yaw: match (
-                staged_at_the_shapes() || staged_in_the_back_room(),
-                staged_in_the_tesseract(),
-                staged(),
-            ) {
-                (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).1,
-                (true, _, _) => posed_at_the_shapes(reaches).1,
-                (_, true, _) => tesseract::posed().1,
-                (_, _, true) if staged_in_the_village() => village::posed(reaches).1,
-                (_, _, true) => posed_yaw,
-                _ => 0.0,
+            yaw: match staged_pose {
+                Some((at, looking_at)) => rooms::aimed(at, looking_at).0,
+                None => match (
+                    staged_at_the_shapes() || staged_in_the_back_room(),
+                    staged_in_the_tesseract(),
+                    staged(),
+                ) {
+                    (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).1,
+                    (true, _, _) => posed_at_the_shapes(reaches).1,
+                    (_, true, _) => tesseract::posed().1,
+                    (_, _, true) if staged_in_the_village() => village::posed(reaches).1,
+                    (_, _, true) => posed_yaw,
+                    _ => 0.0,
+                },
             },
             // level out past the door, where there is no floor worth looking
             // down at, and a little down in the hall
-            pitch: match (staged_in_the_tesseract(), staged() && staged_in_the_hall()) {
-                (true, _) => tesseract::posed().2,
-                (_, true) => POSED_PITCH,
-                _ if staged_in_the_village() => village::posed(reaches).2,
-                _ => 0.0,
+            pitch: match staged_pose {
+                Some((at, looking_at)) => rooms::aimed(at, looking_at).1,
+                None => match (staged_in_the_tesseract(), staged() && staged_in_the_hall()) {
+                    (true, _) => tesseract::posed().2,
+                    (_, true) => POSED_PITCH,
+                    _ if staged_in_the_village() => village::posed(reaches).2,
+                    _ => 0.0,
+                },
             },
             turning: 0.0,
             tilting: 0.0,
@@ -15935,6 +15989,24 @@ fn main() {
         return;
     }
 
+    // **And which of those are rooms**, for the grid spec 0135 asks for.
+    //
+    // A second question rather than a third column, because the answers
+    // are two different lists: `--screenshots` is everything the
+    // photographer takes, which includes the village out in the field,
+    // and this is what goes in a grid of rooms. The photographer knows
+    // nothing about either list, which is the point: the alternative was
+    // a shell script filtering the first list by a name, and the name of
+    // the one shot that is not a room is not a thing a shell script
+    // should know.
+    if blitzkit::asked_for("--rooms") {
+        for shot in rooms::shots(room::Room::of(games()).reaches) {
+            println!("{}", shot.file);
+        }
+
+        return;
+    }
+
     garden::runs_for(how_long_a_day_is());
 
     let mut arcade = Arcade::new();
@@ -16242,7 +16314,7 @@ mod tests {
         // `at` is where the feet are. The angles are worked out from where
         // the eyes are, which is `EYE` above that, or a target on the floor
         // nearby comes out looking at the floor.
-        let look = looking_at - vec3(at.x, at.y + EYE, at.z);
+        let (yaw, pitch) = rooms::aimed(at, looking_at);
 
         arcade.at = at;
         // **And the height, which is not `at.y`.** The camera stands at
@@ -16253,8 +16325,8 @@ mod tests {
         // and the baths came out looking at the garden, both from a camera
         // standing on the hall's floor.
         arcade.eye = at.y;
-        arcade.yaw = look.x.atan2(-look.z);
-        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+        arcade.yaw = yaw;
+        arcade.pitch = pitch;
 
         // **One update, at no time at all.** A room's lamps are worked out
         // from where you are standing, so a frame drawn without this is a
@@ -16309,6 +16381,34 @@ mod tests {
         done: bool,
     ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
         standing_at(at, looking_at, done, None)
+    }
+
+    /// The same, inside spec 0021's eight cells. Spec 0135.
+    ///
+    /// **Because a pose cannot reach them either.** They are nowhere in
+    /// the building's coordinates, so the way in is the one the game
+    /// uses: through the plinth. `go_inside` is that, called rather than
+    /// copied, so a room this test photographs is the room a player
+    /// arrives in.
+    fn standing_inside(
+        at: Vec3,
+        looking_at: Vec3,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        move |renderer| {
+            let (mut arcade, mut geometry, mut text, sound) = built(renderer, false);
+
+            arcade.go_inside();
+
+            posed(
+                &mut arcade,
+                &mut geometry,
+                &mut text,
+                &sound,
+                renderer,
+                at,
+                looking_at,
+            )
+        }
     }
 
     /// The same, on a given layer. Spec 0134.
@@ -20200,14 +20300,9 @@ mod tests {
     /// one showed.
     #[test]
     fn the_nook_is_drawn() {
-        let reaches = reaches();
-        let (at, _) = room::nook_floor(reaches);
+        let (at, looking_at) = rooms::pose(reaches(), "nook");
 
-        looks_right(
-            "nook",
-            vec3(at.x, EYE, -reaches + 1.4),
-            vec3(at.x, EYE, at.z),
-        );
+        looks_right("nook", at, looking_at);
     }
 
     /// Spec 0061: the corridor of mirrors, square on to its west wall.
@@ -20313,10 +20408,9 @@ mod tests {
         // height. A hall with a six metre roof carries that; a corridor
         // whose panels stop at 2.55 puts the camera above all of them, and
         // the first picture taken here was a picture of the ceiling.
-        let along = (mirrors::SOUTH + mirrors::NORTH) * 0.5;
-        let at = vec3(mirrors::middle(), 0.0, along);
+        let (at, looking_at) = rooms::pose(reaches(), "mirrors");
 
-        looks_right("mirrors", at, vec3(mirrors::WEST, at.y + EYE, along));
+        looks_right("mirrors", at, looking_at);
     }
 
     /// Spec 0027: the gallery, from the way in.
@@ -20328,14 +20422,9 @@ mod tests {
     /// is the one that is not, and that reading wants them in one view.
     #[test]
     fn the_gallery_is_drawn() {
-        let reaches = reaches();
-        let (at, _) = mandel::panel(reaches);
+        let (at, looking_at) = rooms::pose(reaches(), "gallery");
 
-        looks_right(
-            "gallery",
-            vec3(at.x, EYE, at.z + 5.0),
-            vec3(at.x, at.y - 0.1, at.z),
-        );
+        looks_right("gallery", at, looking_at);
     }
 
     /// Specs 0027 and 0040: the field, looking back at the building.
@@ -20374,13 +20463,9 @@ mod tests {
     /// whether it does.
     #[test]
     fn the_pond_is_drawn() {
-        let reaches = reaches();
-        // a pace back from the lip on the pond's own south east shoulder,
-        // reckoned off the outline rather than off a size written down
-        let at = pond::rim_at(reaches, 0.86, pond::VERGE + 1.2);
-        let isle = pond::islands(reaches)[1].0;
+        let (at, looking_at) = rooms::pose(reaches(), "pond");
 
-        looks_right("pond", at, vec3(isle.x, EYE - 0.35, isle.z));
+        looks_right("pond", at, looking_at);
     }
 
     /// Spec 0130: the clock on the back room's north wall.
@@ -20459,15 +20544,9 @@ mod tests {
     /// walk through.
     #[test]
     fn the_hall_inside_is_drawn() {
-        let reaches = reaches();
-        let one = valhalla::hall(reaches);
-        let (door, _, _) = valhalla::doorway(reaches);
+        let (at, looking_at) = rooms::pose(reaches(), "valhalla-hall");
 
-        looks_right_at_the_end(
-            "valhalla-hall",
-            vec3(door.x - 2.0, door.y + valhalla::FLOOR_UP, door.z),
-            vec3(one.at.x - one.wide * 0.4, door.y + EYE + 0.2, door.z),
-        );
+        looks_right_at_the_end("valhalla-hall", at, looking_at);
     }
 
     /// The lamps a scene ends up with, for a question a picture cannot
@@ -20575,29 +20654,35 @@ mod tests {
     /// placements came back as a flat disc on a flat wall.
     #[test]
     fn the_glass_room_is_drawn() {
-        let reaches = reaches();
-        let room = glass::inside(reaches);
-        let (ball, _) = glass::ball(reaches);
+        let (at, looking_at) = rooms::pose(reaches(), "glass");
 
-        looks_right(
-            "glass",
-            vec3(ball.x, glass::UP, room.min.z + 1.2),
-            vec3(ball.x, ball.y, glass::well(reaches).min.z),
+        looks_right("glass", at, looking_at);
+    }
+
+    /// Spec 0135: the tesseract room, which had no picture of its own.
+    ///
+    /// **The twelfth room, and the one that was never held.** It has been
+    /// drawable since spec 0021 and staged by `--screenshot=tesseract`
+    /// since, with nothing comparing what came out against anything. A
+    /// room in the grid is a room with a reference, which is what this
+    /// spec asks of all twelve.
+    #[test]
+    fn the_tesseract_is_drawn() {
+        let (at, looking_at) = rooms::pose(reaches(), tesseract::SLUG);
+
+        blitzkit::picture::drawn_looks_right(
+            &reference(tesseract::SLUG),
+            (WIDE, TALL),
+            standing_inside(at, looking_at),
         );
     }
 
     /// Spec 0027: the garden, looking at the pond.
     #[test]
     fn the_garden_is_drawn() {
-        let reaches = reaches();
-        let at = garden::at(reaches);
+        let (at, looking_at) = rooms::pose(reaches(), "garden");
 
-        let pond = garden::pond(reaches).0;
-
-        // looked at level with the eye rather than down at it: the pond is
-        // on the ground a few paces off, and aimed at where it lies this
-        // is a picture of fish
-        looks_right("garden", at, vec3(pond.x, EYE, pond.z));
+        looks_right("garden", at, looking_at);
     }
 
     /// Spec 0065: the moon over the garden, at midnight.
@@ -20998,12 +21083,9 @@ mod tests {
     /// Spec 0027: the baths, from the corner by the tub, down the pool.
     #[test]
     fn the_baths_are_drawn() {
-        let reaches = reaches();
-        let middle = spa::at(reaches);
-        let pool = spa::pool(reaches).0;
-        let at = vec3(middle.x + 7.5, middle.y, middle.z + 4.5);
+        let (at, looking_at) = rooms::pose(reaches(), "baths");
 
-        looks_right("baths", at, vec3(pool.x, at.y + EYE, pool.z));
+        looks_right("baths", at, looking_at);
     }
 
     /// Spec 0027: the cellar, from the middle of its floor.
@@ -21021,14 +21103,9 @@ mod tests {
     /// measured from.
     #[test]
     fn the_cellar_is_drawn() {
-        let reaches = reaches();
-        let at = vec3(
-            cellar::stair_foot() - 2.775,
-            -cellar::DOWN,
-            cellar::opening(reaches),
-        );
+        let (at, looking_at) = rooms::pose(reaches(), "cellar");
 
-        looks_right("cellar", at, vec3(at.x - 5.0, at.y + EYE, at.z));
+        looks_right("cellar", at, looking_at);
     }
 
     /// Spec 0027: the space behind the wall, which is the one run this
@@ -21053,10 +21130,9 @@ mod tests {
     /// from.
     #[test]
     fn the_back_room_is_drawn() {
-        let reaches = reaches();
-        let (at, _) = posed_in_the_back_room(reaches);
+        let (at, looking_at) = rooms::pose(reaches(), "back-room");
 
-        looks_right("back-room", at, back::block(reaches));
+        looks_right("back-room", at, looking_at);
     }
 
     /// Spec 0027: the comparison can fail.
@@ -21097,7 +21173,7 @@ mod tests {
         arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
         arcade.before_frame(&mut renderer);
 
-        let look = looking_at - vec3(at.x, at.y + EYE, at.z);
+        let (yaw, pitch) = rooms::aimed(at, looking_at);
 
         arcade.at = at;
         // **And the height, which is not `at.y`.** The camera stands at
@@ -21108,8 +21184,8 @@ mod tests {
         // and the baths came out looking at the garden, both from a camera
         // standing on the hall's floor.
         arcade.eye = at.y;
-        arcade.yaw = look.x.atan2(-look.z);
-        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+        arcade.yaw = yaw;
+        arcade.pitch = pitch;
 
         let mut scene = Scene::new();
         let mut camera = Camera::new();

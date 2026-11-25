@@ -157,6 +157,12 @@ pub const OPTIONS: Options = Options {
             says: "print the pictures and their files, and stop",
         },
         Asked {
+            name: "--rooms",
+            also: "",
+            takes: "",
+            says: "print the files of the rooms that go in the grid, and stop",
+        },
+        Asked {
             name: "--walk",
             also: "",
             takes: "<route>",
