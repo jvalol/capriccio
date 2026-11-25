@@ -1,6 +1,6 @@
 # 0123 Renders, tiles and three storeys
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-21
 
 ## Goal
@@ -66,8 +66,21 @@ where the fire and the cooking are.
 
 - No two buildings that stand next to each other take the same
   render. — `village::tests::no_two_neighbours_are_the_same_colour`
-- Every building is at least three storeys to its
+- Every building that fronts the street is at least three storeys to its
   eaves. — `village::tests::the_street_has_something_to_be_a_street_between`
+
+**Next to each other is the street's own width**, which is the one number
+that separates a pair somebody reads as a pair from the two ends of a
+village: fronts facing across the street stand ten apart, two in a row four
+to five and a half, and the gap left for the common fourteen. The test also
+asks that every building has a neighbour at all, because a palette with a
+colour per house passes any rule that reaches no pairs.
+
+**And it is the fronts and not the barn.** The criterion said every building
+when it was written. The barn closes the west end from beyond the street
+rather than standing on it, and it is a working building at six metres:
+raising it to three storeys says the place has none. It keeps its own brown
+for the same reason.
 - The street is still clear, and the rounds people walk still
   walk. — the tests spec 0068 already has
 
@@ -91,6 +104,14 @@ now with a painted surround round them.
 `garden::gives_off`, which is never under one, so once they could be seen
 every house on the street had its lamps lit under a blue sky. Dark glass by
 day and lit by night, on `garden::sun_up`.
+
+**One cabin was two storeys and nobody had counted.** Written later, by
+the test above on the day it was written: the smallest of the six stood 8.4
+to its eaves, which is 2.9 storeys and floors to two, so it carried two rows
+of windows where its neighbours carried three or four. It is 8.9 now. Three
+`STOREY`s exactly, 8.7, floors to two as well, which was tried rather than
+worked out, so a height that means three storeys has to clear the number and
+not meet it.
 
 **The joints fell under a texel.** The street's whole face is one texture,
 because the ruts follow a curve down it in the world's own numbers and a tiled

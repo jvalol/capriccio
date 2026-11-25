@@ -241,16 +241,22 @@ pub fn built(reaches: f32) -> Vec<Built> {
     // **Three storeys and four, per spec 0123.** They stood 2.4 to 2.8 to
     // the eaves, which is one, and a ten metre street between one-storey
     // buildings is a frontier main street because that is what it is. The
-    // street is not squeezed to answer that; the buildings are given the
-    // height the street already had room for. Each still differs from its
-    // neighbour, which is spec 0068's own argument for why this reads as a
+    // smallest of them was 8.4, which is 2.9 storeys and floors to two, so
+    // it carried two rows of windows where its neighbours carried three or
+    // four. Three `STOREY`s exactly, 8.7, floors to two as well, which was
+    // tried rather than worked out: the quotient lands just under three in
+    // an f32, so the number has to clear three and not meet it.
+    //
+    // The street is not squeezed to answer any of that; the buildings are
+    // given the height the street already had room for. Each still differs
+    // from its neighbour, which is spec 0068's own argument for why this reads as a
     // village and not a row of sheds, and no two side by side take the same
     // render.
     vec![
         // the north side, nearest the way you come in
         one(-16.0, -1.0, 7.0, 6.0, 9.2, 13.0, 0),
         one(-4.0, -1.0, 9.0, 7.0, 11.6, 15.8, 2),
-        one(9.0, -1.0, 6.0, 5.5, 8.4, 12.0, 4),
+        one(9.0, -1.0, 6.0, 5.5, 8.9, 12.0, 4),
         // and the south, set along differently so the street is not a
         // corridor of pairs, and with a wide gap left between the last two
         // for the common the fire stands on
@@ -2376,6 +2382,91 @@ mod tests {
     use super::*;
 
     const REACHES: f32 = 20.0;
+
+    /// Spec 0123: no two that stand together take the same render.
+    ///
+    /// **Next to each other is the street's own width.** Two fronts facing
+    /// across it stand ten apart, two in a row stand four to five and a
+    /// half, and the gap left for the common is fourteen, so the one number
+    /// already written down separates the pairs somebody reads as a pair
+    /// from the two ends of a village. It catches the barn against the
+    /// cabin nearest it as well, which is a pair the eye does put together.
+    #[test]
+    fn no_two_neighbours_are_the_same_colour() {
+        let houses = built(REACHES);
+        let apart = |one: &Built, two: &Built| {
+            let (a, b) = (one.footprint(), two.footprint());
+            let along = (b.min.x - a.max.x).max(a.min.x - b.max.x).max(0.0);
+            let across = (b.min.z - a.max.z).max(a.min.z - b.max.z).max(0.0);
+
+            along.max(across)
+        };
+
+        for (n, one) in houses.iter().enumerate() {
+            // **Every one of them has a neighbour**, which is what makes
+            // the rule above worth stating: a palette with a colour each
+            // passes any test that reaches no pairs.
+            let mut neighbours = 0;
+
+            for (m, two) in houses.iter().enumerate() {
+                if n == m || apart(one, two) > STREET_WIDE {
+                    continue;
+                }
+
+                neighbours += 1;
+
+                assert_ne!(
+                    rendered(one),
+                    rendered(two),
+                    "two buildings {:.1} apart are rendered alike, at {:?} and {:?}",
+                    apart(one, two),
+                    one.at,
+                    two.at
+                );
+            }
+
+            assert!(
+                neighbours > 0,
+                "the building at {:?} stands next to nothing",
+                one.at
+            );
+        }
+    }
+
+    /// Spec 0123: the street has something to be a street between.
+    ///
+    /// **Three storeys to the eaves is what makes it one.** They stood 2.4
+    /// to 2.8, which is one storey, and ten metres of street between
+    /// one-storey buildings is a frontier main street because that is what
+    /// it is. `storeys` is also what lays the window rows, so a front under
+    /// three carries two rows and reads as the cabin it used to be.
+    ///
+    /// **The barn is not one of them.** It closes the west end from beyond
+    /// the street rather than fronting it, and it is a working building:
+    /// raising it to a townhouse says the place has none.
+    #[test]
+    fn the_street_has_something_to_be_a_street_between() {
+        let fronts: Vec<Built> = built(REACHES)
+            .into_iter()
+            .filter(|one| one.render.is_some())
+            .collect();
+
+        assert!(
+            fronts.len() >= 4,
+            "{} rendered fronts is not a street",
+            fronts.len()
+        );
+
+        for one in &fronts {
+            assert!(
+                storeys(one) >= 3,
+                "the front at {:?} is {} storeys to its eaves of {}",
+                one.at,
+                storeys(one),
+                one.eaves
+            );
+        }
+    }
 
     /// Spec 0071. The one thing a staged shot can get wrong that nobody
     /// notices until it is published: a camera pointing somewhere else.
