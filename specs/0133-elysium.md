@@ -1,6 +1,6 @@
 # 0133 Elysium
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-23
 
 ## Goal
@@ -269,17 +269,34 @@ still marked unbuilt have no test yet and are what is left.
 - The garden is in sight from the head of the stair, with the water between
   you and it. — `elysium::tests::you_see_it_across_the_water_from_the_top`
 
-### Not built yet
+- Nothing of this place is drawn in the
+  building. — `tests::neither_place_can_see_the_other`
+- And nothing of the building here. — `tests::nothing_on_another_layer_is_drawn`,
+  which is spec 0134's
+- There is nobody in it. — `tests::nobody_is_in_it`
 
-- Nothing of the building is visible from here and nothing of here from the
-  building. — `elysium::tests::neither_place_can_see_the_other`
-- There is nobody in it. — `elysium::tests::nobody_is_in_it`
+**Those three are in `main.rs` and not in `elysium.rs`**, where this spec
+first put them, because each needs a frame: the question is what a scene
+holds, which wants the game and a renderer.
 
-Spec 0134's `tests::nothing_on_another_layer_is_drawn` holds one direction
-of the first of those, the village being absent from here. The other
-direction, this place being absent from the building, has nothing on it.
+**And each reads a colour rather than a position.** The first go at the
+colonnade counted instances inside its own boxes and found two of them on
+the arcade's layer, which is not a leak: those are the arcade's own field,
+standing at coordinates the two places have shared since spec 0134 made
+the separation a fourth coordinate rather than six hundred metres. What is
+being asked is whose thing is in the frame, and `aim::RUIN` and
+`aim::COATS` are palettes nothing else in the building wears.
+
+Where somebody is standing is `people::doing` over a round, offset per
+round and then moved apart, so a test that worked out a position again
+would be a second account of that. A coat in the frame is somebody in the
+frame wherever they are standing. A palette invented for Elysium later
+would walk past it, which is the limit of what a colour can say.
 
 ### Verified by hand
+
+Neither of these is answered. They are what the status does not cover: the
+place is built and held, and whether it is worth walking to is Jake's.
 
 - **Whether it reads as somewhere else within a second of arriving**, which
   is the only thing that decides whether it is a second garden or a second

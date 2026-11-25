@@ -19333,13 +19333,6 @@ mod tests {
         let middle =
             all.iter().fold(Vec3::ZERO, |sum, box_| sum + box_.center()) / all.len() as f32;
         let from = middle + vec3(34.0, 2.0, 0.0);
-        // **Only the part of it that is off the ground.** Spec 0133's place
-        // stands on the arcade's own x and z now and its ground follows
-        // you, so a box drawn round the village's footprint has that sand
-        // in it: the first go at this counted 171 things and every one of
-        // them was Elysium's own floor. What is three metres up is the
-        // village and nothing else, its copy of spec 0064's room being
-        // over the nook.
         // **Counted off the ground, which the first go was not.** Spec
         // 0133's place stands on the arcade's own x and z now and its
         // ground follows you, so anything inside the village's footprint
@@ -19386,6 +19379,142 @@ mod tests {
              village, on a layer the village is not on",
             theirs
         );
+    }
+
+    /// Anything in a frame wearing one of these, which is how a thing
+    /// that belongs to one place is counted in a picture of another.
+    ///
+    /// **A colour and not a position.** The first go at the test below
+    /// counted instances inside the colonnade's own boxes and found two
+    /// of them on the arcade's layer, which is not a leak: those are the
+    /// arcade's own field, standing at coordinates the two places share
+    /// since spec 0134 made the separation a fourth coordinate. What is
+    /// being asked is whose thing is drawn, and a palette nothing else
+    /// uses is the one marker a scene carries.
+    fn wearing(scene: &Scene, worn: &[glam::Vec4]) -> usize {
+        scene
+            .instances()
+            .filter(|one| {
+                worn.iter()
+                    .any(|colour| (glam::Vec4::from(one.color) - *colour).length() < 1e-4)
+            })
+            .count()
+    }
+
+    /// Spec 0133: nothing of that place is in the building's frame.
+    ///
+    /// **The other direction from the test above**, which stands in the
+    /// arcade's village and finds it gone from the other layer. This one
+    /// takes the thing only Elysium has, the colonnade on its far shore,
+    /// and stands at the same three coordinates on each layer. The two
+    /// together are the criterion: neither place can see the other.
+    ///
+    /// It used to be six hundred metres of distance doing this and it is a
+    /// layer now, which is why it is worth a test at all: distance was
+    /// self-evident and an equality is a line somebody can delete.
+    #[test]
+    fn neither_place_can_see_the_other() {
+        let reaches = reaches();
+        let ruin = [aim::RUIN, aim::RUIN_SHADE];
+        let columns = elysium::columns(reaches);
+
+        assert!(
+            !columns.is_empty(),
+            "there is no colonnade, so this proves nothing"
+        );
+
+        let middle =
+            columns.iter().fold(Vec3::ZERO, |sum, (at, _)| sum + *at) / columns.len() as f32;
+        let standing = elysium::shores(reaches).0.center();
+        let from = vec3(standing.x, 0.0, standing.z);
+
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
+        else {
+            return;
+        };
+
+        let (there, _) = standing_on_layer(from, middle, layers::ELYSIUM)(&mut renderer);
+        let theirs = wearing(&there, &ruin);
+
+        let (here, _) = standing_on_layer(from, middle, layers::ARCADE)(&mut renderer);
+        let ours = wearing(&here, &ruin);
+
+        assert!(
+            theirs > 0,
+            "nothing of the colonnade is drawn standing on its own shore, \
+             looking at it from {:?}, so this proves nothing",
+            from
+        );
+        assert_eq!(
+            ours, 0,
+            "the building draws {} pieces of spec 0133's colonnade, on a \
+             layer it is not on",
+            ours
+        );
+    }
+
+    /// Spec 0133: there is nobody in it.
+    ///
+    /// **Read off what a person wears.** Where somebody is standing is
+    /// `people::doing` over a round, offset per round and then moved
+    /// apart, and a test that worked that out again would be a second
+    /// account of it. `aim::COATS` and `aim::CLOAKS` are worn by figures
+    /// and by nothing else in this building, so a frame with one in it has
+    /// somebody in it, wherever they happen to be standing.
+    ///
+    /// It holds against somebody populating this place later with the
+    /// building's own figures. A new palette invented for Elysium would
+    /// walk past it, which is the limit of what a colour can say.
+    #[test]
+    fn nobody_is_in_it() {
+        let reaches = reaches();
+        let worn: Vec<glam::Vec4> = aim::COATS
+            .iter()
+            .chain(aim::CLOAKS.iter())
+            .copied()
+            .collect();
+
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
+        else {
+            return;
+        };
+
+        // **The control first**, because a marker that matches nothing
+        // makes every frame empty of people.
+        let all = village::solid(reaches);
+        let street =
+            all.iter().fold(Vec3::ZERO, |sum, box_| sum + box_.center()) / all.len() as f32;
+        let (where_they_are, _) =
+            standing_on_layer(vec3(street.x, 0.0, street.z + 12.0), street, layers::ARCADE)(
+                &mut renderer,
+            );
+
+        assert!(
+            wearing(&where_they_are, &worn) > 0,
+            "nobody is wearing a coat in the village either, so this proves \
+             nothing"
+        );
+
+        // and then the shore, the water and the garden, which is the whole
+        // of what is over there to stand in
+        let (near, far) = elysium::shores(reaches);
+        let water = elysium::water(reaches).0;
+
+        for at in [near.center(), water, far.center()] {
+            let from = vec3(at.x, 0.0, at.z);
+            let (scene, _) =
+                standing_on_layer(from, elysium::at(reaches), layers::ELYSIUM)(&mut renderer);
+            let folk = wearing(&scene, &worn);
+
+            assert_eq!(
+                folk, 0,
+                "{} pieces of somebody are drawn standing at {:?} in spec \
+                 0133's place, which is meant to have nobody in it",
+                folk, from
+            );
+        }
     }
 
     /// Spec 0134: no lamp lights across layers.
