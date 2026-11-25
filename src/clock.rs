@@ -277,7 +277,12 @@ pub fn now() -> f32 {
 /// this pins, so both clocks in the building say one time and both references
 /// hold still. It also called it the nook's, and it stands over the cellar's
 /// fire. See spec 0007.
-#[cfg(test)]
+///
+/// **Not `cfg(test)` any more**, which is what let the clips churn for three
+/// weeks. Only the picture tests pinned the hour, so every film of the
+/// building was taken at whatever time it happened to be, and the arcade's
+/// clip came back different every single time it was made. Engine spec 0084
+/// has the hunt. A film is a reference as much as a picture is.
 pub const SHOWN: f32 = 10.0 + 10.0 / 60.0;
 
 /// How far round a wheel has turned at `hours` past midnight.

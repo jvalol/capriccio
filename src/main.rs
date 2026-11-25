@@ -729,6 +729,28 @@ fn staged_as() -> Option<String> {
     blitzkit::one_argument("--screenshot")
 }
 
+/// Whether this run is making something that gets kept and compared.
+///
+/// **A film and a staged shot are both references**, and a reference drawn
+/// off the machine's own hour is a different picture every time it is made.
+/// The picture tests have pinned the clock since spec 0130; nothing else
+/// did, so the arcade's clip came back different on every refilm from the
+/// day that clock went in. Engine spec 0084 has the hunt that found it.
+///
+/// Read once on the first frame rather than per frame, next to `--layer`,
+/// so a run that is given an hour of its own keeps it.
+fn making_a_reference() -> bool {
+    filming() || staged_as().is_some()
+}
+
+/// The hour such a run keeps, if it is one.
+///
+/// Split out from the flag so the rule can be asked a question without a
+/// process to read arguments from.
+fn hour_to_keep(reference: bool) -> Option<f32> {
+    reference.then_some(clock::SHOWN)
+}
+
 /// Every shot this game can stage, as the argument to ask for it by and the
 /// file it belongs in.
 ///
@@ -10860,6 +10882,14 @@ impl Game for Arcade {
                 self.layer = layer;
             }
 
+            // and the hour, if this run is making something that will be
+            // compared with itself later. Before the pose for the same
+            // reason the layer is: what the clock says is part of the
+            // picture.
+            if self.wall_clock.is_none() {
+                self.wall_clock = hour_to_keep(making_a_reference());
+            }
+
             if let Some(pose) = posed_at() {
                 self.stand(pose);
             }
@@ -19484,6 +19514,38 @@ mod tests {
             there.runs().is_empty(),
             "the building's plan is drawn in spec 0133's place, {} runs of it",
             there.runs().len()
+        );
+    }
+
+    /// Spec 0130: a run that is making a reference keeps one hour.
+    ///
+    /// **The rule, not the flag.** Whether this run is filming or staging a
+    /// shot is read off the process's own arguments and cannot be handed a
+    /// value in a test, so what is asked here is the thing the flag feeds.
+    /// A reference keeps `clock::SHOWN`; anything else keeps nothing and
+    /// falls through to the machine's hour, which is what spec 0130 asks a
+    /// clock on a wall to do.
+    ///
+    /// What this cannot check is that the pinning is wired to the first
+    /// frame. That is two films of the arcade coming back the same clip,
+    /// which is in the spec by hand.
+    #[test]
+    fn a_run_making_a_reference_keeps_one_hour() {
+        assert_eq!(
+            hour_to_keep(true),
+            Some(clock::SHOWN),
+            "a film or a staged shot drew its clock off the machine's hour"
+        );
+        assert_eq!(
+            hour_to_keep(false),
+            None,
+            "an ordinary run pinned the clock, so the building stopped \
+             telling the time"
+        );
+        assert_eq!(
+            Arcade::new().the_hour(),
+            clock::now(),
+            "an unpinned arcade is not reading the machine's hour"
         );
     }
 
