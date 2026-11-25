@@ -170,6 +170,16 @@ standard library: the engine's `web_time` gives the same answer as
 features off, `clock` for the native build and `wasmbind` for the browser,
 where it reads the same `Date` the page would.
 
+**Except when the run is making a reference**, which is a film or a staged
+shot. Those pin the hour at `clock::SHOWN`, ten past ten, on the first frame.
+A clock that says the right time is the point of this spec and is exactly
+wrong for a picture that gets compared with itself later: the arcade's clip
+came back different on every refilm for three weeks because of it, which
+engine spec 0084 has the hunt for. `SHOWN` was already here for the picture
+tests and was `#[cfg(test)]`, so it only ever covered half the references.
+
+An hour given on purpose outranks it, and an ordinary run pins nothing.
+
 ## What the drawing of it found
 
 **Where a hand sits and which way it lies are one number, and they were
@@ -292,6 +302,8 @@ other.
   jumping. — `clock::tests::the_hands_say_the_time`
 - The pendulum beats seconds and the escape wheel lets one tooth by every
   two beats. — `clock::tests::the_pendulum_beats_seconds`
+- A run that is making a reference keeps one hour, and an ordinary run reads
+  the machine's. — `tests::a_run_making_a_reference_keeps_one_hour`
 - A thing laid in the face of the clock at a turn points the way the face
   says it points, so where it sits and which way it lies cannot come
   apart. — `clock::tests::a_turn_lays_a_thing_the_way_the_face_says`
