@@ -110,6 +110,8 @@ rather than a second pair that happens to match.
   photographing. — `rooms::tests::every_shot_stands_in_the_room_it_takes`
 - The staged shot and the picture test read one pose, so a room cannot be
   published from a place nobody tested. — `rooms::tests::the_tests_and_the_photographer_share_a_pose`
+- The tesseract room draws what it drew, which is the one picture test the
+  twelve were missing. — `tests::the_tesseract_is_drawn`
 
 ### Verified by hand
 
