@@ -9037,9 +9037,12 @@ impl Arcade {
         let mut pushing = None;
 
         if going.length_squared() > 1e-6 {
-            if let Some(middle) =
-                elysium::through(self.room.reaches, self.looking_from(), self.facing())
-            {
+            if let Some(middle) = elysium::through(
+                self.room.reaches,
+                self.layer,
+                self.looking_from(),
+                self.facing(),
+            ) {
                 // **Are you walking at that glass**, which is asked of what
                 // you want and not of what you got. It asked the second:
                 // whether the plinth had already taken your movement away,
@@ -11013,7 +11016,12 @@ impl Game for Arcade {
                 // place is holding you.
                 eprintln!(
                     "  glass {}  through {:.2}  layer w {}",
-                    match elysium::through(self.room.reaches, self.looking_from(), self.facing()) {
+                    match elysium::through(
+                        self.room.reaches,
+                        self.layer,
+                        self.looking_from(),
+                        self.facing(),
+                    ) {
                         Some(middle) => format!(
                             "yes, {:.2} off its middle at {:.0}",
                             self.looking_from().distance(middle),
@@ -19958,6 +19966,63 @@ mod tests {
     /// Walked through `aimed_and_moved` rather than `gone`, because the
     /// crossing lands in the first and every other test of it drives the
     /// second.
+    /// Spec 0133: it puts you through once, and then it lets you walk.
+    ///
+    /// **Jake, off his own run: after landing in elysium and starting down
+    /// the stairs im transported back through the ball again.** The two
+    /// spheres stand 4.2 apart inside one room and `elysium::through` read
+    /// both of them whatever layer you stood on. `placing` is a reflection,
+    /// so crossing leaves you the distance from the far sphere that you had
+    /// to the near one and facing the one you came from, with the stairwell
+    /// of that room on the far side of it. Walking on was walking at it:
+    /// holding forward for twenty seconds crossed thirteen times, between
+    /// z -16.301 and -12.885, and never reached the stair.
+    ///
+    /// Twenty seconds and not the four the other crossing tests use,
+    /// because those hold the crossing and this holds what comes after it.
+    /// The second assert is the control: a body that walked into a wall and
+    /// stopped would cross once too.
+    #[test]
+    fn one_walk_at_the_glass_crosses_once() {
+        let mut game = Arcade::new();
+        let reaches = game.room.reaches;
+        let (ball, _) = glass::ball(reaches);
+        let at = vec3(ball.x, glass::UP, ball.z + 2.0);
+
+        game.at = at;
+        game.eye = at.y;
+        game.yaw = 0.0;
+        game.pitch = 0.0;
+
+        let mut was = game.layer;
+        let mut crossings = 0;
+
+        for _ in 0..(60 * 20) {
+            // held down the whole way, and the crossing lets go of every
+            // key, so a player walking at it presses again
+            game.walking = [true, false, false, false];
+            game.aimed_and_moved(1.0 / 60.0);
+
+            if game.layer != was {
+                crossings += 1;
+                was = game.layer;
+            }
+        }
+
+        assert_eq!(
+            crossings, 1,
+            "twenty seconds of walking forward from {:?} crossed {} times and \
+             ended at {:?}",
+            at, crossings, game.at
+        );
+        assert!(
+            game.at.distance(at) > 20.0,
+            "the body only got from {:?} to {:?}, so one crossing proves nothing",
+            at,
+            game.at
+        );
+    }
+
     #[test]
     fn only_the_sphere_changes_the_layer() {
         let mut game = Arcade::new();

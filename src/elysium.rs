@@ -244,39 +244,64 @@ pub const AT_IT: f32 = 1.35;
 /// are getting any closer to that glass, and working out which of the two
 /// you matched a second time is two accounts of one answer.
 ///
-/// **Which sphere you are at is the whole of the state.** There is no flag
-/// saying where you are, because there does not need to be one: both rooms
-/// stand in the world at once and your own position says which you are in. A
-/// flag would be a second account of that, and this building has learned
-/// what two accounts of one thing do.
+/// **The sphere of the room you are standing in, and not both of them.**
+/// This read both, on the reasoning that your own position says which room
+/// you are in and a flag would be a second account of it. The position does
+/// not say: the two spheres stand 4.2 apart inside one room, so you can walk
+/// from either to the other without the room changing under you, and the
+/// layer is the only thing that knows which is yours.
+///
+/// It cost a loop nobody could get out of. `placing` is a reflection, so
+/// crossing leaves you the same distance from the far room's sphere that you
+/// had to the near one, facing the one you came from with nothing in
+/// between. Walking on means walking at it. Twenty seconds of holding
+/// forward crossed thirteen times, between z -16.301 and -12.885, and the
+/// stairwell at the end of that room is on the far side of a sphere that is
+/// not yours.
+///
+/// Jake, off his own run: after landing in elysium and starting down the
+/// stairs im transported back through the ball again.
+///
+/// It closes a second hole of the same shape. Only your own layer's sphere
+/// is drawn, so the other was a crossing you could walk into at a piece of
+/// empty air.
 ///
 /// **Looking into it, and not merely near it.** The ray has to pass through
 /// the glass, which is what makes it the thing you are doing rather than the
 /// thing you walked past. Spec 0133.
-pub fn through(reaches: f32, from: Vec3, facing: Vec3) -> Option<Vec3> {
-    let place = placing(reaches);
+pub fn through(
+    reaches: f32,
+    layer: crate::layers::Layer,
+    from: Vec3,
+    facing: Vec3,
+) -> Option<Vec3> {
     let (here, radius) = crate::glass::ball(reaches);
 
-    for middle in [here, place.of(here)] {
-        if from.distance(middle) > radius + AT_IT {
-            continue;
-        }
+    // spec 0064's exhibit is the arcade's, and `placing` says where the copy
+    // of it stands. Asked of the layer rather than listed here, so a third
+    // world would be a line in `layers` and not a second list.
+    let middle = match layer == crate::layers::ARCADE {
+        true => here,
+        false => placing(reaches).of(here),
+    };
 
-        // the ray's nearest approach to the middle, which is inside the
-        // glass when you are looking into it
-        let to = middle - from;
-        let along = to.dot(facing);
-
-        if along <= 0.0 {
-            continue;
-        }
-
-        if (to - facing * along).length() <= radius {
-            return Some(middle);
-        }
+    if from.distance(middle) > radius + AT_IT {
+        return None;
     }
 
-    None
+    // the ray's nearest approach to the middle, which is inside the
+    // glass when you are looking into it
+    let to = middle - from;
+    let along = to.dot(facing);
+
+    if along <= 0.0 {
+        return None;
+    }
+
+    match (to - facing * along).length() <= radius {
+        true => Some(middle),
+        false => None,
+    }
 }
 
 /// How long pushing into the glass takes to carry you through, in seconds,
@@ -1213,7 +1238,7 @@ mod tests {
             ahead(at, head)
         );
         assert!(
-            through(reaches, at, facing).is_some(),
+            through(reaches, crate::layers::ARCADE, at, facing).is_some(),
             "standing at {:?} is not walking into the glass, so this proves nothing",
             at
         );
@@ -1243,7 +1268,14 @@ mod tests {
         let rooms = [room, place.box_of(room)];
         let mut opened = 0;
 
-        for step in 0..8 {
+        // both layers, because each room has a sphere of its own now and
+        // the question is where a door may open at all
+        for (step, layer) in (0..16).map(|n| {
+            (
+                n % 8,
+                [crate::layers::ARCADE, crate::layers::ELYSIUM][n / 8],
+            )
+        }) {
             let turn = step as f32 * std::f32::consts::FRAC_PI_4;
             let facing = vec3(turn.sin(), 0.0, -turn.cos());
 
@@ -1264,7 +1296,7 @@ mod tests {
                                 && at.z <= one.max.z
                         });
 
-                        match through(reaches, at, facing) {
+                        match through(reaches, layer, at, facing) {
                             None => continue,
                             Some(_) => assert!(
                                 in_the_room,
@@ -1412,7 +1444,8 @@ mod tests {
         let at = vec3(here.x, here.y, here.z + 1.0);
         let into = (here - at).normalize();
 
-        let there = through(reaches, at, into).expect("the building's glass is a door");
+        let there = through(reaches, crate::layers::ARCADE, at, into)
+            .expect("the building's glass is a door");
 
         assert!(
             (there - here).length() < 1e-3,
@@ -1420,7 +1453,8 @@ mod tests {
         );
 
         let over = place.of(at);
-        let back = through(reaches, over, -into).expect("the copy's glass is a door too");
+        let back = through(reaches, crate::layers::ELYSIUM, over, -into)
+            .expect("the copy's glass is a door too");
 
         assert!(
             (back - place.of(here)).length() < 1e-3,
@@ -1449,11 +1483,11 @@ mod tests {
         let at = vec3(here.x, here.y, here.z + 1.0);
 
         assert!(
-            through(reaches, at, vec3(1.0, 0.0, 0.0)).is_none(),
+            through(reaches, crate::layers::ARCADE, at, vec3(1.0, 0.0, 0.0)).is_none(),
             "looking across the room counts as looking into the glass"
         );
         assert!(
-            through(reaches, at, vec3(0.0, 0.0, 1.0)).is_none(),
+            through(reaches, crate::layers::ARCADE, at, vec3(0.0, 0.0, 1.0)).is_none(),
             "looking away from it counts as looking into it"
         );
 
@@ -1465,7 +1499,7 @@ mod tests {
         let past = vec3(0.707, 0.0, -0.707);
 
         assert!(
-            through(reaches, at, past).is_none(),
+            through(reaches, crate::layers::ARCADE, at, past).is_none(),
             "looking past it, {:.2} off its middle, counts as looking into it",
             (here - at - past * (here - at).dot(past)).length()
         );
@@ -1473,7 +1507,13 @@ mod tests {
         let far = vec3(here.x, here.y, here.z + radius + AT_IT + 1.0);
 
         assert!(
-            through(reaches, far, (here - far).normalize()).is_none(),
+            through(
+                reaches,
+                crate::layers::ARCADE,
+                far,
+                (here - far).normalize()
+            )
+            .is_none(),
             "looking into it from across the room counts as being at it"
         );
     }

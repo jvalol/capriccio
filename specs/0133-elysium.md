@@ -142,6 +142,15 @@ That is also what keeps it from being a trap. There is no second mechanism to
 find, nothing to work out, and nothing that can be missed: whoever got in
 already knows the way out, because it is the way they got in.
 
+**One sphere each, and only yours takes you.** There are two of them: spec
+0064's and the copy of it here, standing 4.2 apart inside one room. Reading
+both made the walk above impossible. Arriving leaves you facing the sphere
+you came from with that room's stair beyond it, so walking to the stair
+walked you back into it, and holding forward for twenty seconds crossed
+thirteen times without reaching anything. Which sphere is yours is the layer,
+which is the one thing that already knows. Only yours is drawn as well, so
+the other was a door standing at a piece of empty air.
+
 ## The three that were open, and how they settled
 
 **What counts as walking into it is settled.** You cannot literally enter.
@@ -231,6 +240,9 @@ still marked unbuilt have no test yet and are what is left.
   down. — `tests::walking_into_it_takes_you_with_nothing_held_down`
 - The room swaps at the top of the fold, with the frame
   covered. — `tests::the_room_swaps_behind_the_black`
+- And having swapped it lets you walk: one walk forward crosses once and
+  reaches the stair, where it used to cross thirteen times in twenty seconds
+  and get nowhere. — `tests::one_walk_at_the_glass_crosses_once`
 - The glass winds from a mirror into a lens on the way
   across. — `elysium::tests::the_glass_turns_from_a_mirror_into_a_lens`
 - And is its own tint at rest, so none of this dims spec 0064's
