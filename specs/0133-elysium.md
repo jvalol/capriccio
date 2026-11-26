@@ -257,6 +257,9 @@ still marked unbuilt have no test yet and are what is left.
 - And is black before that lens bends hard enough to gather the room behind
   it into a picture, while the frame itself is still mostly
   open. — `elysium::tests::it_is_black_before_it_gathers_the_room`
+- And the frame is wholly black across every frame the swap can land on, at
+  any rate down to twenty a second, without being black for the whole
+  crossing. — `elysium::tests::the_swap_is_in_the_dark_whatever_frame_it_lands_on`
 - And is its own tint at rest, so none of this dims spec 0064's
   room. — `elysium::tests::the_glass_is_itself_until_you_walk_into_it`
 - The way back is the way in read backwards, so nobody can be stranded

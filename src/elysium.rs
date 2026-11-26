@@ -452,6 +452,9 @@ pub fn taken() -> f32 {
 /// off the one arc: it shuts on the way in and opens on the way out, with
 /// the move and the turn in the dark between.
 ///
+/// Over [`SHUTS`] rather than over the whole fold, so that the swap is in
+/// the dark whatever frame it lands on.
+///
 /// **Written on the fold and not on [`darkens`], which is what it used to
 /// be.** It was that one squared, and that one was the fold cubed, so this
 /// is the curve it has always computed. What broke the composition is
@@ -460,8 +463,38 @@ pub fn taken() -> f32 {
 /// blackout rather than a fold. The glass is the thing that had to shut
 /// sooner; the frame did not.
 pub fn seals(fold: f32) -> f32 {
-    fold.clamp(0.0, 1.0).powi(6)
+    (fold / SHUTS).clamp(0.0, 1.0).powi(6)
 }
+
+/// The slowest frame this will still hide a swap through.
+///
+/// Twenty, which is slower than anything this building has ever drawn at and
+/// is the point: the cost of being generous here is a few hundredths of a
+/// second more black, and the cost of being tight is the fault below coming
+/// back on whichever machine is having a bad second.
+const SLOWEST: f32 = 20.0;
+
+/// How near the top of the arc the frame is wholly black by.
+///
+/// **Because the swap lands on a frame and not on a number.** It fires the
+/// first frame `going_through` is past one, which can be anywhere inside a
+/// step of `dt / THROUGH`, and [`fold`] reads back down from there. At sixty
+/// frames a second the swap can land at fold 0.976 and at thirty at 0.952,
+/// where the frame was 0.87 and 0.75 covered: the rest of it is the room you
+/// are leaving, held for the frame before the other one arrives.
+///
+/// Jake, off his own run: still a little bit of the origin room before the
+/// destination lands.
+///
+/// **And the test for this could not see it.** `the_room_swaps_behind_the
+/// _black` drives sixty frames a second, and [`THROUGH`] is 0.7 of a second,
+/// which is forty-two of them exactly: its arc lands on 1.000 every time and
+/// the overshoot it is meant to catch never happens. A number that divides
+/// is the worst kind of fixture.
+///
+/// Solved off [`SLOWEST`] rather than tried, so widening what this covers is
+/// one number and not two.
+pub const SHUTS: f32 = 1.0 - (1.0 / SLOWEST) / THROUGH;
 
 /// The multiplier itself, squared like [`bending`] so the two move
 /// together and the growing is the same gesture as the bending.
@@ -1553,6 +1586,47 @@ mod tests {
             )
             .is_none(),
             "looking into it from across the room counts as being at it"
+        );
+    }
+
+    /// Spec 0133: and the swap is in the dark whatever frame it lands on.
+    ///
+    /// **Jake, off his own run: still a little bit of the origin room before
+    /// the destination lands.** The swap fires the first frame
+    /// `going_through` is past one, which is anywhere inside a step of
+    /// `dt / THROUGH`, and `fold` reads back down from there. Sealing on the
+    /// fold alone left the frame 0.87 covered at sixty frames a second and
+    /// 0.75 at thirty, and what is not covered is the room you came from.
+    ///
+    /// **Swept over frame rates rather than driven at one**, because the one
+    /// the other test drives at is the one that hides this: `THROUGH` is 0.7
+    /// of a second and sixty frames of it is forty-two exactly, so its arc
+    /// lands on 1.000 and never overshoots at all.
+    #[test]
+    fn the_swap_is_in_the_dark_whatever_frame_it_lands_on() {
+        for fps in [SLOWEST, 24.0, 30.0, 48.0, 60.0, 72.0, 120.0, 144.0] {
+            let step = (1.0 / fps) / THROUGH;
+            let worst = fold(1.0 + step);
+
+            assert_eq!(
+                seals(worst),
+                1.0,
+                "at {} frames a second the swap can land at fold {:.4}, where \
+                 the frame is {:.3} covered and the rest of it is the room \
+                 you are leaving",
+                fps,
+                worst,
+                seals(worst)
+            );
+        }
+
+        // and the control on the other side: it is not simply black for the
+        // whole crossing, which would pass the sweep above and be a cut
+        assert!(
+            seals(0.5) < 0.1,
+            "the frame is {:.3} covered halfway across, so the fold is a \
+             blackout rather than a hole",
+            seals(0.5)
         );
     }
 
