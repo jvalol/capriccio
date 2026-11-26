@@ -192,12 +192,22 @@ move the other.
 - **The far side.** Half the picture is never drawn. It is generated anyway
   because the ground is one field and splitting it would be two accounts of
   one thing.
-- **Clouds and fog over it.** Spec 0019's storm already drifts across the
-  dome; whether it crosses the moon is not answered here.
-- **The layering, which is still the wrong way round.** Jake, 2026-11-13: the
-  atmosphere and celestial bodies like the moon and the sun, stars, etc,
-  should be different layers. the clouds and lightning are closer to the
-  ground than the moon. They are not. The storm is the backdrop at the far
-  plane and both bodies hang at 230, so a cloud can never cross either one.
-  Fixing it wants alpha in the storm's picture so the breaks let a sky
-  through, and that is its own spec.
+- **Clouds and fog over it, which spec 0066 did the next day.** This said
+  spec 0019's storm drifts across the dome and whether it crosses the moon
+  was not answered here. It is answered: `tests::the_cloud_crosses_the_moon`
+  is one of 0066's criteria.
+- **The layering, which was the wrong way round and is not now.** Jake,
+  2026-11-13: the atmosphere and celestial bodies like the moon and the sun,
+  stars, etc, should be different layers. the clouds and lightning are closer
+  to the ground than the moon. They were not. The storm was the backdrop at
+  the far plane and both bodies hung at 230, so a cloud could never cross
+  either one. The own spec this asked for was written that same day, and it
+  is two: the engine's 0099 made a sky of more than one layer, and this
+  building's 0066 put the garden's in order, the deck's nearest point at 0.40
+  and both bodies at `moon::OUT`, 0.80, with
+  `garden::tests::the_sky_is_layered_in_order` holding it.
+
+  Left here as a correction rather than deleted, because these two read as
+  open for twelve days after they were closed, and the hour's gap between a
+  complaint being written down in one spec and answered in another is where
+  that happens.
