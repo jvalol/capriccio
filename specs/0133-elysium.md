@@ -142,6 +142,14 @@ That is also what keeps it from being a trap. There is no second mechanism to
 find, nothing to work out, and nothing that can be missed: whoever got in
 already knows the way out, because it is the way they got in.
 
+**Arriving does not take your hands off the keys.** The crossing let go of
+everything held, which is what `focus_changed` does and is right there: a key
+down when the window goes away is down for ever. Nothing goes away here, so
+what it did was stop you still in the room you had just reached, with the key
+down and nothing to do but lift it and press it again. Jake: after moving
+through the sphere the first time if i'm still holding forward my motion
+stops.
+
 **One sphere each, and only yours takes you.** There are two of them: spec
 0064's and the copy of it here, standing 4.2 apart inside one room. Reading
 both made the walk above impossible. Arriving leaves you facing the sphere
@@ -240,9 +248,10 @@ still marked unbuilt have no test yet and are what is left.
   down. — `tests::walking_into_it_takes_you_with_nothing_held_down`
 - The room swaps at the top of the fold, with the frame
   covered. — `tests::the_room_swaps_behind_the_black`
-- And having swapped it lets you walk: one walk forward crosses once and
-  reaches the stair, where it used to cross thirteen times in twenty seconds
-  and get nowhere. — `tests::one_walk_at_the_glass_crosses_once`
+- And having swapped it lets you walk on: one press of forward crosses once,
+  keeps carrying you, and reaches the stair. It used to cross thirteen times
+  in twenty seconds, and it used to stop you dead on arrival with the key
+  still down. — `tests::one_walk_at_the_glass_crosses_once`
 - The glass winds from a mirror into a lens on the way
   across. — `elysium::tests::the_glass_turns_from_a_mirror_into_a_lens`
 - And is its own tint at rest, so none of this dims spec 0064's

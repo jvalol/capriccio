@@ -2928,8 +2928,16 @@ impl Arcade {
             self.eye = at.y;
             self.falling = 0.0;
             self.layer = self.layer.across();
-            self.let_go();
 
+            // **And it does not take your hands off the keys.** This let go
+            // of all four lists, which `focus_changed` does because a key
+            // held when the window goes away is held for ever. Nothing goes
+            // away here. What it did instead was stop you dead in a room you
+            // had just arrived in, with the key still down and no way to
+            // start again but to lift it and press it.
+            //
+            // Jake, off his own run: after moving through the sphere the
+            // first time if i'm still holding forward my motion stops.
             return 0.0;
         }
         // the ride is not walking, so it takes no steps. Spec 0004 reads this
@@ -19994,18 +20002,29 @@ mod tests {
         game.yaw = 0.0;
         game.pitch = 0.0;
 
+        // **Pressed once and never again**, because both faults this holds
+        // live after the crossing and a test that presses every frame hides
+        // the second of them.
+        game.walking = [true, false, false, false];
+
         let mut was = game.layer;
         let mut crossings = 0;
+        let mut crossed_at = None;
+        let mut half_a_second_on = None;
 
-        for _ in 0..(60 * 20) {
-            // held down the whole way, and the crossing lets go of every
-            // key, so a player walking at it presses again
-            game.walking = [true, false, false, false];
+        for n in 0..(60 * 20) {
             game.aimed_and_moved(1.0 / 60.0);
 
             if game.layer != was {
                 crossings += 1;
                 was = game.layer;
+                crossed_at = Some((n, game.at));
+            }
+
+            if let Some((when, where_)) = crossed_at {
+                if n == when + 30 {
+                    half_a_second_on = Some(game.at.distance(where_));
+                }
             }
         }
 
@@ -20014,6 +20033,15 @@ mod tests {
             "twenty seconds of walking forward from {:?} crossed {} times and \
              ended at {:?}",
             at, crossings, game.at
+        );
+
+        let carried = half_a_second_on.expect("nothing crossed, so there is nothing to hold");
+
+        assert!(
+            carried > 0.5,
+            "half a second after the crossing the body had gone {:.3}, so \
+             arriving took the key out of your hand",
+            carried
         );
         assert!(
             game.at.distance(at) > 20.0,
