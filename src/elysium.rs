@@ -405,7 +405,37 @@ pub const SWELLS: f32 = 3.0;
 /// the dark ran ahead of the glass and the first half of the crossing was
 /// black before anything had bent.
 pub fn darkens(fold: f32) -> f32 {
-    fold.clamp(0.0, 1.0).powi(3)
+    (fold / taken()).clamp(0.0, 1.0).powi(5)
+}
+
+/// The fold by which it is black, which is the fold at which it starts
+/// bending hard enough to gather the room into an image.
+///
+/// **Because a lens that is not black yet is a window.** `darkens` ran the
+/// whole fold, so at 0.95 the glass was bending at 2.07 and still a seventh
+/// transparent, and what a bend like that does is collect the room behind it
+/// into a bright picture inside the sphere: the lamps and the colonnade,
+/// legible, a tenth of a second before the room swaps.
+///
+/// Jake, off his own run: now there's a flash of the originating room on
+/// other side of the ball before it gets swapped.
+///
+/// **And the fifth power rather than the third, which is what ending the
+/// fold here costs.** Cubed over a fold that stops at 0.767 the glass is
+/// 0.28 gone at the halfway mark, where cubing the whole fold had it at
+/// 0.125, and `the_glass_is_itself_until_you_walk_into_it` refuses that for
+/// its own reason: a glass half gone by the middle never shows the bending
+/// it is the middle of. The fifth power puts that midpoint back at 0.118.
+/// Solved for rather than tried, which is `ln 0.125 / ln (0.5 / taken)`.
+///
+/// Derived off [`bending`] rather than written down, because it is the same
+/// moment read from the other side and two numbers for one moment come
+/// apart. Lowering [`SWALLOWS`] was the other way and is worse: it is not
+/// the bending that shows the room, it is the glass being clear while it
+/// bends, and a gentler lens just leaves a mirror ball reflecting the place
+/// you are leaving.
+pub fn taken() -> f32 {
+    ((1.0 - crate::glass::INDEX) / (SWALLOWS - crate::glass::INDEX)).sqrt()
 }
 
 /// How far the whole frame is covered, a share of the way across the fold.
@@ -417,12 +447,20 @@ pub fn darkens(fold: f32) -> f32 {
 /// there's still a rotation towards the stairs on the other side, they
 /// should already be there.
 ///
-/// [`darkens`] squared, so this is nothing for most of the crossing and
-/// the hole does the work, and seals only at the last of it. Read twice
+/// The sixth power of the fold, so this is nothing for most of the crossing
+/// and the hole does the work, and seals only at the last of it. Read twice
 /// off the one arc: it shuts on the way in and opens on the way out, with
 /// the move and the turn in the dark between.
+///
+/// **Written on the fold and not on [`darkens`], which is what it used to
+/// be.** It was that one squared, and that one was the fold cubed, so this
+/// is the curve it has always computed. What broke the composition is
+/// `darkens` saturating at [`taken`]: carried through, the whole frame
+/// would go black there and stay black for a third of a second, which is a
+/// blackout rather than a fold. The glass is the thing that had to shut
+/// sooner; the frame did not.
 pub fn seals(fold: f32) -> f32 {
-    darkens(fold).powi(2)
+    fold.clamp(0.0, 1.0).powi(6)
 }
 
 /// The multiplier itself, squared like [`bending`] so the two move
@@ -1515,6 +1553,54 @@ mod tests {
             )
             .is_none(),
             "looking into it from across the room counts as being at it"
+        );
+    }
+
+    /// Spec 0133: and it is black before it is a lens worth looking through.
+    ///
+    /// **Jake, off his own run: now there's a flash of the originating room
+    /// on other side of the ball before it gets swapped.** `darkens` ran the
+    /// whole fold, so at 0.95 the glass bent at 2.07 while still a seventh
+    /// clear, and a bend like that gathers the room behind it into a picture
+    /// inside the sphere: the lamps and the colonnade, legible, a tenth of a
+    /// second before the room swaps.
+    ///
+    /// Held at every hundredth of the fold rather than at the one number,
+    /// because the two curves are read off each other and a test naming
+    /// `taken` would be asking `darkens` what it just did.
+    ///
+    /// The second half is the other side of it: shutting the glass sooner
+    /// must not shut the frame sooner, or the hole nobody can see through
+    /// is a blackout. `seals` is the fold's sixth power, which is what
+    /// `darkens` squared came to before any of this.
+    #[test]
+    fn it_is_black_before_it_gathers_the_room() {
+        for n in 0..=100 {
+            let fold = n as f32 / 100.0;
+
+            if bending(fold) >= 1.0 {
+                assert_eq!(
+                    darkens(fold),
+                    1.0,
+                    "at fold {:.2} the glass bends {:.3} and is only {:.3} dark, \
+                     so it is a window onto the room you are leaving",
+                    fold,
+                    bending(fold),
+                    darkens(fold)
+                );
+            }
+        }
+
+        assert!(
+            seals(taken()) < 0.5,
+            "the frame is {:.3} covered by the time the glass goes black, so \
+             the glass going black is a thing nobody sees",
+            seals(taken())
+        );
+        assert_eq!(
+            seals(1.0),
+            1.0,
+            "the frame is not covered at the top of the arc, where the room swaps"
         );
     }
 

@@ -254,6 +254,9 @@ still marked unbuilt have no test yet and are what is left.
   still down. — `tests::one_walk_at_the_glass_crosses_once`
 - The glass winds from a mirror into a lens on the way
   across. — `elysium::tests::the_glass_turns_from_a_mirror_into_a_lens`
+- And is black before that lens bends hard enough to gather the room behind
+  it into a picture, while the frame itself is still mostly
+  open. — `elysium::tests::it_is_black_before_it_gathers_the_room`
 - And is its own tint at rest, so none of this dims spec 0064's
   room. — `elysium::tests::the_glass_is_itself_until_you_walk_into_it`
 - The way back is the way in read backwards, so nobody can be stranded
