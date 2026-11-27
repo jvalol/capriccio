@@ -579,6 +579,87 @@ pub fn shell() -> Vec<(Vec3, Vec3)> {
         .collect()
 }
 
+/// How far below the ceiling the shade's underside hangs.
+///
+/// **This is where the lamp is, and it is said here rather than in `aim`.**
+/// The building's rule, learned in the cellar and broken again in the baths,
+/// is that every lamp sits in a fitting, and the way to keep it is to derive
+/// the lamp from the fitting so there is no lamp that is not in one.
+/// `study::pendant_lamp` does the same thing for the rooms that have a
+/// ceiling grid. The number was `aim::TESSERACT_LAMP_UP` and said 0.82 of
+/// the way up; it is the same number from the other end and is now said
+/// once.
+pub const LAMP_DROP: f32 = CELL * 0.18;
+
+/// How wide the shade is.
+///
+/// A fraction of the cell and not an absolute size, which is the opposite of
+/// what the plinth does. The plinth is furniture and a person walks up to
+/// it, so it stays the size it is in a bigger room. A fitting nine metres up
+/// is only ever seen at a distance, and what it has to do is read as the
+/// thing the light comes from, so it is sized against the room the way the
+/// light's own reach already is.
+pub const LAMP_ACROSS: f32 = CELL * 0.13;
+pub const LAMP_STEM: f32 = LAMP_ACROSS * 0.07;
+
+/// The shade, its stem, and the rose where the stem meets the ceiling.
+///
+/// **Square, and stepped rather than one slab.** Everything in this cell is
+/// square: six panels, six shell slabs, a plinth. A turned bowl would be the
+/// only round thing in here that is not an exhibit, and one slab on a stick
+/// is the placeholder this project has been told about more than once. Two
+/// plates, the upper narrower, is a taper for one extra box.
+///
+/// The rose is what stops the stem reading as a wire growing out of a
+/// painted square. It is the smallest of the three and does the most.
+/// How thick each of the plates is.
+const PLATE: f32 = LAMP_ACROSS * 0.09;
+
+pub fn pendant() -> [(Vec3, Vec3); 3] {
+    let (shade, _) = shade();
+    let top = shade.y + PLATE * 0.5;
+
+    [
+        // the rose, with its top buried in the ceiling panel rather than
+        // laid against it. Two faces in one plane both on show is the fault
+        // this building has made seven times; a face inside a solid is
+        // hidden instead, and the alternative here was a three centimetre
+        // gap with the rose floating under the ceiling.
+        (
+            vec3(0.0, CELL - PLATE * 0.5, 0.0),
+            vec3(LAMP_ACROSS * 0.3, PLATE, LAMP_ACROSS * 0.3),
+        ),
+        // the stem down to the shade
+        (
+            vec3(0.0, (CELL + top + PLATE) * 0.5, 0.0),
+            vec3(LAMP_STEM, CELL - top - PLATE, LAMP_STEM),
+        ),
+        // and the narrower plate on top of it, which is the taper
+        (
+            vec3(0.0, top + PLATE * 0.5, 0.0),
+            vec3(LAMP_ACROSS * 0.62, PLATE, LAMP_ACROSS * 0.62),
+        ),
+    ]
+}
+
+/// The lit plate of it, which is the only part that gives light.
+pub fn shade() -> (Vec3, Vec3) {
+    (
+        vec3(0.0, CELL - LAMP_DROP + PLATE * 0.5, 0.0),
+        vec3(LAMP_ACROSS, PLATE, LAMP_ACROSS),
+    )
+}
+
+/// Where the lamp is, which is the underside of the shade it hangs in.
+///
+/// Read off [`shade`] rather than written down, so a lamp outside its
+/// fitting is not a thing that can be expressed here.
+pub fn lamp() -> Vec3 {
+    let (at, size) = shade();
+
+    at - Vec3::Y * (size.y * 0.5)
+}
+
 /// The field on a face, in the colour of the cell beyond it.
 ///
 /// Where it is and how big, which is all the room needs to say; what colour
@@ -2855,6 +2936,64 @@ mod tests {
 
             assert_eq!(on, 3, "{:?} is on {} cells", edge, on);
         }
+    }
+
+    /// Spec 0021: the one lamp in here is inside a fitting, and the fitting
+    /// hangs off the ceiling without touching anything else.
+    ///
+    /// **The rule this holds is the building's oldest.** A light with no
+    /// fitting is a bright patch on a surface and no reason for it; the
+    /// cellar was told once and the baths did it worse, with the lamps on
+    /// the ceiling and the sconces dark on a wall. This cell had a point
+    /// light nine metres up and nothing there at all until Jake looked up
+    /// and asked what was supposed to be on the ceiling.
+    ///
+    /// What makes it hold is that `lamp` reads `shade` rather than naming a
+    /// height of its own, the way `study::pendant_lamp` does. The assertion
+    /// below is the second line of defence; the first is that a lamp outside
+    /// its fitting cannot be written.
+    #[test]
+    fn the_lamp_hangs_in_a_fitting() {
+        let at = lamp();
+        let (shade, size) = shade();
+        let half = size * 0.5;
+
+        assert!(
+            (at.x - shade.x).abs() <= half.x + 1e-4
+                && (at.z - shade.z).abs() <= half.z + 1e-4
+                && (at.y - shade.y).abs() <= half.y + 1e-4,
+            "the lamp at {:?} is not inside the shade at {:?} by {:?}",
+            at,
+            shade,
+            size
+        );
+
+        // the whole fitting is overhead, clear of a standing body and of the
+        // plinth it hangs over
+        let (plinth, plinth_size) = plinth();
+        let lowest = std::iter::once((shade, size))
+            .chain(pendant())
+            .map(|(at, size)| at.y - size.y * 0.5)
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            lowest > plinth.y + plinth_size.y * 0.5 + SHAPE_ACROSS + 1.0,
+            "the fitting comes down to {:.2}, which is into the room",
+            lowest
+        );
+
+        // and it reaches the ceiling, so it is hung rather than floating
+        let highest = pendant()
+            .iter()
+            .map(|(at, size)| at.y + size.y * 0.5)
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            highest >= CELL - 1e-4,
+            "the fitting stops at {:.2} and the ceiling is at {:.2}",
+            highest,
+            CELL
+        );
     }
 
     /// Spec 0021: the map lines up with the room it is a map of.

@@ -8807,12 +8807,34 @@ impl Arcade {
         scene.light.intensity = 0.0;
         scene.light.ambient = Vec3::ONE * aim::TESSERACT_LIT + air * aim::TESSERACT_AIR;
 
+        // and the one lamp, taken off the fitting it hangs in rather than
+        // written out again here. It had no fitting until Jake looked up and
+        // asked what was supposed to be on the ceiling, which is the
+        // building's oldest mistake: a bright patch with nothing there to
+        // have made it.
         scene.push_light(blitzkit::lighting::PointLight::new(
-            glam::vec3(0.0, tesseract::CELL * aim::TESSERACT_LAMP_UP, 0.0),
+            tesseract::lamp(),
             Vec3::ONE,
             aim::TESSERACT_LAMP,
             tesseract::CELL * aim::TESSERACT_LAMP_REACH,
         ));
+
+        for (at, size) in tesseract::pendant() {
+            scene.push_material(
+                cube,
+                &Transform::at(at).with_scale(size),
+                aim::TESSERACT_FITTING,
+                aim::VOID,
+            );
+        }
+
+        let (at, size) = tesseract::shade();
+        scene.push_material(
+            cube,
+            &Transform::at(at).with_scale(size),
+            aim::TESSERACT_SHADE,
+            aim::VOID,
+        );
 
         for (at, size) in tesseract::shell() {
             scene.push_material(

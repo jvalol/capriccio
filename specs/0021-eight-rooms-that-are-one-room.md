@@ -346,6 +346,35 @@ If 11 still walks tight, the lever is not this number. It is that the cell
 is a dark box with one plinth in the middle and nothing between a person and
 any wall, so there is nothing in it to measure a distance against.
 
+**And the lamp had no fitting, 2026-11-27.** Jake, looking up: *what's
+supposed to be on the ceiling?* Nothing is, by design: the ceiling and the
+floor are the two faces nobody can walk at, so `sign_at` gives them no
+object and they carry a panel, a border and a word and no more. What he
+could see was the room's one point light, nine metres up with nothing there
+to have made it, which is the building's oldest fault and was last made in
+the baths.
+
+So there is a pendant. A rose with its top buried in the ceiling panel, a
+stem, a narrower plate, and a square shade on the end of it, and the lamp is
+read off the shade's underside rather than written down. `TESSERACT_LAMP_UP`
+is gone: a lamp's height is where its fitting holds it, and said in two
+places it was two accounts of one thing. That is the same move
+`study::pendant_lamp` makes for the rooms with a ceiling grid, and it is why
+this cell could have a light with no fitting for as long as it did.
+
+Square and stepped rather than turned, because everything in this cell is
+square and a bowl would be the only round thing in here that is not an
+exhibit, and because one slab on a stick is a placeholder.
+
+**It drew as a grey patch first, and the arithmetic is worth keeping.** The
+shade was given 1.45, which is past one and should burn. It does not, here:
+the lamp sits at the shade's own underside, so the light is in that face's
+plane and it takes no direct share of it at all. What lands on it is the
+ambient, `TESSERACT_LIT` plus a fifth of the cell's hue, about 0.19, and
+1.45 of that is 0.28. Darker than the lit ceiling round it, which is the
+fault it was put there to fix. It wants the reciprocal of that ambient and
+is 5.2, in family with the neon at 3.2 and spec 0017's door frame at 2.4.
+
 ## Why it was parked, and what the three failures were
 
 
@@ -787,6 +816,9 @@ And the map:
 - And the shape turns with your head to do it, rigidly about its own up, so
   the eight cells keep their shape and only their side of it changes.
   — `tesseract::tests::the_shape_in_your_hand_turns_with_your_head`
+- The cell's one lamp is inside the shade of a fitting that reaches the
+  ceiling and hangs clear of the room below it.
+  — `tesseract::tests::the_lamp_hangs_in_a_fitting`
 - The cross lays the four walls you can walk at out flat, up for the one in
   front of you, and the two nobody can walk at are not on it. The squares are
   square, they face the holder rather than each standing at its own angle,

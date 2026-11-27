@@ -2071,12 +2071,38 @@ pub const TESSERACT_LIT: f32 = 0.13;
 
 /// The lamp the room carries, because it cannot borrow one.
 ///
-/// How high it hangs as a fraction of the cell, how bright, and how far it
-/// reaches as a fraction of the cell. A closed box has no sun in it, so this
-/// is the only thing in here that makes one face differ from another.
-pub const TESSERACT_LAMP_UP: f32 = 0.82;
+/// How bright, and how far it reaches as a fraction of the cell. A closed
+/// box has no sun in it, so this is the only thing in here that makes one
+/// face differ from another.
+///
+/// How high it hangs used to be here too, as 0.82 of the cell, and is
+/// `tesseract::LAMP_DROP` now. A lamp's height is where its fitting holds
+/// it, and said in two places it is two accounts of one thing: this one had
+/// no fitting at all for as long as it was written here.
 pub const TESSERACT_LAMP: f32 = 1.5;
 pub const TESSERACT_LAMP_REACH: f32 = 1.8;
+
+/// The shade on the end of it, which has to burn rather than take the room's
+/// light.
+///
+/// **Five and not one and a half, and the arithmetic says why.** The lamp
+/// is at the shade's own underside, so that face has the light in its plane
+/// and takes no direct share of it at all: what falls on it is the ambient,
+/// which is `TESSERACT_LIT` plus a fifth of the cell's hue and comes to
+/// about 0.19. At 1.45 the shade drew at 0.28, a grey patch darker than the
+/// lit ceiling round it, which is the fault it was put there to fix. It
+/// wants roughly the reciprocal of that ambient, and this is in family with
+/// the other things in this building that give off more than they are given:
+/// neon at 3.2 and spec 0017's door frame at 2.4.
+///
+/// It takes the cell's tint with it, since the ambient it multiplies is
+/// mostly the air. A lamp in red air reading red is the same bargain the
+/// rest of the room already made.
+pub const TESSERACT_SHADE: Vec4 = vec4(5.2, 5.1, 4.6, 1.0);
+
+/// And the stem and rose that hold it, which are hardware rather than light
+/// and take the shell's own dark.
+pub const TESSERACT_FITTING: Vec4 = vec4(0.22, 0.22, 0.26, 1.0);
 
 pub const BEHIND_FLOOR: Vec4 = vec4(0.018, 0.018, 0.024, 1.0);
 pub const BEHIND_WALL: Vec4 = vec4(0.022, 0.022, 0.030, 1.0);
