@@ -64,6 +64,43 @@ facing you hide nothing and ask nothing. Both maps are still there, which is
 what he asked for when he said do both: the shape says what this place is,
 and the cross says which wall leads where.
 
+**It said up is ahead and left is left, and did neither, 2026-11-27.** Two
+faults, one in each direction, and the arithmetic says both out loud.
+
+The cross was laid out by a `match` on the face, which names the frame's
+four ways. `Face::Right` is the wall at the room's `+x`, which is where
+`Face::way` puts it and where `crossing` reads a body as having left by it.
+Facing `Face::Ahead`, which is `+z` and the way `go_inside` stands you,
+screen right is `-x`. So the wall the cross called right was a metre to your
+left and the whole of it was a mirror image. The shape beside it has the
+same mirror and keeps it for now, which is said again below.
+
+And up was the frame's ahead rather than yours. `frame` changes only at the
+halfway mark of a crossing, so turning on the spot moved nothing at all: the
+square on top was the wall you walked in at, whichever way you were then
+looking. That is the third time this room's map has been called hard to line
+up with and the first time anybody measured it.
+
+Jake, looking at it: *the map could be more intuitive, with the map rotating
+so it reflects what rooms you're looking at.*
+
+So a wall's square goes where that wall is. Along the cross by how much of
+it lies to your right, up the cross by how much lies ahead of you, both off
+the wall's own direction in the room and the camera's own facing. There is
+no second account of where anything is, so there is nothing to keep in step,
+and facing a corner puts the two walls either side of it either side of the
+top. The squares stay flat on the window; it is which square is which that
+turns.
+
+**The shape does not follow your head, and that is on purpose.** It carries
+`HELD_TILT_Y`, which is 35 degrees about its own up and exists so you are
+never looking down one of its axes: a tesseract seen square on reads as a
+flat outline. Turning it with your head would walk it through that view once
+a quadrant. So the shape stays still and the cross is the one that answers
+which wall is which. The shape's own mirror is not fixed here, because
+undoing it means either flipping `corners_in` or renaming which world wall
+`Step::Right` is, and the second changes which object stands in which room.
+
 The four-cube goes in the cell you came in by, so finding the way out and
 finding the room with the four-cube in it are the same job. The trefoil knot
 goes in the cell opposite, which is what there is to find.
@@ -685,6 +722,13 @@ And the map:
   front of you, and the two nobody can walk at are not on it. The squares are
   square, they face the holder rather than each standing at its own angle,
   and no two of them overlap. — `tesseract::tests::the_cross_lays_out_the_four_walls_flat`
+- Every square is where its own wall is, from sixty four ways of looking:
+  up the cross by how far ahead the wall lies, across it by how far to your
+  right, and still four squares one step out from the middle with none on
+  top of another. — `tesseract::tests::the_cross_turns_with_your_head`
+- And the wall you are looking at is the square on top, checked off square
+  so it is not four lucky right angles.
+  — `tesseract::tests::the_wall_you_look_at_is_the_one_on_top`
 
 A bar belongs to three cells and not two, which that first test was written
 saying. A cube's edge is on two of its faces and that is one dimension short:

@@ -8659,11 +8659,18 @@ impl Arcade {
         //
         // Unspun, which the cube it replaced was not. A cross is only a
         // compass while it is square to the eye.
+        //
+        // **Square to the eye and turning under you, which are not the same
+        // thing.** The squares stay flat on the window; which square is
+        // which comes off where you are looking, so the wall in front of
+        // you is the one on top whatever you do with the mouse. The shape
+        // above does not follow your head and keeps its tilt, which is what
+        // stops it reading as a flat outline at four headings out of four.
         let beside = middle + up * tesseract::ROOM_UP;
         let turn = glam::Quat::from_mat3(&glam::Mat3::from_cols(right, up, right.cross(up)));
 
         for face in tesseract::Face::ALL {
-            let Some((at, size)) = tesseract::cross_at(face) else {
+            let Some((at, size)) = tesseract::cross_at(face, ahead) else {
                 continue;
             };
 
@@ -8683,7 +8690,7 @@ impl Arcade {
             // and the thing that stands in the room through that wall, on
             // the square that stands for it, which is the whole of how this
             // answers where a wall goes without a key
-            if let Some((where_, across)) = tesseract::face_thing(face) {
+            if let Some((where_, across)) = tesseract::face_thing(face, ahead) {
                 self.draw_a_thing(
                     scene,
                     tesseract::sign_on(inside.frame, face),

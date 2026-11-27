@@ -799,22 +799,61 @@ pub const ROOM_UP: f32 = 0.104;
 /// left. Nothing is hidden, nothing is foreshortened, and there is no
 /// matching to do. The two that are not on it are the floor and the ceiling,
 /// which are the two you cannot walk at.
-pub fn cross_at(face: Face) -> Option<(Vec3, Vec3)> {
+///
+/// **It said that and did neither, for as long as it has existed.** The
+/// layout was a `match` on the face, which names the frame's four ways and
+/// not the screen's, and the two are not the same set:
+///
+/// - `Face::Right` is the wall at the room's `+x`, which is where
+///   [`Face::way`] puts it and where [`crossing`] reads it. Facing
+///   [`Face::Ahead`], which is `+z` and the way `go_inside` stands you,
+///   screen right is `-x`. So the wall the map called right was a metre to
+///   your left and the whole cross was a mirror image. The shape beside it
+///   had it too, and `the_held_map_lines_up_with_the_room` asserted the
+///   mirrored side rather than catching it, because it compared the shape
+///   with itself and never with the room.
+/// - And up was the frame's ahead rather than yours. `frame` only changes
+///   at the halfway mark of a crossing, so turning on the spot moved
+///   nothing: the square on top was the wall you came in at, whichever way
+///   you were then looking.
+///
+/// Jake, three times across three builds of this, most lately looking at
+/// it: *the map could be more intuitive, with the map rotating so it
+/// reflects what rooms you're looking at.*
+///
+/// So the square for a wall goes where that wall is: along the screen by
+/// how much of it lies to your right, up the screen by how much lies ahead
+/// of you. Both come off the wall's own direction in the room, so there is
+/// no second account of where anything is and nothing to keep in step. Face
+/// a corner and the two walls either side of it sit either side of the top,
+/// which is what a thing that turns under you looks like.
+pub fn cross_at(face: Face, looking: Vec3) -> Option<(Vec3, Vec3)> {
     face.step()?;
 
-    // in the holder's own frame, where x is right, y is up and z is ahead
-    let along = match face {
-        Face::Ahead => Vec3::Y,
-        Face::Back => Vec3::NEG_Y,
-        Face::Right => Vec3::X,
-        Face::Left => Vec3::NEG_X,
-        Face::Down | Face::Up => return None,
-    };
+    let (look, right) = ground(looking);
+    let way = face.way();
 
     Some((
-        along * CROSS_STEP,
+        vec3(way.dot(right), way.dot(look), 0.0) * CROSS_STEP,
         vec3(ROOM_ACROSS * 2.0, ROOM_ACROSS * 2.0, ROOM_SKIN),
     ))
+}
+
+/// Where somebody is looking and what is to the right of their screen, both
+/// flattened onto the floor they are standing on.
+///
+/// **The pair rather than the angle.** An angle needs a zero, and a zero
+/// written here is a second account of which way the room's `+z` is. Two
+/// vectors taken off the camera's own say it once.
+///
+/// Flattened, because the cross is a plan of a cell and the two faces that
+/// are not on it are the two the floor has no room for. Looking at your own
+/// feet leaves nothing to flatten, so that falls back on the way you came
+/// in rather than collapsing the cross onto a point.
+fn ground(looking: Vec3) -> (Vec3, Vec3) {
+    let look = vec3(looking.x, 0.0, looking.z).normalize_or(Face::Ahead.way());
+
+    (look, look.cross(Vec3::Y))
 }
 
 /// How far from the middle of the cross each square sits.
@@ -836,8 +875,8 @@ pub const CROSS_STEP: f32 = ROOM_ACROSS * 2.6;
 /// its third axis pointing back at the eye, which is written down where the
 /// cross is drawn and was got wrong anyway: minus z put every object behind
 /// its own square, where the square hid it completely.
-pub fn face_thing(face: Face) -> Option<(Vec3, f32)> {
-    let (at, _) = cross_at(face)?;
+pub fn face_thing(face: Face, looking: Vec3) -> Option<(Vec3, f32)> {
+    let (at, _) = cross_at(face, looking)?;
     let across = ROOM_ACROSS * 2.0 * FACE_ACROSS;
 
     Some((at + Vec3::Z * (ROOM_SKIN + across * 0.5), across))
@@ -2231,16 +2270,20 @@ mod tests {
     /// held in rather than reaching the eye.
     #[test]
     fn a_square_of_the_cross_carries_its_thing_toward_you() {
+        // off square, so a thing that followed the layout by luck rather
+        // than by sharing it comes apart here
+        let looking = vec3(0.4, -0.2, 0.9);
+
         for face in Face::ALL {
-            let Some((at, across)) = face_thing(face) else {
+            let Some((at, across)) = face_thing(face, looking) else {
                 assert!(
-                    cross_at(face).is_none(),
+                    cross_at(face, looking).is_none(),
                     "{:?} has a square and no thing on it",
                     face
                 );
                 continue;
             };
-            let (middle, _) = cross_at(face).expect("a square to carry it");
+            let (middle, _) = cross_at(face, looking).expect("a square to carry it");
 
             // on the square it belongs to, and nowhere near another
             assert!(
@@ -2796,22 +2839,19 @@ mod tests {
     /// not a cube any more.
     #[test]
     fn the_cross_lays_out_the_four_walls_flat() {
-        let want = [
-            (Face::Ahead, Vec3::Y),
-            (Face::Back, Vec3::NEG_Y),
-            (Face::Right, Vec3::X),
-            (Face::Left, Vec3::NEG_X),
-        ];
+        let walls = [Face::Ahead, Face::Back, Face::Right, Face::Left];
+        // the way you arrive, which is what go_inside stands you in
+        let looking = Face::Ahead.way();
 
-        for (face, along) in want {
-            let (at, size) = cross_at(face).expect("a wall you can walk at");
+        for face in walls {
+            let (at, size) = cross_at(face, looking).expect("a wall you can walk at");
 
             assert!(
-                (at - along * CROSS_STEP).length() < 1e-5,
-                "the {:?} square sits at {:?} rather than {:?} of the middle",
+                (at.length() - CROSS_STEP).abs() < 1e-5,
+                "the {:?} square sits {:.4} from the middle rather than {:.4}",
                 face,
-                at,
-                along
+                at.length(),
+                CROSS_STEP
             );
 
             // square, and flat: all four face the holder rather than each
@@ -2824,12 +2864,12 @@ mod tests {
             );
 
             // and clear of its neighbours, or the cross is one shape
-            for (other, _) in want {
+            for other in walls {
                 if other == face {
                     continue;
                 }
 
-                let (beside, _) = cross_at(other).expect("another wall");
+                let (beside, _) = cross_at(other, looking).expect("another wall");
 
                 assert!(
                     (at - beside).length() > size.x,
@@ -2843,13 +2883,17 @@ mod tests {
         // the floor and the ceiling are not on it, because they are the two
         // nobody can walk at
         for face in [Face::Down, Face::Up] {
-            assert!(cross_at(face).is_none(), "{:?} is on the cross", face);
+            assert!(
+                cross_at(face, looking).is_none(),
+                "{:?} is on the cross",
+                face
+            );
         }
 
         // and what is through the four is four different cells, none of them
         // the one you are standing in
         let frame = Frame::new();
-        let mut through: Vec<Cell> = want.iter().map(|(f, _)| frame.beyond(*f)).collect();
+        let mut through: Vec<Cell> = walls.iter().map(|f| frame.beyond(*f)).collect();
 
         through.sort_by_key(|cell| (cell.axis, cell.up));
         through.dedup();
@@ -2857,5 +2901,100 @@ mod tests {
         assert_eq!(through.len(), 4, "the four walls name four rooms");
         assert!(!through.contains(&frame.cell()));
         assert!(!through.contains(&opposite(frame.cell())));
+    }
+
+    /// Spec 0021: every square of the cross is where its own wall is, from
+    /// wherever you are looking.
+    ///
+    /// The one the mirror and the frozen frame both failed. Standing the way
+    /// you arrive, the wall called Right is a metre to your left and the old
+    /// cross drew it on your right; turn on the spot and nothing moved at
+    /// all, because the frame only changes when you walk through something.
+    #[test]
+    fn the_cross_turns_with_your_head() {
+        let walls = [Face::Ahead, Face::Back, Face::Right, Face::Left];
+
+        for n in 0..64 {
+            let about = n as f32 / 64.0 * std::f32::consts::TAU;
+            let looking = vec3(about.sin(), 0.0, -about.cos());
+            // the same right the draw takes off the camera
+            let right = looking.cross(Vec3::Y);
+
+            let where_ = |face: Face| cross_at(face, looking).expect("a wall").0.truncate();
+
+            // up the cross is ahead of you, and across it is to your right,
+            // both measured against the wall's own way in the room
+            for face in walls {
+                let at = where_(face);
+                let way = face.way();
+
+                assert!(
+                    (at.y - way.dot(looking) * CROSS_STEP).abs() < 1e-4,
+                    "looking {:?}, the {:?} wall lies {:+.2} ahead of you and \
+                     the cross puts it {:+.2} up",
+                    looking,
+                    face,
+                    way.dot(looking),
+                    at.y / CROSS_STEP
+                );
+                assert!(
+                    (at.x - way.dot(right) * CROSS_STEP).abs() < 1e-4,
+                    "looking {:?}, the {:?} wall lies {:+.2} to your right \
+                     and the cross puts it {:+.2} across",
+                    looking,
+                    face,
+                    way.dot(right),
+                    at.x / CROSS_STEP
+                );
+            }
+
+            // and it is still a cross: four squares the same way out from
+            // the middle, none on top of another
+            for face in walls {
+                assert!((where_(face).length() - CROSS_STEP).abs() < 1e-4);
+
+                for other in walls {
+                    if other != face {
+                        assert!(
+                            (where_(face) - where_(other)).length() > ROOM_ACROSS * 2.0,
+                            "looking {:?}, the {:?} and {:?} squares overlap",
+                            looking,
+                            face,
+                            other
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Spec 0021: the wall you are looking at is the square on top.
+    ///
+    /// The sweep above is the arithmetic; this is the sentence the help text
+    /// has always made and the cross has never kept.
+    #[test]
+    fn the_wall_you_look_at_is_the_one_on_top() {
+        let walls = [Face::Ahead, Face::Back, Face::Right, Face::Left];
+
+        for face in walls {
+            // a little off square, so this is not four lucky right angles
+            let looking = face.way() + walls[0].way() * 0.2;
+
+            let highest = walls
+                .iter()
+                .copied()
+                .max_by(|one, other| {
+                    let up = |f: Face| cross_at(f, looking).expect("a wall").0.y;
+
+                    up(*one).total_cmp(&up(*other))
+                })
+                .expect("four walls");
+
+            assert_eq!(
+                highest, face,
+                "looking at the {:?} wall, the square on top is {:?}",
+                face, highest
+            );
+        }
     }
 }
