@@ -58,11 +58,18 @@ z −9.5 to −25.5, measured from the south face of the wall it shares with the
 nook. It sits at the height the glass room sits at now, y 3.5 to 6.7, so the
 colonnade, the bays, the cornice and the lid are what they already are.
 
-**The ground floor under it is an L, because the south room is already
-there.** That room runs x −5.2 to 5.2 down to z −15.75 with its west wall at
-x −5.5, so the new ground floor is x −12.4 to −5.5 for z −9.5 to −16.05, and
-the full x −12.4 to −3.0 south of that. The upper floor is the whole rectangle
-and overhangs the south room by 2.2 metres for its first six.
+**The ground floor under it was an L, because the south room was already
+there.** That room ran x −5.2 to 5.2 with its west wall at x −5.5, so the new
+ground floor was x −12.4 to −5.5 for its first six metres and the full x
+−12.4 to −3.0 south of that, with the upper floor the whole rectangle,
+overhanging by 2.2.
+
+**It is a rectangle since 2026-11-27.** Spec 0022's gallery was that wide
+because its row of shapes was, and that row went down its side walls: the
+room is the hall's own width now, which is x −2.7 to 2.7 with its west wall
+at −3.0, and −3.0 is this wing's east face. One wall between the two rooms
+rather than two in a plane, one slab under this one rather than two round a
+corner, and nothing overhanging anything.
 
 **One straight flight, climbing south.** Fourteen risers of `cellar::RISER`
 and 4.2 metres of going, as spec 0064 has always had, on the line x −7.7 that

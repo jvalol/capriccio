@@ -88,37 +88,38 @@ pub const WELL_WIDE: f32 = FLIGHT + GUARD * 2.0;
 
 /// The wing's own ground storey, which is what this room stands on.
 ///
-/// **An L and not a rectangle.** Spec 0022's gallery is already on the
-/// ground at x -5.2 to 5.2 and runs south to its own end, so the wing takes
-/// the ground west of the gallery's wall for that stretch and the full width
-/// south of it. Two slabs rather than one that overlaps the gallery's: two
-/// floors in a plane is the fault this building has found five times.
+/// **A rectangle, and it used to be an L.** Spec 0022's gallery was 10.4
+/// wide because its row of shapes was, which put its west wall 2.8 metres
+/// inside this footprint: the wing took the ground west of that wall for
+/// the gallery's own six metres and the full width south of it, in two
+/// slabs rather than one that overlaps the gallery's, since two floors in
+/// a plane is the fault this building has found five times. The room above
+/// was the whole rectangle and overhung the result.
 ///
-/// The room above is the whole rectangle, since above 3.2 metres there is
-/// nothing south of the nook at all. It overhangs the gallery by 2.2 metres
-/// for its first six, which spec 0114 names and accepts.
-pub fn under(reaches: f32) -> [Aabb; 2] {
+/// The gallery's exhibits went down its sides and it is the hall's width
+/// now, which is this room's east face. So there is no notch, one slab
+/// does it, and the wall between the two rooms is one wall.
+///
+/// Checked and not assumed: the gallery's west face is read here rather
+/// than taken as read, so a gallery that widens again comes back as a
+/// floor overlapping another room's, which
+/// `no_two_rooms_leave_a_hole_between_their_floors` and its neighbours
+/// would say.
+pub fn under(reaches: f32) -> [Aabb; 1] {
     let room = inside(reaches);
     let (west, east) = (room.min.x - THICK, room.max.x + THICK);
     let (south, north) = (room.min.z - THICK, room.max.z);
-    // up to the gallery's own floor, which is the one thing on this ground
-    // already. To its slab's edge and not to the west face of the wall on
-    // it: stopped a thickness short, the strip the wall stands on has no
-    // floor under it at all, which `no_two_rooms_leave_a_hole_between_their
-    // _floors` reads as a hole between two rooms and is right to.
     let (at, size) = room::gallery(reaches);
-    let beside = at.x - size.x * 0.5;
 
-    [
-        Aabb::new(
-            vec3(west, -THICK, at.z - size.z * 0.5),
-            vec3(beside, 0.0, north),
-        ),
-        Aabb::new(
-            vec3(west, -THICK, south),
-            vec3(east, 0.0, at.z - size.z * 0.5),
-        ),
-    ]
+    debug_assert!(
+        at.x - size.x * 0.5 >= east - 1e-3,
+        "the gallery's west face is at {:.2} and the wing's east at {:.2}, \
+         so this slab laps the gallery's floor",
+        at.x - size.x * 0.5,
+        east
+    );
+
+    [Aabb::new(vec3(west, -THICK, south), vec3(east, 0.0, north))]
 }
 
 /// The wing's own walls on the ground storey.
@@ -3011,8 +3012,10 @@ mod tests {
 
         // **And the east side is the tight one, so it is named.** The
         // flight stands in the middle of the opening and the gallery's
-        // west wall is 1.3 off it: wide enough, and the first thing that
-        // would stop being wide enough if the gallery moved west.
+        // west wall is what the room stops at: it was 1.3 off the flight
+        // with the gallery 10.4 wide, and 3.8 since that room was
+        // narrowed to the hall's own width. The first thing that would
+        // stop being wide enough if the gallery grew west again.
         let clear = crate::room::gallery_west() - (flight + FLIGHT * 0.5);
 
         assert!(
@@ -3026,7 +3029,9 @@ mod tests {
         // and the control, which is what says the wall was not simply
         // deleted: east of the gallery's west face it is still there, and
         // the nook does not open into the gallery
-        let at = crate::room::gallery_west() + 1.5;
+        // half way along what is left of that wall, since the gallery's
+        // own way in off the aisle is the rest of it
+        let at = (crate::room::gallery_west() + crate::room::gallery_way().0) * 0.5;
         let stopped = walked(
             vec3(at, 0.2, shared + 1.5),
             vec3(at, 0.0, shared - 3.0),

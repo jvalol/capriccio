@@ -1138,10 +1138,18 @@ mod tests {
     /// **The fault the third placing exists to fix.** On the whole back
     /// wall the row of six stood 0.75 off it, and from anywhere far
     /// enough back to see all of the picture, three of them were across
-    /// the middle of it. Measured in plan, which is where it has to be
-    /// measured: a shape between the room and the wall is in front of the
-    /// wall from every standing place at once, so no camera can settle
-    /// it.
+    /// the middle of it.
+    ///
+    /// **Asked along the sightline rather than across the room, since the
+    /// row went down the sides.** With the six on the end wall a shape
+    /// between the room and that wall was in front of it from every
+    /// standing place at once, so the question was answered in plan and
+    /// the answer was how far off the middle each one stood. Down the
+    /// sides they are off the middle by less than the frame's own half
+    /// width, 1.475 against 1.520, and are still nowhere near in front of
+    /// it, because they are three and a half metres nearer. What is left
+    /// to ask is the thing that was always meant: walk in, look at the
+    /// picture's edge, and see whether anything is on that line.
     ///
     /// Against the sweep and not the width. A shape turns, and what it
     /// reaches while it turns is what is in the way.
@@ -1150,17 +1158,30 @@ mod tests {
         let reaches = 8.3;
         let frame = framed() * 0.5;
         let sweep = crate::display::sweep();
+        let wall = crate::room::gallery_wall(reaches);
+        let on = crate::display::all_of_them(reaches);
 
-        for one in crate::display::all_of_them(crate::room::gallery_wall(reaches)) {
-            let clear = one.at.x.abs() - sweep - frame;
+        // from the way in, which is the one place spec 0039 points the
+        // room at, and from the back of the room, which is where you end
+        // up to take the whole picture in
+        for door in [-reaches, wall + framed() / crate::room::IN_FRAME] {
+            for one in &on {
+                // how far off the middle the sightline to the frame's own
+                // edge has run by the time it is level with this shape
+                let along = (door - one.at.z) / (door - wall);
+                let line = frame * along;
+                let clear = one.at.x.abs() - sweep - line;
 
-            assert!(
-                clear >= crate::display::BESIDE - 1e-4,
-                "{} sweeps to {:.3} of the middle and the picture's frame reaches {:.3}",
-                one.name,
-                one.at.x.abs() - sweep,
-                frame
-            );
+                assert!(
+                    clear >= crate::display::BESIDE - 1e-4,
+                    "standing at z {:.2}, {} sweeps to {:.3} of the middle \
+                     where the line to the frame's edge is at {:.3}",
+                    door,
+                    one.name,
+                    one.at.x.abs() - sweep,
+                    line
+                );
+            }
         }
     }
 

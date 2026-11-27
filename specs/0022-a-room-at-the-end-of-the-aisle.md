@@ -36,8 +36,41 @@ the row is bounded by the new room instead of by the old one's furniture.
 
 ## What it is
 
-A room across the end of the hall, wider than the aisle and deep enough to
-stand back in, with the shapes along its far wall.
+A room off the end of the hall, the hall's own width and deep enough to walk
+down, with the shapes along its two side walls and the picture at the end.
+
+### 2026-11-27: along the sides, and the hall's width
+
+**It was wider than the aisle, and that was what put it inside the wing.**
+`GALLERY_WIDE` came off the row: six shapes at 0.95 opening round spec 0039's
+picture is 10.4, so the room's west wall stood 2.8 metres inside the footprint
+of spec 0114's wing beside it. `glass::under` laid an L to dodge it and the
+room above overhung the result, which spec 0114 named and accepted. Opening
+the wall between that wing and the nook put a body in the wing looking at the
+jog.
+
+Jake: *how about reshaping the gallery so its objects are along the sides
+leading to the fractal, then the room could be centered with the hall.*
+
+So the row is two ranks of three down the side walls, in facing pairs a bay
+apart, and nothing but the picture is on the end wall. The width is then the
+hall's own, `(WALL + CABINET.x) * 2`, which is also the wing's east face: one
+wall between the two rooms rather than two in a plane, the wing's ground
+storey a rectangle rather than an L, and the room square on the aisle it
+opens off.
+
+What the depth holds changed with it. It was far enough back to see the whole
+row across the end wall; it is a rank's run plus `mandel::framed` over
+`IN_FRAME` of clear floor in front of the picture.
+
+Three things moved because they were measured off the old room, each found by
+a test rather than by looking. The load room hangs on the gallery's east wall,
+so it moved west and south with it. Its doorway was 2.35 from the far corner,
+which is now directly behind the deeper of the two plinths on that wall, so it
+sits in the bay between the last two instead and `display::bay` is sized to
+hold it. And the gallery's own photograph stood five metres back, which in a
+room 5.4 wide is the far wall and nothing else, so it is taken from the
+opening.
 
 **Wider than the aisle on purpose.** Walking down the aisle between two rows
 of cabinets and out into something broader is the whole of what this room is
@@ -93,8 +126,14 @@ its first build, which from inside is a room standing on black.
 
 ## Acceptance criteria
 
-- The shapes fit along its far wall with real clearance at each end, derived
-  from the room rather than written down. — `display::tests::the_row_fits_between_the_end_cabinets`
+- The two ranks leave a walkway wider than a body between them, and the
+  picture on the end wall has clear plaster either side of it, both derived
+  from the room rather than written
+  down. — `display::tests::the_ranks_leave_a_way_through_and_the_picture_a_wall`
+- They are three facing pairs in the order you meet them, with the tesseract
+  in the last of them. — `display::tests::they_stand_in_pairs_down_the_sides`
+- Nothing of either rank is on the line from the way in to the picture's own
+  edge. — `mandel::tests::nothing_stands_in_front_of_the_picture`
 - Nothing in the building stands in it except the room and what holds the
   shapes up, and the shapes really are in it. — `room::tests::nothing_stands_in_the_gallery`
 - You cannot walk through any of it. — `room::tests::you_cannot_walk_through_anything`
@@ -115,3 +154,10 @@ the shapes are through a doorway from any cabinet.
 - Walking out of the aisle into it reads as arriving somewhere rather than as
   the room getting wider.
 - The whole row is in view from the back of it.
+
+And since the ranks went down the sides, where what a camera sees at once is
+no longer the whole of it:
+
+- Walking down it past three pairs reads as leading to the picture.
+- The nearest pair is beside you rather than in front of you, which is what a
+  room this width does and is the thing a wider one would not.

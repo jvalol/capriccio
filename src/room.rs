@@ -286,13 +286,27 @@ pub const INSIDE: f32 = 1.0;
 /// side, so you walk out of the gap between the last two cabinets and into
 /// something broader. A gap the full width of the room would be the end wall
 /// simply stopping, which is what this is replacing.
-/// Wide enough for the row with the picture's hole in the middle of it,
-/// and `display::CLEAR` of bare wall past each end.
+/// As wide as the hall, which is as wide as the wing beside it leaves it.
 ///
-/// It was 6.8 for a row of six standing shoulder to shoulder. Spec 0039's
-/// picture now stands in the middle of that row rather than behind it, per
-/// `display::gap`, and the room holds what the row came to.
-pub const GALLERY_WIDE: f32 = 10.4;
+/// **It was 10.4, which was the row.** Six shapes shoulder to shoulder
+/// opening round spec 0039's picture came to that, and a room as wide as
+/// its row put this one's west wall 2.8 metres inside the wing of spec
+/// 0114: `glass::under` laid an L to dodge it and the room above
+/// overhung the result. Jake, standing in the wing and looking at the
+/// jog: how about reshaping the gallery so its objects are along the
+/// sides leading to the fractal, then the room could be centered with
+/// the hall.
+///
+/// So the exhibits went down the sides and this stopped being the row's
+/// number. What is left to set it is the wing, whose east face stands
+/// `WALL + CABINET.x` off the middle, the same as the nook's own east
+/// edge and the same as the hall's rows: one wall between the two rooms
+/// rather than two in a plane, and the gallery exactly as wide as the
+/// hall that runs into it.
+///
+/// Written off those two rather than as 5.4, because the fact is that it
+/// matches them and not that it is that number.
+pub const GALLERY_WIDE: f32 = (WALL + CABINET.x) * 2.0;
 
 /// How much wall is in frame per unit you stand back from it.
 ///
@@ -302,15 +316,19 @@ pub const GALLERY_WIDE: f32 = 10.4;
 /// and the first guess at that depth was 4.2 and cut both ends off the row.
 pub const IN_FRAME: f32 = 1.15;
 
-/// How deep the gallery is: far enough back to see the whole row, plus room
-/// to stand in behind that.
+/// How deep the gallery is: the length of a rank of exhibits, and then
+/// far enough back off the picture to see it.
 ///
 /// Derived, so a row that grows takes the room with it rather than quietly
 /// not fitting in it, which is the whole fault this room exists to fix.
+///
+/// **Both halves changed and the answer barely did.** It used to be what
+/// it takes to see the whole row across the end wall, 6.25. Three a side
+/// run `display::alongside`, the picture wants `mandel::framed` over
+/// `IN_FRAME` of floor in front of it, and the two come to within a tenth
+/// of what the room already was.
 pub fn gallery_deep() -> f32 {
-    let wants = crate::display::shapes() + crate::display::CLEAR * 2.0;
-
-    wants / IN_FRAME + 0.6
+    crate::display::alongside() + crate::mandel::framed() / IN_FRAME
 }
 
 /// Whether a point is in the gallery rather than the hall it opens off.
@@ -374,10 +392,12 @@ pub const GALLERY_SHADE: Vec3 = vec3(0.26, 0.12, 0.26);
 /// Off the row's own places rather than off a division of its span, so a
 /// shape that moves takes its light with it.
 pub fn gallery_lamps(reaches: f32) -> Vec<Vec3> {
-    let z = gallery_wall(reaches) + crate::display::OFF_THE_WALL;
-
     (0..crate::display::count())
-        .map(|n| vec3(crate::display::along(n), GALLERY_LAMP_UP, z))
+        .map(|n| {
+            let at = crate::display::stands(reaches, n);
+
+            vec3(at.x, GALLERY_LAMP_UP, at.z)
+        })
         .collect()
 }
 
@@ -1465,7 +1485,7 @@ impl Room {
 
         Self {
             stood,
-            displays: crate::display::all_of_them(gallery_wall(reaches)),
+            displays: crate::display::all_of_them(reaches),
             benches,
             bookcases,
             walls,
@@ -1840,7 +1860,8 @@ impl Room {
             ("the hall of mirrors", crate::mirrors::floor()),
         ];
 
-        // and spec 0114's wing, in two slabs round the gallery's corner
+        // and spec 0114's wing, one slab since the gallery stopped
+        // reaching into it
         out.extend(
             crate::glass::under(reaches)
                 .iter()
@@ -2928,10 +2949,15 @@ mod tests {
     /// Spec 0094: one lamp over each exhibit, at the exhibit's own place.
     ///
     /// **Because the ceiling used to work it out for itself.** The lamps
-    /// were three, spread along a division of `display::row()`, so the row
+    /// were three, spread along a division of the row's span, so the row
     /// and the lights were two accounts of where things stand and a shape
-    /// that moved left its light behind. They come off `display::along`
+    /// that moved left its light behind. They come off `display::stands`
     /// now, and this is what says so.
+    ///
+    /// **Both ways across the floor since the exhibits went down the
+    /// sides**, which is the whole of what this guards: over a rank, a
+    /// lamp with the right x and the wrong z is a lamp over the exhibit
+    /// opposite.
     #[test]
     fn a_lamp_hangs_over_each_exhibit() {
         let reaches = 9.0;
@@ -2946,12 +2972,17 @@ mod tests {
         );
 
         for (n, lamp) in lamps.iter().enumerate() {
+            let at = crate::display::stands(reaches, n);
+
             assert!(
-                (lamp.x - crate::display::along(n)).abs() < 1e-4,
-                "the lamp over shape {} hangs at {:.3} and the shape stands at {:.3}",
+                (lamp.x - at.x).abs() < 1e-4 && (lamp.z - at.z).abs() < 1e-4,
+                "the lamp over shape {} hangs at {:.3},{:.3} and the shape \
+                 stands at {:.3},{:.3}",
                 n,
                 lamp.x,
-                crate::display::along(n)
+                lamp.z,
+                at.x,
+                at.z
             );
             assert!(
                 lamp.y > TALL * 0.5,
@@ -3863,6 +3894,10 @@ mod tests {
     ///
     /// From the doorway it named a shape on the far wall and offered to turn
     /// it, which is a thing to do to something you cannot see.
+    ///
+    /// **Stood off its face rather than down the room at it**, since the
+    /// exhibits went down the gallery's sides: four metres north of one is
+    /// four metres along the wall it stands against.
     #[test]
     fn the_sight_does_not_reach_across_the_room() {
         let room = Room::of(some(12));
@@ -3880,7 +3915,7 @@ mod tests {
         );
 
         // and the same one is seen from a couple of units away
-        let near = shape + Vec3::Z * 2.0;
+        let near = shape - Vec3::X * crate::display::side(2) * 2.0;
         assert_eq!(
             room.looking_at(near, shape - near),
             Some(Seen::Display(2)),
@@ -3896,8 +3931,8 @@ mod tests {
         let eye = Vec3::Y * 1.55;
         let one = room.displays[2];
 
-        // down the room at it, from the middle of the aisle
-        let you = vec3(one.at.x, 0.0, one.at.z + 4.0) + eye;
+        // across the walkway at it, from the middle of the room
+        let you = one.at - Vec3::X * crate::display::side(2) * 2.0 - Vec3::Y * one.at.y + eye;
         assert_eq!(
             room.looking_at(you, one.at - you),
             Some(Seen::Display(2)),

@@ -1,4 +1,18 @@
-//! What is on the far wall: the engine's own shapes, turning. Spec 0002.
+//! What is down the sides of the gallery: the engine's own shapes, turning.
+//! Spec 0002.
+//!
+//! **Down the sides and not across the end.** They stood in one row on the
+//! far wall, opening round spec 0039's picture, and that row is what set
+//! the room's width: six at 0.95 with the picture in the hole came to 10.4,
+//! which put the gallery's west wall 2.8 inside the wing beside it. Jake,
+//! having opened the wall between the wing and the nook: how about reshaping
+//! the gallery so its objects are along the sides leading to the fractal,
+//! then the room could be centered with the hall.
+//!
+//! So the room no longer has to be as wide as six shapes, only as wide as
+//! the picture at the end of it, and `room::GALLERY_WIDE` is the hall's own
+//! width instead. You walk in off the aisle, pass three pairs, and the
+//! picture is what the room points at.
 //!
 //! Built from `blitzkit-shapes`, which is the same library the examples build
 //! from, so these are the objects themselves rather than pictures of them and
@@ -48,41 +62,23 @@ pub const APART: f32 = 0.95;
 #[allow(dead_code)]
 pub const CLEAR: f32 = 0.6;
 
-/// The gap the row has to live in, which is the gallery's width.
+/// The gap the two ranks have to live in, which is the gallery's width.
 ///
-/// It used to be the gap between the inner faces of the two cabinets at the
-/// end of the rows, because the row was on the wall between them. Spec 0022
-/// moved the wall.
+/// It was the clear span between the two cabinets at the end of the hall's
+/// rows, because the row was on the wall between them; then spec 0022's
+/// gallery, because the row was as wide as the room. Now the ranks are down
+/// the sides and what has to fit across here is the walkway between them.
 #[allow(dead_code)]
 pub fn span() -> f32 {
     crate::room::GALLERY_WIDE
-}
-
-/// How wide the six stand, from the outside of one to the outside of the
-/// other, with no account of what is between them.
-///
-/// What the room is deep enough to see, which is a different question from
-/// how wide the room is. See `room::gallery_deep`.
-pub fn shapes() -> f32 {
-    (SHAPES.len() - 1) as f32 * APART + ACROSS
 }
 
 /// How much clear wall the picture keeps either side of its own moulding.
 ///
 /// Measured to the next shape's sweep and not to its middle, which is what
 /// you are actually asking when you ask whether a thing is in the way.
+#[allow(dead_code)]
 pub const BESIDE: f32 = 0.4;
-
-/// Where the innermost shape of each half stands.
-///
-/// **Spec 0039 hung the one that does not stop behind the six that do, and
-/// from anywhere far enough back to see all of it, three of them were
-/// across the middle of it.** So the row opens instead: three either side
-/// and the picture in the hole, with clear floor in front of it and the
-/// way in from the hall pointing straight at it.
-pub fn inside() -> f32 {
-    crate::mandel::framed() * 0.5 + BESIDE + sweep()
-}
 
 /// How far a shape reaches from its own middle while it is turning, which
 /// is further than it is wide. See [`SWEEP`].
@@ -90,15 +86,49 @@ pub fn sweep() -> f32 {
     ACROSS * SWEEP * 0.5
 }
 
-/// How wide the row actually is, from the outside of one shape to the other.
+/// How far apart one pair stands from the next, down the room.
 ///
-/// Measured and not drawn, which is the family three constants above are in
-/// already: it exists so the fit can be checked. The ceiling used to divide
-/// it to place three lamps, and spec 0094 hung one over each exhibit off
-/// `along` instead, so nothing that renders reads this now.
+/// **A bay, and not [`APART`].** That one is how close two shapes can
+/// stand on one wall without their sweeps touching, which is the right
+/// question for a row and the wrong one for a walk: three pairs at 0.95
+/// put all six inside the first two metres of the room and left four of
+/// bare plaster leading to the picture. What sets this is the pace of
+/// walking past them, so it is the room's own half width and the plan
+/// divides into squares.
+///
+/// **Or what the load room's door needs, whichever is more.** That door
+/// is in the gallery's east wall, so one gap between two plinths of the
+/// east rank has to hold it: two sweeps, the door, and a clear jamb.
+/// `back::tests::you_can_walk_in_and_out_again` walked into a plinth
+/// standing in the doorway, which is what found this.
+pub fn bay() -> f32 {
+    let door = sweep() * 2.0 + crate::back::WAY + CLEAR;
+
+    door.max(crate::room::GALLERY_WIDE * 0.5)
+}
+
+/// How far down the room one side's exhibits run, clear wall at the near
+/// end included.
+///
+/// Three a side standing opposite each other, so this is a rank's length
+/// and not the whole row's. `room::gallery_deep` is this plus what it
+/// takes to stand back from the picture, which is the one thing the depth
+/// has to hold besides them.
+pub fn alongside() -> f32 {
+    CLEAR + (count() / 2 - 1) as f32 * bay() + ACROSS
+}
+
+/// How far a shape's own middle stands off the wall behind it, counting
+/// its sweep.
+///
+/// What the walkway between the two ranks is measured against, which is
+/// the question a room this narrow has that the old one did not.
+///
+/// Measured rather than drawn, like the three above it: nothing that
+/// renders reads this, and the check is the point.
 #[allow(dead_code)]
-pub fn row() -> f32 {
-    (inside() + (SHAPES.len() / 2 - 1) as f32 * APART) * 2.0 + ACROSS
+pub fn reaches_in() -> f32 {
+    OFF_THE_WALL + sweep()
 }
 
 pub const OFF_THE_WALL: f32 = 0.75;
@@ -177,8 +207,20 @@ pub fn count() -> usize {
     SHAPES.len()
 }
 
-/// Where the nth one stands along the row: out from the picture a step at a
-/// time, each half its own way.
+/// Which wall the nth one stands against: -1 for the west, 1 for the east.
+///
+/// Alternating, so the six are three facing pairs rather than a rank of
+/// three and then a rank of three: walking in you meet them two at a
+/// time in the order they are listed, and the tesseract that spec 0021
+/// ends on is still the last one you reach.
+pub fn side(n: usize) -> f32 {
+    match n.is_multiple_of(2) {
+        true => -1.0,
+        false => 1.0,
+    }
+}
+
+/// Where the nth one stands.
 ///
 /// **Its own function because the ceiling asks it too.** Spec 0094 hangs a
 /// light over each exhibit, and a lamp that worked out where the plinths
@@ -186,15 +228,16 @@ pub fn count() -> usize {
 /// `all_of_them` cannot answer it, because building six meshes to find out
 /// where a lamp goes is a question asked every frame and answered with a
 /// Menger sponge.
-pub fn along(n: usize) -> f32 {
-    let each = count() / 2;
-    let (side, out) = if n < each {
-        (-1.0, (each - 1 - n) as f32)
-    } else {
-        (1.0, (n - each) as f32)
-    };
+///
+/// **Off the way in rather than off the picture.** The row used to open
+/// outwards from the middle of the far wall, so the picture was what it
+/// was measured from. These run from the door down, which is the order
+/// you meet them in and the order they are listed in.
+pub fn stands(reaches: f32, n: usize) -> Vec3 {
+    let out = crate::room::GALLERY_WIDE * 0.5 - OFF_THE_WALL;
+    let from = -reaches - CLEAR - ACROSS * 0.5;
 
-    side * (inside() + out * APART)
+    vec3(side(n) * out, HIGH, from - (n / 2) as f32 * bay())
 }
 
 /// Which shape stands in a given place.
@@ -280,7 +323,7 @@ pub fn see_through(n: usize, knob: i32) -> bool {
 /// down. Five numbers picked by eye drew the Klein bottle at 0.136 and the
 /// hilbert tube at 0.522, a quarter of each other, while the library hands all
 /// five back within a twentieth of the same size already.
-pub fn all_of_them(wall: f32) -> Vec<Display> {
+pub fn all_of_them(reaches: f32) -> Vec<Display> {
     SHAPES
         .iter()
         .zip(meshes())
@@ -288,7 +331,7 @@ pub fn all_of_them(wall: f32) -> Vec<Display> {
         .map(|(n, (name, mesh))| {
             let mut one = Display {
                 name,
-                at: vec3(along(n), HIGH, wall + OFF_THE_WALL),
+                at: stands(reaches, n),
                 scale: 1.0,
                 half: Vec3::ZERO,
             };
@@ -728,48 +771,121 @@ impl Spin {
 mod tests {
     use super::*;
 
-    /// Spec 0002 and 0021: the row fits between the cabinets at the end of
-    /// the rows, with room to spare at each end.
+    /// Spec 0002 and 0021: the two ranks leave a walkway between them, and
+    /// the picture they lead to has clear wall either side of it.
     ///
-    /// **The test that was missing.** What bounds this row is where those
-    /// cabinets stand, and nothing said so, so when a sixth shape arrived the
-    /// row was made to fit by shrinking every shape in it by 18 per cent and
-    /// the gate stayed green. Jake read it off the screen instead.
+    /// **The test that was missing, in its second shape.** What bounded
+    /// the old row was where the hall's end cabinets stood, and nothing
+    /// said so, so when a sixth shape arrived the row was made to fit by
+    /// shrinking every shape in it by 18 per cent and the gate stayed
+    /// green. The row is down the sides now and what binds has changed
+    /// with it: across the room it is the walkway, and on the end wall it
+    /// is the picture. Both, because either alone is a room you cannot use
+    /// or a room with nothing to look at.
     #[test]
-    fn the_row_fits_between_the_end_cabinets() {
-        let span = span();
-        let row = row();
+    fn the_ranks_leave_a_way_through_and_the_picture_a_wall() {
+        let walkway = span() - reaches_in() * 2.0;
 
         assert!(
-            row + CLEAR * 2.0 <= span,
-            "{} shapes at {} apart is {:.2} of row in a gap of {:.2}, which leaves {:.2} at each end",
-            SHAPES.len(),
-            APART,
-            row,
-            span,
-            (span - row) * 0.5
+            walkway > crate::RADIUS * 4.0,
+            "{} across less {:.2} a side of exhibit leaves a walkway of \
+             {:.2}, against a body of {:.2}",
+            span(),
+            reaches_in(),
+            walkway,
+            crate::RADIUS * 2.0
         );
 
-        // and the outermost shape really is inside the gap, measured off the
-        // row rather than off the arithmetic above
-        let on = all_of_them(-6.0);
-        let edge = on
-            .iter()
-            .map(|one| one.at.x.abs() + ACROSS * 0.5)
-            .fold(0.0f32, f32::max);
+        let beside = (span() - crate::mandel::framed()) * 0.5;
 
         assert!(
-            edge <= span * 0.5 - CLEAR,
-            "the end shape reaches {:.2} and the clear half gap is {:.2}",
-            edge,
-            span * 0.5 - CLEAR
+            beside >= CLEAR,
+            "the picture is {:.2} framed on a wall of {:.2}, which leaves \
+             {:.2} either side against a clearance of {}",
+            crate::mandel::framed(),
+            span(),
+            beside,
+            CLEAR
+        );
+
+        // and the ranks really are off the walls and inside the room's own
+        // depth, measured off where they stand rather than off the
+        // arithmetic above
+        let reaches = 9.5;
+        let on = all_of_them(reaches);
+        let (near, far) = (-reaches, -reaches - crate::room::gallery_deep());
+
+        for one in &on {
+            assert!(
+                (one.at.x.abs() - (span() * 0.5 - OFF_THE_WALL)).abs() < 1e-4,
+                "{} stands at x {:.3} rather than {:.2} off a side wall",
+                one.name,
+                one.at.x,
+                OFF_THE_WALL
+            );
+            assert!(
+                one.at.z + ACROSS * 0.5 <= near - CLEAR + 1e-4
+                    && one.at.z - ACROSS * 0.5 >= far + CLEAR - 1e-4,
+                "{} stands at z {:.3}, and the room runs {:.2} to {:.2} \
+                 wanting {} clear at each end",
+                one.name,
+                one.at.z,
+                near,
+                far,
+                CLEAR
+            );
+        }
+    }
+
+    /// Spec 0002: they are three facing pairs, in the order you meet them.
+    ///
+    /// **Because a rank of three and then a rank of three is the same six
+    /// and a different room.** Alternating is what makes the walk down the
+    /// middle pass them two at a time, and it is what keeps the tesseract
+    /// of spec 0021 at the end rather than halfway along one side.
+    #[test]
+    fn they_stand_in_pairs_down_the_sides() {
+        let on = all_of_them(9.5);
+
+        for pair in on.chunks(2) {
+            assert_eq!(pair.len(), 2, "an odd one out of the pairing");
+            assert!(
+                (pair[0].at.z - pair[1].at.z).abs() < 1e-4,
+                "{} and {} are a pair and stand at z {:.3} and {:.3}",
+                pair[0].name,
+                pair[1].name,
+                pair[0].at.z,
+                pair[1].at.z
+            );
+            assert!(
+                pair[0].at.x < 0.0 && pair[1].at.x > 0.0,
+                "{} and {} are both on the {} side",
+                pair[0].name,
+                pair[1].name,
+                match pair[0].at.x < 0.0 {
+                    true => "west",
+                    false => "east",
+                }
+            );
+        }
+
+        // **The deepest pair and not the deepest one**, since the two of a
+        // pair stand level and which of them a sort calls first is the
+        // order they were listed in, not a fact about the room.
+        let deepest = on.iter().map(|one| one.at.z).fold(f32::INFINITY, f32::min);
+
+        assert!(
+            (on[tesseract()].at.z - deepest).abs() < 1e-4,
+            "the tesseract stands at z {:.3} and the last pair at {:.3}",
+            on[tesseract()].at.z,
+            deepest
         );
     }
 
     /// Spec 0002: there is a display for each shape the library carries.
     #[test]
     fn every_shape_is_on_the_wall() {
-        let on = all_of_them(-6.0);
+        let on = all_of_them(9.5);
         let names: Vec<&str> = on.iter().map(|one| one.name).collect();
 
         assert_eq!(
@@ -804,13 +920,15 @@ mod tests {
     /// Spec 0002: and they stand clear of each other.
     #[test]
     fn they_stand_clear() {
-        let on = all_of_them(-6.0);
+        let on = all_of_them(9.5);
 
         for (n, one) in on.iter().enumerate() {
             assert!(
-                (one.at.z + 6.0 - OFF_THE_WALL).abs() < 1e-4,
-                "{} is not off the wall",
-                one.name
+                (span() * 0.5 - one.at.x.abs() - OFF_THE_WALL).abs() < 1e-4,
+                "{} stands {:.3} off its side wall rather than {}",
+                one.name,
+                span() * 0.5 - one.at.x.abs(),
+                OFF_THE_WALL
             );
 
             for other in &on[n + 1..] {
@@ -834,7 +952,7 @@ mod tests {
     /// hilbert tube at 0.522, and nothing failed.
     #[test]
     fn they_are_all_the_same_size() {
-        for (one, mesh) in all_of_them(-6.0).iter().zip(meshes()) {
+        for (one, mesh) in all_of_them(9.5).iter().zip(meshes()) {
             let drawn = mesh.bounds().size().max_element() * one.scale;
 
             assert!(
@@ -967,7 +1085,7 @@ mod tests {
     fn no_turn_moves_a_shape_or_puts_it_through_its_plinth() {
         let quarter = std::f32::consts::FRAC_PI_2;
 
-        for one in all_of_them(-6.0).iter() {
+        for one in all_of_them(9.5).iter() {
             let (at, size) = plinth_under(one);
             let top = at.y + size.y * 0.5;
 
@@ -1020,7 +1138,7 @@ mod tests {
     /// shape does not hang over the edge.
     #[test]
     fn a_plinth_is_wider_than_its_shape() {
-        for one in all_of_them(-6.0).iter() {
+        for one in all_of_them(9.5).iter() {
             let (_, size) = plinth_under(one);
 
             assert!(

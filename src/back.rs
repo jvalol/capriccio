@@ -62,26 +62,48 @@ pub fn span() -> (f32, f32) {
     (west, west + WIDE)
 }
 
+/// How much clear wall the doorway keeps between itself and the corner.
+pub const CORNER: f32 = 0.6;
+
 /// And the same along `z`, taken off the gallery's far wall so the two rooms
 /// end together.
+///
+/// **Or far enough to hold its own doorway, whichever is more.** That
+/// door is in the gallery's east wall and where it goes is set there, by
+/// where the gallery's east rank stands. A room that stops short of it is
+/// a door opening onto the outside of its own north wall.
 pub fn deep(reaches: f32) -> (f32, f32) {
     let far = gallery_wall(reaches);
 
-    (far, far + DEEP)
+    (far, (far + DEEP).max(way(reaches).1 + CORNER))
 }
+
+/// How wide the doorway is.
+pub const WAY: f32 = 1.3;
 
 /// The doorway in the gallery's east wall, as the two `z` it runs between.
 ///
-/// **Clear of the shapes by more than a body is wide.** The row of plinths
-/// ends at `display::row()` across and stands within a metre of the gallery's
-/// far wall, and a door beside it would leave seventy centimetres to squeeze
-/// through. A body is 0.9 and wants 1.05 clear, so the door is a long stride
-/// further down the wall and you reach it across open floor.
+/// **Clear of the shapes, which is now a question about this wall.** The
+/// row used to stand across the gallery's far wall and this one only had
+/// to start far enough along not to be squeezed against the end of it:
+/// 2.35 from the corner, written down. The row went down the two side
+/// walls, so the last two exhibits of the east rank stand on this wall,
+/// and 2.35 put the door directly behind the deeper one's plinth.
+/// `tests::you_can_walk_in_and_out_again` walked into that plinth and
+/// slid south, which is what that test is for.
+///
+/// So it is midway between the last two of that rank, in the bay between
+/// them, which `display::bay` is sized to hold. The stretch south of the
+/// last one is 2.44 whatever the bay is and looks like the other
+/// candidate; that is the rig's own bay on this side, and a door there
+/// opens into the rig.
 pub fn way(reaches: f32) -> (f32, f32) {
-    let (far, _) = deep(reaches);
-    let from = far + 2.35;
+    let last = crate::display::count() - 1;
+    let middle = (crate::display::stands(reaches, last).z
+        + crate::display::stands(reaches, last - 2).z)
+        * 0.5;
 
-    (from, from + 1.3)
+    (middle - WAY * 0.5, middle + WAY * 0.5)
 }
 
 /// The gallery's east wall, in two pieces with the doorway between them.

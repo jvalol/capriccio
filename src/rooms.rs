@@ -185,11 +185,19 @@ pub fn shots(reaches: f32) -> Vec<Shot> {
 
     // **The gallery, from the way in**, with the whole room in one frame,
     // which is the point of it.
+    //
+    // **In the opening and not five metres down the room**, since the
+    // exhibits went down the sides. Five metres back was a metre inside
+    // the door while the room was 10.4 wide and read as the far wall
+    // alone once it was 5.4: the picture filling the frame with bare
+    // plaster either side of it and every shape behind the camera or
+    // outside it. From the opening the two ranks run away down the walls,
+    // which is the room.
     let (panel, _) = mandel::panel(reaches);
     out.push(plain(
         "gallery",
         "media/rooms/gallery.png",
-        vec3(panel.x, eye, panel.z + 5.0),
+        vec3(panel.x, eye, -reaches - 0.4),
         vec3(panel.x, panel.y - 0.1, panel.z),
     ));
 

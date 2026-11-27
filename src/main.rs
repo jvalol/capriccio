@@ -16904,8 +16904,12 @@ mod tests {
         let shape = 4;
 
         let mut one = Arcade::new();
-        one.at = vec3(one.room.displays[shape].at.x, 0.0, -13.0);
-        one.yaw = 0.0;
+        // **Across the walkway at it and not down the room**, since spec
+        // 0022's exhibits went down the gallery's sides: standing at a
+        // shape's own x is standing against the wall it is on.
+        let stands = one.room.displays[shape].at;
+        one.at = vec3(stands.x - display::side(shape) * 1.2, 0.0, stands.z);
+        one.yaw = display::side(shape) * std::f32::consts::FRAC_PI_2;
         one.seen = one.what_i_see();
         assert_eq!(
             one.seen,
@@ -16938,16 +16942,27 @@ mod tests {
 
         // and with nothing in your hands the same arrow turns you
         let mut one = Arcade::new();
-        one.at = vec3(one.room.displays[shape].at.x, 0.0, -13.0);
-        one.yaw = 0.0;
+        // **Across the walkway at it and not down the room**, since spec
+        // 0022's exhibits went down the gallery's sides: standing at a
+        // shape's own x is standing against the wall it is on.
+        let stands = one.room.displays[shape].at;
+        one.at = vec3(stands.x - display::side(shape) * 1.2, 0.0, stands.z);
+        one.yaw = display::side(shape) * std::f32::consts::FRAC_PI_2;
         one.looking = [false, false, false, true];
+
+        // **Against where it started and not against nought**, because
+        // facing a side wall is not facing down the room any more
+        let was = one.yaw;
+
         for _ in 0..30 {
             one.aimed_and_moved(1.0 / 60.0);
         }
 
         assert!(
-            one.yaw > 0.1,
-            "half a second of right arrow with empty hands turned you by {:.3}",
+            one.yaw > was + 0.1,
+            "half a second of right arrow with empty hands turned you from \
+             {:.3} to {:.3}",
+            was,
             one.yaw
         );
     }
@@ -16971,8 +16986,12 @@ mod tests {
         let (least, most) = display::knob_runs(shape).expect("the tube has a knob");
 
         let mut one = Arcade::new();
-        one.at = vec3(one.room.displays[shape].at.x, 0.0, -13.0);
-        one.yaw = 0.0;
+        // **Across the walkway at it and not down the room**, since spec
+        // 0022's exhibits went down the gallery's sides: standing at a
+        // shape's own x is standing against the wall it is on.
+        let stands = one.room.displays[shape].at;
+        one.at = vec3(stands.x - display::side(shape) * 1.2, 0.0, stands.z);
+        one.yaw = display::side(shape) * std::f32::consts::FRAC_PI_2;
         one.seen = one.what_i_see();
         one.use_what_i_see();
         assert_eq!(one.spin.holding(), Some(shape), "it is not in your hands");
@@ -19807,10 +19826,19 @@ mod tests {
             "an ordinary run pinned the clock, so the building stopped \
              telling the time"
         );
-        assert_eq!(
-            Arcade::new().the_hour(),
-            clock::now(),
-            "an unpinned arcade is not reading the machine's hour"
+        // **Within a second and not exactly**, because both sides read a
+        // live clock and `Arcade::new` runs between them. An hour is held
+        // as a fraction of a day in an f32, where a step near 0.3 is 2.6
+        // milliseconds, so building the arcade costs more than one: this
+        // was an exact comparison and failed three runs in five, on
+        // nothing but how long the building took to put up that time.
+        let apart = (Arcade::new().the_hour() - clock::now()).abs();
+
+        assert!(
+            apart < 1.0 / 86_400.0,
+            "an unpinned arcade read an hour {:.1} seconds off the \
+             machine's, so it is not reading the machine's at all",
+            apart * 86_400.0
         );
     }
 
