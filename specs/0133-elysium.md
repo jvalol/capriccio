@@ -159,6 +159,26 @@ thirteen times without reaching anything. Which sphere is yours is the layer,
 which is the one thing that already knows. Only yours is drawn as well, so
 the other was a door standing at a piece of empty air.
 
+**The way out has only the dark.** The arc runs nought to two so the second
+half is the first read backwards, and that was meant to be the room arriving:
+the copy's own ball at full size shrinking back onto its plinth. It is not,
+because arriving leaves you facing the stair and the ball you came out of is
+behind you, at -0.997 of your look and nine tenths of a metre back. The whole
+unwind of the swell and the bend is drawn where you cannot see it.
+
+So the only thing the way out has is the frame uncovering, and read backwards
+off the way in it was a sixth power, which is a curve that has already
+finished: two tenths of a second of lift and half a second of a room standing
+still. Jake: it does still feel a bit binary, like there's a warping effect
+but i land in the same room before it snaps to the next one.
+
+Straight on the way out, then, and the sixth power only on the way in, where
+the hole is in front of you and has to stay out of the way until the end.
+Turning the sphere behind you into something worth seeing is the other way
+and is a bigger piece of work: it wants the arrival to face something other
+than the stair, which is the one thing about this crossing Jake asked for by
+name.
+
 ## The three that were open, and how they settled
 
 **What counts as walking into it is settled.** You cannot literally enter.
@@ -260,6 +280,9 @@ still marked unbuilt have no test yet and are what is left.
 - And the frame is wholly black across every frame the swap can land on, at
   any rate down to twenty a second, without being black for the whole
   crossing. — `elysium::tests::the_swap_is_in_the_dark_whatever_frame_it_lands_on`
+- And the dark lifts slower than it fell, since the swell and the bend are
+  behind your head on the way out and the lift is the only gesture that half
+  has. — `elysium::tests::the_dark_lifts_slower_than_it_fell`
 - And is its own tint at rest, so none of this dims spec 0064's
   room. — `elysium::tests::the_glass_is_itself_until_you_walk_into_it`
 - The way back is the way in read backwards, so nobody can be stranded

@@ -438,7 +438,8 @@ pub fn taken() -> f32 {
     ((1.0 - crate::glass::INDEX) / (SWALLOWS - crate::glass::INDEX)).sqrt()
 }
 
-/// How far the whole frame is covered, a share of the way across the fold.
+/// How far the whole frame is covered, a share `through` of the way across
+/// the crossing.
 ///
 /// **Because the hole is in front of you and the turn is not.** The glass
 /// darkening is the hole, and it covers whatever the ball covers; the half
@@ -447,13 +448,25 @@ pub fn taken() -> f32 {
 /// there's still a rotation towards the stairs on the other side, they
 /// should already be there.
 ///
-/// The sixth power of the fold, so this is nothing for most of the crossing
-/// and the hole does the work, and seals only at the last of it. Read twice
-/// off the one arc: it shuts on the way in and opens on the way out, with
-/// the move and the turn in the dark between.
+/// The sixth power of the fold on the way in, so this is nothing for most
+/// of the approach and the hole does the work, and seals only at the last
+/// of it. Over [`SHUTS`] rather than over the whole fold, so that the swap
+/// is in the dark whatever frame it lands on.
 ///
-/// Over [`SHUTS`] rather than over the whole fold, so that the swap is in
-/// the dark whatever frame it lands on.
+/// **And straight on the way out, which is the only gesture that half
+/// has.** It was the one curve read backwards, and read backwards a sixth
+/// power is a curve that is already gone: the black lifted inside two
+/// tenths of a second and the remaining half second was a room standing
+/// still. Jake, on that: it does still feel a bit binary, like there's a
+/// warping effect but i land in the same room before it snaps to the next
+/// one.
+///
+/// The swell and the bend carry the way in, and neither of them carries
+/// the way out, because the sphere you came out of is behind your head:
+/// facing the stair it is at -0.997 of your look, so the whole unwind is
+/// drawn where you cannot see it. That leaves this. Straight, it is a room
+/// arriving over the length of the half rather than a cut at the start of
+/// it.
 ///
 /// **Written on the fold and not on [`darkens`], which is what it used to
 /// be.** It was that one squared, and that one was the fold cubed, so this
@@ -462,8 +475,13 @@ pub fn taken() -> f32 {
 /// would go black there and stay black for a third of a second, which is a
 /// blackout rather than a fold. The glass is the thing that had to shut
 /// sooner; the frame did not.
-pub fn seals(fold: f32) -> f32 {
-    (fold / SHUTS).clamp(0.0, 1.0).powi(6)
+pub fn seals(through: f32) -> f32 {
+    let shut = (fold(through) / SHUTS).clamp(0.0, 1.0);
+
+    match through <= 1.0 {
+        true => shut.powi(6),
+        false => shut,
+    }
 }
 
 /// The slowest frame this will still hide a swap through.
@@ -1606,7 +1624,7 @@ mod tests {
     fn the_swap_is_in_the_dark_whatever_frame_it_lands_on() {
         for fps in [SLOWEST, 24.0, 30.0, 48.0, 60.0, 72.0, 120.0, 144.0] {
             let step = (1.0 / fps) / THROUGH;
-            let worst = fold(1.0 + step);
+            let worst = 1.0 + step;
 
             assert_eq!(
                 seals(worst),
@@ -1615,7 +1633,7 @@ mod tests {
                  the frame is {:.3} covered and the rest of it is the room \
                  you are leaving",
                 fps,
-                worst,
+                fold(worst),
                 seals(worst)
             );
         }
@@ -1627,6 +1645,51 @@ mod tests {
             "the frame is {:.3} covered halfway across, so the fold is a \
              blackout rather than a hole",
             seals(0.5)
+        );
+    }
+
+    /// Spec 0133: and the dark lifts slower than it fell.
+    ///
+    /// **Jake, off his own run: it does still feel a bit binary, like
+    /// there's a warping effect but i land in the same room before it snaps
+    /// to the next one.** `seals` was the one curve read in both
+    /// directions, and a sixth power read backwards is a curve that has
+    /// already finished: two tenths of a second of lift and half a second
+    /// of nothing after it.
+    ///
+    /// Held as the asymmetry itself rather than at a figure, because the
+    /// shape of either side is Jake's call and this is the only part of it
+    /// that is not: at the same fold the way out is darker than the way
+    /// in. Every fold under [`SHUTS`], since at or over it both sides are
+    /// wholly black by `the_swap_is_in_the_dark_whatever_frame_it_lands_on`
+    /// and there is nothing to compare.
+    #[test]
+    fn the_dark_lifts_slower_than_it_fell() {
+        for n in 1..=92 {
+            let fold = n as f32 / 100.0;
+
+            assert!(
+                fold < SHUTS,
+                "fold {:.2} is at or past SHUTS, where both sides are black \
+                 and this sweep is asking nothing",
+                fold
+            );
+
+            assert!(
+                seals(2.0 - fold) > seals(fold),
+                "at fold {:.2} the way out is {:.3} covered and the way in \
+                 {:.3}, so the lift is the fall backwards",
+                fold,
+                seals(2.0 - fold),
+                seals(fold)
+            );
+        }
+
+        // and it is a lift and not a hold: the far end of the arc is clear
+        assert_eq!(
+            seals(2.0),
+            0.0,
+            "the frame is still covered where the crossing ends"
         );
     }
 

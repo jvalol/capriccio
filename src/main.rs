@@ -8218,7 +8218,7 @@ impl Arcade {
     fn draw_the_fold(&self, geometry: &mut Geometry) {
         use blitzkit::geometry::quad::Quad;
 
-        let seal = elysium::seals(elysium::fold(self.going_through));
+        let seal = elysium::seals(self.going_through);
 
         if seal <= 0.0 {
             return;
@@ -20170,7 +20170,7 @@ mod tests {
             when
         );
 
-        let sealed = elysium::seals(elysium::fold(when));
+        let sealed = elysium::seals(when);
 
         assert!(
             sealed > 0.97,
