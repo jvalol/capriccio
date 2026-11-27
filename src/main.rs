@@ -9628,10 +9628,32 @@ impl Arcade {
     /// world they are lighting.
     fn sky_clock(&self) -> f32 {
         if self.layer == layers::ELYSIUM {
-            return garden::when(elysium::MORNING);
+            return elysium::moment();
         }
 
         self.since
+    }
+
+    /// Whether the sun and its fill reach where you are standing.
+    ///
+    /// **`noise::room_at` is the building's map and it has no fourth
+    /// coordinate.** It takes an x, a y and a z and says which room of the
+    /// arcade that is, and spec 0133's place stands on the arcade's own x
+    /// and z: asked where Elysium's stair comes down it answers with the
+    /// storey under spec 0114's wing, which is roofed, so the sun was given
+    /// nothing and the fill was wound to `garden::indoors`. A shore in
+    /// morning daylight was lit as though it were under a lid.
+    ///
+    /// The same shape as the sky above it, which was `can_see_outdoors`
+    /// asked of the same map, and as spec 0021's map in the corner before
+    /// it. Spec 0134 named four lists a layer governs and each of these was
+    /// one nobody had counted.
+    ///
+    /// Asked here rather than by teaching `room_at` a layer, because that
+    /// map is also what picks a footstep and a room's voice, and `Field` is
+    /// grass. What is being asked here is only whether the sky gets to you.
+    fn the_sky_reaches_me(&self) -> bool {
+        self.layer == layers::ELYSIUM || noise::room_at(self.room.reaches, self.at).sees_the_sky()
     }
 
     fn facing(&self) -> Vec3 {
@@ -11163,17 +11185,36 @@ impl Game for Arcade {
         self.outdoors = self.in_the_open();
         // and whether it is worth drawing, which is a question about sight.
         // The engine's spec 0086.
-        self.sees_outdoors = self
-            .room
-            .can_see_outdoors(self.looking_from(), self.room.reaches);
+        //
+        // **And it is a layer's question, which is the sixth list.** Spec
+        // 0134 named four, spec 0021's map was the fifth, and this is the
+        // sixth and the one anybody could see. `can_see_outdoors` is the
+        // building's room asked about the building, and spec 0133's place
+        // stands on the arcade's own x and z, so whether Elysium had a sky
+        // came off where the building's walls are. Its stair comes down
+        // inside the wing's footprint, which has a lid over it, and that
+        // is where you arrive: the near shore and the first few metres of
+        // the wade were under a black sky, and it snapped on out in the
+        // water where the building stops.
+        //
+        // There is nowhere in Elysium the sky cannot be seen. The one
+        // roofed thing in it is the copy of spec 0064's room, which is a
+        // colonnade of bays over the water, and spec 0133's own criterion
+        // is that the garden is in sight from the head of its stair.
+        //
+        // Jake, looking at the near shore: *elysium looks really bare.* A
+        // dark sky was the first of three faults reported off this place
+        // once before, and `elysium::MORNING` carries that one: written as
+        // a `since` rather than an hour it read the small hours. Same look,
+        // different cause, and fixing that one left this one standing.
+        self.sees_outdoors = self.layer == layers::ELYSIUM
+            || self
+                .room
+                .can_see_outdoors(self.looking_from(), self.room.reaches);
 
         // how much of the sky's own fill reaches you, wound toward whether
         // the room you are standing in has any sky at all. Spec 0095.
-        let wants = if noise::room_at(self.room.reaches, self.at).sees_the_sky() {
-            1.0
-        } else {
-            0.0
-        };
+        let wants = if self.the_sky_reaches_me() { 1.0 } else { 0.0 };
         let most = dt / SKY_FILL_LAGS;
         self.sky_fill = Some(match self.sky_fill {
             Some(now) => now + (wants - now).clamp(-most, most),
@@ -12004,7 +12045,7 @@ impl Game for Arcade {
         scene.light.color = colour;
         // and nothing at all in a room with no sky, per `Room::sees_the_sky`.
         // The sun cannot reach these rooms and the map cannot quite say so.
-        let sky = noise::room_at(self.room.reaches, self.at).sees_the_sky();
+        let sky = self.the_sky_reaches_me();
         let strength = if sky { strength } else { 0.0 };
 
         scene.light.intensity = strength;
@@ -20086,6 +20127,68 @@ mod tests {
         }
     }
 
+    /// Spec 0133: Elysium has a sky where you arrive in it.
+    ///
+    /// **The sixth list a layer governs.** Spec 0134 named four and spec
+    /// 0021's map was the fifth; this is the sixth and the one anybody
+    /// could see. `can_see_outdoors` is the building's room asked about
+    /// the building, and Elysium stands on the arcade's own x and z, so
+    /// whether this place had a sky came off where the building's walls
+    /// are. Its stair comes down inside the wing's footprint, which has a
+    /// lid over it, so the near shore and the first few metres of the wade
+    /// were under a black sky and it snapped on out in the water where the
+    /// building stops.
+    ///
+    /// **And the same map decides the sun and the fill**, which is where
+    /// the rest of it was. `noise::room_at` answered with the roofed storey
+    /// under spec 0114's wing, so the sun's strength was nought and the
+    /// ambient was wound to `garden::indoors`: a shore in morning daylight
+    /// lit as though it were under a lid.
+    ///
+    /// The control is the same spot on the arcade's own layer, where both
+    /// are rightly false. Only the layer differs between the two halves, so
+    /// only the layer can be what puts the daylight back.
+    #[test]
+    fn the_sky_is_drawn_where_you_arrive_in_elysium() {
+        let mut game = Arcade::new();
+        let sound = SoundSystem::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+
+        // the foot of the stair this place is laid out from, rather than a
+        // position picked to pass
+        let reaches = game.room.reaches;
+        let foot = elysium::placing(reaches).of(glass::stair_foot(reaches));
+
+        let mut asked = |game: &mut Arcade| {
+            game.at = vec3(foot.x, 0.0, foot.z);
+            game.eye = EYE;
+            game.update(0.0, &mut geometry, &mut text, &sound);
+
+            (game.sees_outdoors, game.the_sky_reaches_me())
+        };
+
+        let (sky, lit) = asked(&mut game);
+        assert!(
+            !sky && !lit,
+            "the building has a sky under the wing, so this proves nothing"
+        );
+
+        game.layer = layers::ELYSIUM;
+
+        let (sky, lit) = asked(&mut game);
+        assert!(
+            sky,
+            "no sky is drawn at the foot of Elysium's own stair, which is \
+             where you arrive in it"
+        );
+        assert!(
+            lit,
+            "the sun does not reach the foot of Elysium's own stair, so the \
+             shore is lit as though it were under a lid"
+        );
+    }
+
     /// Spec 0021: no map of the building while you are inside the
     /// tesseract.
     ///
@@ -20210,6 +20313,13 @@ mod tests {
     ///
     /// Asked at one position on both layers, because the position is now
     /// the thing that does not matter.
+    ///
+    /// **The hour and not the `since`, since the weather is pinned too.**
+    /// This held `sky_clock` against `garden::when(MORNING)`, which is one
+    /// particular morning. `elysium::moment` walks the fortnight for the
+    /// first morning whose weather is `elysium::SKY`, so the number is a
+    /// later day at the same hour: what the claim was always about is the
+    /// hour, which is what the name of this says and what it now compares.
     #[test]
     fn the_hour_is_the_layers_and_not_the_buildings() {
         let mut game = Arcade::new();
@@ -20227,24 +20337,32 @@ mod tests {
         game.layer = layers::ELYSIUM;
 
         let over_there = game.sky_clock();
-        let morning = garden::when(elysium::MORNING);
 
         assert!(
-            (over_there - morning).abs() < 1e-4,
+            (garden::hour(over_there) - elysium::MORNING).abs() < 1e-4,
             "spec 0133's hour is {} rather than its morning at {}",
-            over_there,
-            morning
+            garden::hour(over_there),
+            elysium::MORNING
         );
         assert!(
             garden::sun_up(over_there) > 0.8,
             "and the sun is not up at it"
         );
 
-        // and the building's clock does not move it
+        // and the weather with it, which the hour alone never pinned: this
+        // read whichever day the building was on, so Jake found the place
+        // under a storm
+        assert_eq!(
+            garden::weather(over_there).name,
+            elysium::SKY,
+            "spec 0133's weather is the building's"
+        );
+
+        // and the building's clock moves neither
         game.since = 1903.5;
 
         assert!(
-            (game.sky_clock() - morning).abs() < 1e-4,
+            (game.sky_clock() - over_there).abs() < 1e-4,
             "the building's clock moved spec 0133's hour to {}",
             game.sky_clock()
         );

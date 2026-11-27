@@ -248,6 +248,57 @@ generated as you walk into it and thinned past `GROUND_REACH` at 160. This
 has a far side and you can see it from the top of the stair, so none of that
 machinery is wanted: it is a measured crossing, not an horizon.
 
+## It was dark, and none of it was the planting
+
+**Jake, 2026-11-27, standing on the near shore:** *elysium looks really
+bare.* Three faults, all the same shape, and all three were making it dark.
+The place has been built since 23 November and this is the first time
+anybody stood on that shore and looked.
+
+**The sky was not drawn at all where he was standing.** `sees_outdoors` is
+`Room::can_see_outdoors`, which is the building's room asked about the
+building, and this place stands on the arcade's own x and z. His readout put
+him at z −25.02, inside spec 0114's wing, which has a lid over its ground
+storey. Walking the line, it is false from z −20 to about −27 and true from
+−30 out, so the stair's foot, the near shore and the first few metres of the
+wade had no sky at all, and it snapped on somewhere out in the water where
+the building stops.
+
+**The weather was the building's.** The hour was already the layer's, which
+is what `the_hour_is_the_layers_and_not_the_buildings` holds, but
+`garden::which_sky` reads whichever day the building is on. So morning here
+was clear, or overcast, or a storm, depending on nothing anybody standing in
+it can see. He got the storm, and the control for the fix names it: with the
+pin taken out the weather at that hour comes back `"storm"`.
+
+An hour pinned with the weather left running is half a pin. A place that is
+in daylight and stays morning is a fixed moment, and a fixed moment with the
+weather running through it is not fixed. `elysium::SKY` is `"clear"` and
+`elysium::moment` is the two together, found the way every picture test in
+this building already finds a sky it can hold against a file.
+
+**And the sun did not reach him.** `noise::room_at` is the same building map
+and has no fourth coordinate either, so asked where this stair comes down it
+answered with that roofed storey: the sun's strength was nought and the
+ambient was wound to `garden::indoors`. A shore in morning daylight lit as
+though it were under a lid.
+
+That one is fixed with a method here rather than by teaching `room_at` a
+layer, because that map is also what picks a footstep and a room's voice,
+and `Room::Field` is grass. What is being asked is only whether the sky gets
+to you.
+
+**Spec 0134 named four lists a layer governs.** Spec 0021's map in the
+corner was the fifth, found the same morning. These are the sixth and the
+seventh, and the pattern under all four is one sentence: a question written
+before there was a second world asks the building and gets an answer about
+the building.
+
+**What this does not settle is whether it is bare.** Three faults were
+making it dark and the dark was doing the complaining. What it looks like
+lit is a shore, water, a ruin on the far side and pale hills behind, and
+whether that is a paradise is Jake's and is still open below.
+
 ## Acceptance criteria
 
 Much of this is built now, so these name the tests that hold it. The ones
@@ -290,7 +341,12 @@ still marked unbuilt have no test yet and are what is left.
 - The sun is up over it, whatever hour the building is
   at. — `elysium::tests::the_sun_stands_well_up_over_elysium`
 - And that hour is the layer's, so the building's clock does not move
-  it. — `tests::the_hour_is_the_layers_and_not_the_buildings`
+  it, and so is the weather at it, which the hour alone never pinned.
+  — `tests::the_hour_is_the_layers_and_not_the_buildings`
+- The sky is drawn where you arrive, and the sun and its fill reach you
+  there, neither of which held while the building's own room map was
+  answering for a place on another layer.
+  — `tests::the_sky_is_drawn_where_you_arrive_in_elysium`
 - You cross water to reach the garden, and cannot walk round
   it. — `elysium::tests::the_water_is_crossed_and_not_skirted`
 - Crossing slows you to a wade the way the baths

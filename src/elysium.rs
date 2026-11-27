@@ -543,6 +543,37 @@ pub fn swelling(through: f32) -> f32 {
 /// hour with no shape to it.
 pub const MORNING: f32 = 0.17;
 
+/// And the weather, which is the other half of pinning an hour.
+///
+/// **An hour pinned with the weather left running is half a pin.** The hour
+/// here is the layer's and the building's clock does not move it, which is
+/// what `the_hour_is_the_layers_and_not_the_buildings` holds. The weather
+/// was not: `garden::which_sky` reads whichever day the building is on, so
+/// morning here was a clear morning, or an overcast one, or a storm,
+/// depending on nothing anybody here can see. Jake, looking at the near
+/// shore under a black streaked deck: *elysium looks really bare.*
+///
+/// A place that is in daylight and stays morning is a fixed moment, and a
+/// fixed moment with the weather running through it is not fixed.
+///
+/// Clear, because this spec's own words for it are a second paradise in
+/// daylight, and because the three things that have to differ in the first
+/// frame are the hour, the emptiness and the water. None of those survives
+/// a storm.
+pub const SKY: &str = "clear";
+
+/// The moment this place is always at: that hour, under that sky.
+///
+/// `garden::under` walks a fortnight for the first day whose weather at the
+/// hour is this one, which is what every picture test in the building
+/// already does to get a sky it can hold against a file. Falling back on
+/// the plain hour rather than panicking, because a sky that never comes
+/// round in fourteen days is a thing to fix in `SKIES` and not a reason for
+/// the place to stop existing.
+pub fn moment() -> f32 {
+    crate::garden::under(MORNING, SKY).unwrap_or_else(|| crate::garden::when(MORNING))
+}
+
 /// The sand and the planes it is laid on, where the renderer has them.
 ///
 /// Its own struct for `glass::Meshes`'s reason: one more parameter on a
