@@ -1153,6 +1153,20 @@ pub const TESSERACT_HELP: &str =
 /// which is most of why it read as somewhere to wander rather than somewhere
 /// to be. Spec 0021: reach the cell opposite the one you came in by, then get
 /// back to the plinth, which you cannot do by turning round.
+/// What it says when you are standing where the way out is.
+///
+/// **Saying where it is was never saying how to use it.** `standing_in`
+/// has told you the way out is in ana since the room was built, and in ana
+/// it says it is here, and a person standing an arm's length from the
+/// plinth with that on screen still has nothing to press. Inside the
+/// tesseract `what_i_see` gives nothing, so the sight carries no prompt
+/// either, which is the half of the building that would have said it
+/// anywhere else. Jake: *it should be more clear how to get out.*
+///
+/// Only within reach of it, so it is an answer to where you are standing
+/// rather than a line the room repeats at you.
+pub const TESSERACT_LEAVING: &str = "Press Enter to leave.";
+
 pub const TESSERACT_DONE: &str =
     "You have stood in kata, which is as far from ana as this room goes. The way back is three rooms, and not the way you came.";
 /// What the solar system owns up to, under its help line.
@@ -2141,7 +2155,7 @@ pub const CELLS_UP: f32 = 96.0;
 /// bar on the shape in your hand.
 pub const CELLS_LEGEND: f32 = 18.0;
 pub const CELLS_LEGEND_STEP: f32 = 29.0;
-pub const CELLS_LEGEND_ROWS: usize = 3;
+pub const CELLS_LEGEND_ROWS: usize = 4;
 pub const CELLS_SWATCH: Vec2 = vec2(26.0, 9.0);
 pub const CELLS_LEGEND_GAP: f32 = 11.0;
 
@@ -2170,9 +2184,27 @@ pub const CELLS_HERE: Vec4 = vec4(1.0, 1.0, 1.0, 0.95);
 pub const CELLS_WAY: Vec4 = vec4(0.98, 0.84, 0.36, 0.95);
 pub const CELLS_GOAL: Vec4 = vec4(0.36, 0.84, 1.0, 0.95);
 
+/// And the fourth, which is every cell that has been stood in.
+///
+/// **The map claimed to fill in and did not.** `Found` has said since it was
+/// written that the map fills in as it is walked rather than arriving
+/// complete, and the only thing that ever filled in was the count under the
+/// key. Eight rooms alike but for a word is the fault this room keeps
+/// making, and a shape that remembers where you have been is the cheapest
+/// answer to it that does not hand anybody a route.
+///
+/// Dim, and the weakest of the four, so the three the room is actually about
+/// still win the bar they share. Bright enough to tell from `HELD_FRAME`,
+/// which is what an unwalked cell stays.
+pub const CELLS_WALKED: Vec4 = vec4(0.42, 0.44, 0.52, 0.95);
+
 /// What the legend says about each, in the order it lists them.
-pub const CELLS_LEGEND_SAYS: [&str; CELLS_LEGEND_ROWS] =
-    ["where you are", "the way out", "what to find"];
+pub const CELLS_LEGEND_SAYS: [&str; CELLS_LEGEND_ROWS] = [
+    "where you are",
+    "the way out",
+    "what to find",
+    "where you have been",
+];
 
 /// The map you carry, per spec 0021: the whole frame, and the cell you are
 /// standing in picked out of it.

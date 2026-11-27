@@ -383,6 +383,35 @@ answer spec 0132 already gave: a place with no map of its own borrows none
 and does not show the frame of one either. This room has a map of its own
 anyway, which is the shape in your hand and the key under it.
 
+**The map claimed to fill in and never did, 2026-11-27.** Jake: *each
+tesseract room visited should get an indicator on the map.* `Found` has said
+since it was written that the map fills in as it is walked rather than
+arriving complete, and the only thing that ever filled in was the count of
+rooms under the key. The shape itself lit three cells and no more.
+
+A fourth colour now, the weakest of the four, for every cell that has been
+stood in. A bar belongs to three cells, so the one with the most to say wins
+it: where you are, then the way out, then what there is to find, then
+anywhere you have been, and the frame's own dark for a bar on none of those.
+That precedence is its own function now rather than the order of a list read
+back to front, so it can be said out loud and a test can ask it.
+
+It hands nobody a route, which is the bar this room has always held the map
+to. Knowing which rooms you have seen is not knowing how to get anywhere.
+
+**And saying where the way out is was never saying how to use it.** Jake,
+in the same breath: *it should be more clear how to get out.* `standing_in`
+has named the cell with the plinth in it since the room was built, and in
+that cell it says the way out is here, and a person standing an arm's length
+from it still had nothing telling them what to press. Inside the tesseract
+`what_i_see` gives nothing, so the sight carries no prompt either, which is
+the half of the building that would have said it anywhere else.
+
+So there is a line within reach of the plinth and nowhere else, which makes
+it an answer about where you are standing rather than something the room
+repeats at you. Arriving puts you in reach, so it is on screen the moment
+you are in that cell.
+
 **It drew as a grey patch first, and the arithmetic is worth keeping.** The
 shade was given 1.45, which is past one and should burn. It does not, here:
 the lamp sits at the shade's own underside, so the light is in that face's
@@ -839,6 +868,11 @@ And the map:
 - No plan of the building is drawn in the corner while you are in a cell,
   checked against the same arcade drawing one where it starts.
   — `tests::no_map_of_the_building_is_drawn_inside_the_tesseract`
+- A cell that has been stood in is lit on the shape in your hand, and the
+  same bar is the frame's own dark before it has been.
+  — `tests::the_shape_fills_in_as_it_is_walked`
+- Arriving puts the way out under your hand, and in no other cell is it.
+  — `tests::you_arrive_within_reach_of_the_way_out`
 - The cross lays the four walls you can walk at out flat, up for the one in
   front of you, and the two nobody can walk at are not on it. The squares are
   square, they face the holder rather than each standing at its own angle,

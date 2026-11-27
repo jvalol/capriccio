@@ -8491,6 +8491,7 @@ impl Arcade {
             Some(aim::CELLS_HERE),
             Some(aim::CELLS_WAY),
             Some(aim::CELLS_GOAL),
+            Some(aim::CELLS_WALKED),
             None,
         ];
 
@@ -8596,6 +8597,44 @@ impl Arcade {
             && camera.frustum().holds_sphere(middle, across)
     }
 
+    /// What colour one bar of the shape in your hand is drawn.
+    ///
+    /// **A bar belongs to three cells, so the one with the most to say wins
+    /// it.** Where you are, then the way out, then what there is to find,
+    /// then anywhere you have already been, and the frame's own dark for a
+    /// bar that is on none of those.
+    ///
+    /// The fourth of those is new and is what makes the shape fill in as it
+    /// is walked, which `Found` has claimed since it was written while the
+    /// only thing that filled in was the count under the key.
+    ///
+    /// Its own function because the alternative is a list built per frame
+    /// and read back to front, which is how this was written and says the
+    /// precedence by the order of a `Vec` rather than out loud. A test can
+    /// ask this one.
+    fn held_bar(
+        found: &tesseract::Found,
+        mine: tesseract::Cell,
+        edge: (usize, usize),
+    ) -> glam::Vec4 {
+        let on = |cell: tesseract::Cell| tesseract::edges_of(cell).contains(&edge);
+
+        if on(mine) {
+            aim::held_of(aim::CELLS_HERE)
+        } else if on(tesseract::home()) {
+            aim::held_of(aim::CELLS_WAY)
+        } else if on(tesseract::goal()) {
+            aim::held_of(aim::CELLS_GOAL)
+        } else if tesseract::cells()
+            .iter()
+            .any(|cell| found.been(*cell) && on(*cell))
+        {
+            aim::held_of(aim::CELLS_WALKED)
+        } else {
+            aim::HELD_FRAME
+        }
+    }
+
     fn draw_the_held_map(&mut self, scene: &mut Scene, camera: &Camera, cube: MeshId) {
         let Some(inside) = self.inside.as_ref() else {
             return;
@@ -8627,23 +8666,11 @@ impl Arcade {
             middle + right * at.x + up * at.y + ahead * at.z
         };
 
-        // which cells want picking out, worst first so the best wins the bar
         let mine = inside.frame.cell();
-        let picked = [
-            (tesseract::goal(), aim::held_of(aim::CELLS_GOAL)),
-            (tesseract::home(), aim::held_of(aim::CELLS_WAY)),
-            (mine, aim::held_of(aim::CELLS_HERE)),
-        ];
 
         for (one, other) in tesseract::edges() {
             let (from, to) = (lay(corners[one]), lay(corners[other]));
-
-            let colour = picked
-                .iter()
-                .filter(|(cell, _)| tesseract::edges_of(*cell).contains(&(one, other)))
-                .map(|(_, colour)| *colour)
-                .next_back()
-                .unwrap_or(aim::HELD_FRAME);
+            let colour = Self::held_bar(&inside.found, mine, (one, other));
 
             // a bar from one corner to the other, which is a cube stretched
             // along the line between them and turned to lie on it
@@ -11734,6 +11761,14 @@ impl Game for Arcade {
             // never used to say at all
             if inside.found.done() {
                 out.push(aim::TESSERACT_DONE);
+            }
+
+            // and, within reach of the plinth, what to do with it. The rest
+            // of the building puts what to press under the sight, and the
+            // sight says nothing in here, so this is the only place it can
+            // be said.
+            if tesseract::at_the_plinth(inside.frame.cell(), self.at) {
+                out.push(aim::TESSERACT_LEAVING);
             }
 
             out
@@ -19947,6 +19982,108 @@ mod tests {
             "a map of the building is drawn out in the village, {} runs of it",
             out.runs().len()
         );
+    }
+
+    /// Spec 0021: the shape in your hand fills in as the room is walked.
+    ///
+    /// **`Found` has claimed this since it was written and nothing drew
+    /// it.** The map fills in as it is walked rather than arriving
+    /// complete, says the type, and the only thing that filled in was the
+    /// count of rooms under the key. Eight cells alike but for a word is
+    /// the fault this room keeps making.
+    ///
+    /// The control is the first half: the same bar, before that cell has
+    /// been stood in, is the frame's own dark. Without it this passes
+    /// against a shape that lights every bar it has.
+    #[test]
+    fn the_shape_fills_in_as_it_is_walked() {
+        let frame = tesseract::Frame::new();
+        let mine = frame.cell();
+        let mut found = tesseract::Found::new();
+
+        // a cell that is none of the three the key already names, and a bar
+        // of it that no other named cell is on
+        let other = tesseract::cells()
+            .iter()
+            .copied()
+            .find(|cell| *cell != mine && *cell != tesseract::home() && *cell != tesseract::goal())
+            .expect("eight cells and only three are named");
+
+        let named = [mine, tesseract::home(), tesseract::goal()];
+        let bar = tesseract::edges_of(other)
+            .into_iter()
+            .find(|edge| {
+                !named
+                    .iter()
+                    .any(|cell| tesseract::edges_of(*cell).contains(edge))
+            })
+            .expect("a cell of twelve bars shares them all with the named three");
+
+        assert_eq!(
+            Arcade::held_bar(&found, mine, bar),
+            aim::HELD_FRAME,
+            "a cell nobody has stood in is already lit, so this proves nothing"
+        );
+
+        found.went(other);
+
+        assert_eq!(
+            Arcade::held_bar(&found, mine, bar),
+            aim::held_of(aim::CELLS_WALKED),
+            "the shape does not fill in when a cell is walked"
+        );
+
+        // and walking a cell does not take a bar off one of the three
+        let here = tesseract::edges_of(mine)
+            .into_iter()
+            .next()
+            .expect("a cell has twelve bars");
+
+        assert_eq!(
+            Arcade::held_bar(&found, mine, here),
+            aim::held_of(aim::CELLS_HERE),
+            "where you are lost a bar to a cell you have merely been in"
+        );
+    }
+
+    /// Spec 0021: you arrive within reach of the way out, so the line that
+    /// says how to use it is on screen the moment you are in that cell.
+    ///
+    /// **Saying where the way out is was never saying how to use it.**
+    /// `standing_in` has named the cell since the room was built, and in
+    /// that cell it says the way out is here, and a person an arm's length
+    /// from the plinth still had nothing telling them what to press. Inside
+    /// the tesseract `what_i_see` gives nothing, so the sight carries no
+    /// prompt either, which is the half of the building that would have
+    /// said it anywhere else.
+    ///
+    /// What this holds is the premise the new line hangs on, which is that
+    /// arriving puts you in reach. The control is the other seven cells:
+    /// the way out is not under your hand in any of them, so the line is
+    /// an answer about where you are standing rather than something the
+    /// room repeats at you.
+    #[test]
+    fn you_arrive_within_reach_of_the_way_out() {
+        let mut game = Arcade::new();
+        game.go_inside();
+
+        assert!(
+            tesseract::at_the_plinth(game.inside.expect("inside").frame.cell(), game.at),
+            "you arrive at {:?}, which is not within reach of the way out",
+            game.at
+        );
+
+        for cell in tesseract::cells() {
+            if cell == tesseract::home() {
+                continue;
+            }
+
+            assert!(
+                !tesseract::at_the_plinth(cell, game.at),
+                "the way out is under your hand in {:?} as well",
+                cell
+            );
+        }
     }
 
     /// Spec 0021: no map of the building while you are inside the
