@@ -314,6 +314,38 @@ a box you can cross in two strides gives you no time to notice which one you
 walked at. At 6.5 there is a room between you and every wall, and `INSET`
 grew with it rather than staying put in a bigger box.
 
+**And cramped again at 6.5, 2026-11-27.** Jake: *the space inside the
+tesseract could be much bigger, it feels very claustrophobic.* It is 11 now.
+
+The obvious reading of that sentence is wrong and the measurement says so,
+which is worth keeping because the next person to read the complaint will
+reach for the same lever. From the middle of a cube every wall covers the
+same angle whatever the cube measures, since the wall grows exactly as fast
+as the distance to it. Renders of the walking-in view at 6.5, 9.5, 12 and 15
+show the far wall filling the same share of the frame in all four. A bigger
+cube cannot give you a wider angle from the middle of it.
+
+What a bigger one gives is the things that are not the room. The plinth and
+the thing standing on it are absolute, so they shrink against the walls, and
+that contrast is the cue that reads: at 6.5 the four-cube dominates the
+frame and at 11 it sits small in it. The crossing goes from 3.25 metres to
+5.5 from the middle, which is the same argument the 4.6 bump was made on.
+The ceiling rises with the width, because this is a cube and
+`only_the_floor_and_the_ceiling_are_solid` holds it to one.
+
+Everything in the cell was already derived from `CELL`, so all thirty eight
+of its tests passed at the new size untouched. One thing had to be re-aimed.
+`plate` hangs a face's written name near the top of its panel as a
+proportion of it, so a taller room carries the word higher: 5.8 metres up at
+6.5 and 10.3 at 11. The photograph's ten degrees of pitch caught the first
+and cropped the second, so `posed` is at seventeen now. That is a camera
+aimed at a thing rather than a number anybody can derive, which is why it
+moved by hand and says so.
+
+If 11 still walks tight, the lever is not this number. It is that the cell
+is a dark box with one plinth in the middle and nothing between a person and
+any wall, so there is nothing in it to measure a distance against.
+
 ## Why it was parked, and what the three failures were
 
 

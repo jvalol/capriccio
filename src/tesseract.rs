@@ -343,7 +343,26 @@ use glam::{vec3, Vec3};
 /// four of its faces are the way out, and a box you can cross in two strides
 /// gives you no time to notice which one you walked at. At 6.5 there is a
 /// room between you and every wall.
-pub const CELL: f32 = 6.5;
+///
+/// **And 6.5 was still cramped.** Jake again, 2026-11-27: *the space inside
+/// the tesseract could be much bigger, it feels very claustrophobic.*
+///
+/// What this number cannot do is worth writing beside it, because the
+/// obvious reading of that sentence is wrong. From the middle of a cube
+/// every wall covers the same angle whatever the cube measures: the walls
+/// grow exactly as fast as the distance to them, so the middle of a bigger
+/// one looks the same. Renders at 6.5, 9.5, 12 and 15 bear it out, and the
+/// far wall fills the same share of the frame in all four.
+///
+/// What does change is everything that is not the room. The plinth and the
+/// thing on it are absolute, so they shrink against the walls, and that is
+/// the cue that actually reads. The crossing gets longer, which is the same
+/// reason the last bump was made. And the ceiling rises with it, because
+/// this is a cube and has to stay one.
+///
+/// So it goes to 11, and the honest claim for it is a longer crossing and a
+/// smaller plinth in a bigger box, not a wider angle.
+pub const CELL: f32 = 11.0;
 
 /// Half of that, which is what every wall is at.
 pub const HALF: f32 = CELL * 0.5;
@@ -1071,13 +1090,21 @@ pub fn shape_turned(phase: f32) -> blitzkit::mesh::MeshData {
 /// So this stands back in a corner and looks across at the far one, which is
 /// the longest line in a cube and the only view that gets a whole panel, its
 /// mark, the floor and some ceiling into one frame.
+///
+/// **The pitch is set by where a panel's word sits, which is why it moved
+/// when [`CELL`] did.** [`plate`] hangs the word near the top of the panel,
+/// as a proportion of it, so a taller room puts it higher up the wall and
+/// a shot aimed where it used to be crops it off. At 6.5 the word was 5.8
+/// metres up and ten degrees did it; at 11 it is 10.3 and it takes
+/// seventeen. This is not a number that can be worked out once: it is a
+/// camera being aimed at a thing, and the thing moved.
 pub fn posed() -> (Vec3, f32, f32) {
     (
         vec3(HALF * 0.52, 0.0, -(HALF - 0.45)),
         // yaw nought faces -z and grows toward +x, so this looks across the
         // room and a little to the left
         std::f32::consts::PI + 0.41,
-        0.17,
+        0.30,
     )
 }
 
