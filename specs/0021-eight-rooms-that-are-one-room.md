@@ -92,6 +92,18 @@ and facing a corner puts the two walls either side of it either side of the
 top. The squares stay flat on the window; it is which square is which that
 turns.
 
+**And a figure in the middle of it.** A cross that turns needs something to
+turn about, or the squares just swap sides and nothing says what the motion
+is of. Jake asked for it in the same breath as the turning. It is a person
+seen from above, which is what a plan of a cell can show: a bar for the
+shoulders and the head standing into the front of it, two pieces, with the
+head in front doing the work an arrow would otherwise do. Half a square
+across, which leaves a clear gap on every side between it and the squares.
+
+The arcade's own map in the corner reached the same two answers for the same
+reasons, and says so in `minimap`: a dot and a nose for where you are, and
+*the nose no longer turns, because the map does*.
+
 **The shape does not follow your head, and that is on purpose.** It carries
 `HELD_TILT_Y`, which is 35 degrees about its own up and exists so you are
 never looking down one of its axes: a tesseract seen square on reads as a
@@ -729,6 +741,10 @@ And the map:
 - And the wall you are looking at is the square on top, checked off square
   so it is not four lucky right angles.
   — `tesseract::tests::the_wall_you_look_at_is_the_one_on_top`
+- A figure stands in the middle with its head in front of its shoulders and
+  the two touching, and no part of it reaches a square at any heading, while
+  the squares themselves move.
+  — `tesseract::tests::a_figure_stands_in_the_middle_and_the_cross_turns_about_it`
 
 A bar belongs to three cells and not two, which that first test was written
 saying. A cube's edge is on two of its faces and that is one dimension short:

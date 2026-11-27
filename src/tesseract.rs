@@ -856,6 +856,41 @@ fn ground(looking: Vec3) -> (Vec3, Vec3) {
     (look, look.cross(Vec3::Y))
 }
 
+/// How big the figure standing in the middle of the cross is drawn.
+///
+/// **Something at the middle, because a map that turns needs one.** The
+/// cross turns and the squares swap sides, and with nothing between them
+/// there is no saying what they are turning about. Jake, asking for it:
+/// *with a figure at the center and the map rotating about so it reflects
+/// what rooms you're looking at.*
+///
+/// A person seen from above, which is what a plan of a cell can show: a bar
+/// for the shoulders and the head in front of it. Two pieces, and the head
+/// in front is the whole of what says which way the figure faces, so there
+/// is no arrow to read. The arcade's own map in the corner answers this
+/// with a dot and a nose for the same reason, and makes the same choice
+/// about which of the two moves: the nose does not turn, because the map
+/// does.
+///
+/// Half a square across, which leaves [`CROSS_STEP`] less [`ROOM_ACROSS`]
+/// of clear gap on every side between the figure and the squares.
+pub const FIGURE: f32 = ROOM_ACROSS * 0.52;
+
+/// The figure itself: where each piece of it sits in the holder's frame and
+/// how big, with the cross's own up for the way it is facing.
+pub fn cross_figure() -> [(Vec3, Vec3); 2] {
+    [
+        // the shoulders, square across the way it faces
+        (
+            Vec3::NEG_Y * (FIGURE * 0.55),
+            vec3(FIGURE * 2.1, FIGURE * 0.7, ROOM_SKIN),
+        ),
+        // and the head, standing into them rather than off them, or the two
+        // read as a bar with a crumb over it
+        (Vec3::Y * (FIGURE * 0.25), vec3(FIGURE, FIGURE, ROOM_SKIN)),
+    ]
+}
+
 /// How far from the middle of the cross each square sits.
 ///
 /// Far enough apart to read as four things rather than one shape, near
@@ -2966,6 +3001,77 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Spec 0021: a figure stands in the middle of the cross and the four
+    /// squares turn about it.
+    ///
+    /// It is what the cross turns about, so the two claims are one test: the
+    /// figure holds still and is clear of every square while the squares
+    /// move, and the squares have to actually move or there is nothing here
+    /// to be still against.
+    #[test]
+    fn a_figure_stands_in_the_middle_and_the_cross_turns_about_it() {
+        let walls = [Face::Ahead, Face::Back, Face::Right, Face::Left];
+        let (shoulders, head) = {
+            let [one, other] = cross_figure();
+
+            (one, other)
+        };
+
+        // the head is in front of the shoulders and narrower than them,
+        // which is the whole of what says which way it faces
+        assert!(
+            head.0.y > shoulders.0.y && head.1.x < shoulders.1.x,
+            "the head at {:?} does not stand in front of the shoulders at {:?}",
+            head,
+            shoulders
+        );
+
+        // and the two are one figure rather than a bar with a crumb over it
+        assert!(
+            head.0.y - head.1.y * 0.5 <= shoulders.0.y + shoulders.1.y * 0.5,
+            "the head floats off the shoulders"
+        );
+
+        let mut moved = 0;
+
+        for n in 0..32 {
+            let about = n as f32 / 32.0 * std::f32::consts::TAU;
+            let looking = vec3(about.sin(), 0.0, -about.cos());
+
+            for face in walls {
+                let (square, size) = cross_at(face, looking).expect("a wall");
+
+                if (square - cross_at(face, Face::Ahead.way()).expect("a wall").0).length() > 1e-3 {
+                    moved += 1;
+                }
+
+                // nothing of the figure reaches anything of a square, at
+                // any heading, or the middle of the cross is a scuffle
+                for (at, piece) in [shoulders, head] {
+                    let apart = (at.truncate() - square.truncate()).abs();
+                    let touching = (piece.truncate() + size.truncate()) * 0.5;
+
+                    assert!(
+                        apart.x > touching.x || apart.y > touching.y,
+                        "looking {:?}, the figure's piece at {:?} laps the \
+                         {:?} square at {:?}",
+                        looking,
+                        at,
+                        face,
+                        square
+                    );
+                }
+            }
+        }
+
+        assert!(
+            moved > 100,
+            "only {} of the squares moved as the head turned, so there is \
+             nothing for the figure to stand still against",
+            moved
+        );
     }
 
     /// Spec 0021: the wall you are looking at is the square on top.

@@ -8701,6 +8701,20 @@ impl Arcade {
                 );
             }
         }
+
+        // and you, in the middle of the four, facing up the cross. The
+        // squares turn about this; it does not turn, which is the choice
+        // the building's own map in the corner already made about its nose.
+        for (at, size) in tesseract::cross_figure() {
+            scene.push_material(
+                cube,
+                &Transform::at(beside + turn * at)
+                    .with_rotation(turn)
+                    .with_scale(size),
+                aim::held_of(aim::CELLS_HERE),
+                aim::VOID,
+            );
+        }
     }
 
     /// One of the eight things, drawn to a given width wherever it is asked
