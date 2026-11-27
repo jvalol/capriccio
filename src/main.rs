@@ -8263,6 +8263,22 @@ impl Arcade {
             return;
         }
 
+        // **And nothing inside the tesseract either**, which that line does
+        // not cover because the tesseract is not a layer. `layers` says so
+        // in as many words: spec 0021's room is a layer in all but name and
+        // `Arcade::inside` is its `w`. A cell stands at the building's own
+        // origin at the building's own height, so `floors` found a storey
+        // and drew the hall's plan in the corner of a room that is not in
+        // the building at all. Jake, 2026-11-27: *the arcade minimap
+        // shouldn't show while inside the tesseract.*
+        //
+        // That room has a map of its own, the shape in your hand and the key
+        // under it, so this is the same answer a third time: borrow no map,
+        // and do not show the frame of one.
+        if self.inside.is_some() {
+            return;
+        }
+
         let at = self.looking_from();
         let Some(floor) = self.floors.get(plan::storey_at(at.y)) else {
             return;
@@ -19930,6 +19946,49 @@ mod tests {
             out.runs().is_empty(),
             "a map of the building is drawn out in the village, {} runs of it",
             out.runs().len()
+        );
+    }
+
+    /// Spec 0021: no map of the building while you are inside the
+    /// tesseract.
+    ///
+    /// **The layer check did not cover it, because the tesseract is not a
+    /// layer.** `layers` says that room is a layer in all but name and that
+    /// `Arcade::inside` is its `w`, and this is the cost of in all but
+    /// name: a cell stands at the building's own origin at the building's
+    /// own height, so `floors` found a storey and drew the hall's plan in
+    /// the corner of a room that is not in the building.
+    ///
+    /// The control is the same one its two neighbours use and matters for
+    /// the same reason: the drawing gives up early on several counts, so a
+    /// test that only looked at the second half would pass with the gate
+    /// taken out.
+    #[test]
+    fn no_map_of_the_building_is_drawn_inside_the_tesseract() {
+        let mut game = Arcade::new();
+
+        let mut out = Geometry::new();
+        game.draw_the_map(&mut out);
+        assert!(
+            !out.runs().is_empty(),
+            "the arcade draws no map where it starts, so this proves nothing"
+        );
+
+        game.go_inside();
+
+        assert_eq!(
+            plan::storey_at(game.looking_from().y),
+            plan::storey_at(Arcade::new().looking_from().y),
+            "a cell stands off the building's storeys, so the drawing gives \
+             up before it reaches the thing this tests"
+        );
+
+        let mut inside = Geometry::new();
+        game.draw_the_map(&mut inside);
+        assert!(
+            inside.runs().is_empty(),
+            "the building's plan is drawn inside the tesseract, {} runs of it",
+            inside.runs().len()
         );
     }
 

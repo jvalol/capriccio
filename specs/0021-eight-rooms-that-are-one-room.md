@@ -366,6 +366,23 @@ Square and stepped rather than turned, because everything in this cell is
 square and a bowl would be the only round thing in here that is not an
 exhibit, and because one slab on a stick is a placeholder.
 
+**And the building's map was still in the corner.** Jake, 2026-11-27: *the
+arcade minimap shouldn't show while inside the tesseract.* It was, and had
+been since the room was built.
+
+Spec 0132 settled what a map does where there is nothing to map, and spec
+0134 made it a layer question and gated it. Neither reached here, because
+this room is not a layer. `layers` says so itself: spec 0021's room is a
+layer in all but name and `Arcade::inside` is its `w`. That is the cost of
+in all but name. A cell stands at the building's own origin at the
+building's own height, so `floors` found a storey by height alone and drew
+the hall's plan in the corner of a room that is not in the building.
+
+It draws nothing now, and nothing rather than an empty panel, which is the
+answer spec 0132 already gave: a place with no map of its own borrows none
+and does not show the frame of one either. This room has a map of its own
+anyway, which is the shape in your hand and the key under it.
+
 **It drew as a grey patch first, and the arithmetic is worth keeping.** The
 shade was given 1.45, which is past one and should burn. It does not, here:
 the lamp sits at the shade's own underside, so the light is in that face's
@@ -819,6 +836,9 @@ And the map:
 - The cell's one lamp is inside the shade of a fitting that reaches the
   ceiling and hangs clear of the room below it.
   — `tesseract::tests::the_lamp_hangs_in_a_fitting`
+- No plan of the building is drawn in the corner while you are in a cell,
+  checked against the same arcade drawing one where it starts.
+  — `tests::no_map_of_the_building_is_drawn_inside_the_tesseract`
 - The cross lays the four walls you can walk at out flat, up for the one in
   front of you, and the two nobody can walk at are not on it. The squares are
   square, they face the holder rather than each standing at its own angle,
