@@ -121,52 +121,6 @@ pub fn under(reaches: f32) -> [Aabb; 2] {
     ]
 }
 
-/// How wide and how high the way through the shared wall is.
-///
-/// A doorway and not a stairwell: the bottom tread is at floor level where
-/// the wall stands, so what the wall needs is a way through rather than a
-/// hole over a drop. Wide enough for the flight and its two balustrades,
-/// and high enough to walk under at the foot of a climb.
-pub const WAY_WIDE: f32 = 2.1;
-pub const WAY_HIGH: f32 = 2.1;
-
-/// Where that way is, as the two `x` it runs between.
-///
-/// On the flight's own line, named here so the wall it is cut in and the
-/// stair that goes through it cannot come apart.
-pub fn way(reaches: f32) -> (f32, f32) {
-    let at = stair_foot(reaches).x;
-
-    (at - WAY_WIDE * 0.5, at + WAY_WIDE * 0.5)
-}
-
-/// How wide the door beside it is: the way into the wing's ground storey.
-///
-/// **The stair's own way through is not a way past it.** It is 2.1 wide and
-/// the flight is 1.8, so what is left either side is 0.15 and a body is 0.9:
-/// cut only for the stair, the room under this one had no way in at all.
-/// Widening that opening until you could pass beside the flight would take
-/// it to 3.4 and make an arch of what is a doorway, so the ground storey
-/// gets a door of its own instead, which is what a building does.
-pub const DOOR_WIDE: f32 = 1.2;
-
-/// Where that door is, as the two `x` it runs between: west of the stair,
-/// a clear body's width off it.
-pub fn door(reaches: f32) -> (f32, f32) {
-    let (way, _) = way(reaches);
-    let east = way - crate::RADIUS * 2.0 - 0.4;
-
-    (east - DOOR_WIDE, east)
-}
-
-/// Both openings in the wall the wing shares with the nook, west to east.
-///
-/// One list, because three places cut this wall: its collider, the hall's
-/// far end which reaches across the nook, and the nook's own panelling.
-pub fn openings(reaches: f32) -> [(f32, f32); 2] {
-    [door(reaches), way(reaches)]
-}
-
 /// The wing's own walls on the ground storey.
 ///
 /// Three and not four. The north one is the wall it shares with the nook,
@@ -2987,50 +2941,104 @@ mod tests {
         assert!(bowls.len() >= 4, "only {} lamps on the stair", bowls.len());
     }
 
-    /// And the storey under it has a way in, per spec 0114.
+    /// And the storey under it is open to the nook along its whole width,
+    /// per spec 0114.
     ///
-    /// **The stair's own opening is not one.** It is `WAY_WIDE` across and
-    /// the flight is `FLIGHT`, so what is left either side is 0.15 against
-    /// a body of 0.9: cut for the stair alone, the room under this one
-    /// could not be got into at all. The door beside it is what this walks.
+    /// **It used to be a 1.2 door beside the stair.** The wall between
+    /// the two was cut with a 2.1 way on the flight's line and a door
+    /// beside it, because `WAY_WIDE` less `FLIGHT` leaves 0.15 either
+    /// side against a body of 0.9 and the room could not otherwise be got
+    /// into. Jake, standing in it: removing the entire brownish wall would
+    /// feel more spacious. So the wall west of the gallery is gone and the
+    /// whole 7 metres is the way in.
+    ///
+    /// **Swept rather than walked once**, because one x is what a door
+    /// is. Everything but the flight's own run has to let a body through,
+    /// or this is a wide door with furniture in it.
     #[test]
-    fn you_can_walk_past_the_stair_below() {
+    fn the_storey_below_is_open_to_the_nook() {
         let reaches = reaches();
         let room = inside(reaches);
-        let (from, to) = door(reaches);
         let shared = room.max.z;
-        let at = (from + to) * 0.5;
+        let flight = stair_foot(reaches).x;
+        let (west, east) = (room.min.x + 1.0, crate::room::gallery_west() - 0.6);
+        let (mut beside_west, mut beside_east) = (0, 0);
 
-        // the stair's own opening is too tight to pass beside, which is the
-        // whole reason the door is there
-        let (way_from, way_to) = way(reaches);
-        let beside = (way_to - way_from - FLIGHT) * 0.5;
+        for n in 0..=20 {
+            let at = west + (east - west) * n as f32 / 20.0;
 
+            // the flight is not a way past the flight
+            if (at - flight).abs() < FLIGHT * 0.5 + crate::RADIUS {
+                continue;
+            }
+
+            let got = walked(
+                vec3(at, 0.2, shared + 1.5),
+                vec3(at, 0.0, shared - 3.0),
+                8.0,
+            );
+
+            assert!(
+                got.z < shared - 1.5,
+                "walking south at x {:.2} got to z {:.2}, and the wall used \
+                 to be at {:.2}",
+                at,
+                got.z,
+                shared
+            );
+            assert!(
+                got.y.abs() < 0.3,
+                "at x {:.2} it ended at y {:.2} rather than on the wing's floor",
+                at,
+                got.y
+            );
+
+            match at < flight {
+                true => beside_west += 1,
+                false => beside_east += 1,
+            }
+        }
+
+        // both sides of the flight and not just the side the door was on,
+        // which is the whole of what changed
         assert!(
-            beside < crate::RADIUS * 2.0,
-            "the stair's opening leaves {:.2} beside the flight, so the door \
-             beside it is not needed and this test is guarding nothing",
-            beside
+            beside_west >= 3 && beside_east >= 1,
+            "{} of the sweep got in west of the flight and {} east of it, \
+             so this is a door beside the stair again",
+            beside_west,
+            beside_east
         );
 
-        // in from the nook, through the door, and on into the room
-        let inside_it = walked(
+        // **And the east side is the tight one, so it is named.** The
+        // flight stands in the middle of the opening and the gallery's
+        // west wall is 1.3 off it: wide enough, and the first thing that
+        // would stop being wide enough if the gallery moved west.
+        let clear = crate::room::gallery_west() - (flight + FLIGHT * 0.5);
+
+        assert!(
+            clear > crate::RADIUS * 2.0,
+            "only {:.2} clear between the flight and the gallery's west \
+             wall, against a body of {:.2}",
+            clear,
+            crate::RADIUS * 2.0
+        );
+
+        // and the control, which is what says the wall was not simply
+        // deleted: east of the gallery's west face it is still there, and
+        // the nook does not open into the gallery
+        let at = crate::room::gallery_west() + 1.5;
+        let stopped = walked(
             vec3(at, 0.2, shared + 1.5),
             vec3(at, 0.0, shared - 3.0),
             8.0,
         );
 
         assert!(
-            inside_it.z < shared - 1.5,
-            "walking at the door from the nook got to z {:.2}, and the wall \
-             is at {:.2}",
-            inside_it.z,
+            stopped.z > shared,
+            "walking at the gallery's north wall from the nook got to z \
+             {:.2}, past the wall at {:.2}",
+            stopped.z,
             shared
-        );
-        assert!(
-            inside_it.y.abs() < 0.3,
-            "it ended at y {:.2} rather than on the wing's floor",
-            inside_it.y
         );
     }
 

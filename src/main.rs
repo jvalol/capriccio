@@ -1062,6 +1062,10 @@ struct Arcade {
     hung: Option<MeshId>,
     boards: Option<TextureId>,
     boards_mesh: Option<MeshId>,
+    /// One per slab of the wing's ground storey, since a plank has to be
+    /// the same width in both rooms and a quad's tiling is counted off its
+    /// own size.
+    wing_boards: Vec<MeshId>,
     barrel: Option<MeshId>,
     /// A guest's body and a guest's leg, turned on the same wheel as the
     /// barrels and the bell. Spec 0033.
@@ -1851,6 +1855,7 @@ impl Arcade {
             hung: None,
             boards: None,
             boards_mesh: None,
+            wing_boards: Vec::new(),
             barrel: None,
             body: None,
             head: None,
@@ -3458,20 +3463,14 @@ impl Arcade {
         // wall for the nook, in the nook's own place, so there is nothing
         // left to clamp to.
         //
-        // **And in pieces round spec 0114's two openings.** That same rule
-        // is why: the wing's stair climbs south out of this wall and the
-        // storey under it has a door beside the stair, and panelling across
-        // a doorway is a door. `glass::openings` is the only place that
-        // says where.
+        // **And only as far west as the wall goes**, which is the gallery.
+        // It used to run from `back` in pieces round two openings; there is
+        // no wall out there now, and panelling in mid air is worse than
+        // panelling across a doorway. `room::gallery_west` is the one place
+        // that says where it starts.
         let face = -self.room.reaches + room::THICK;
-        let mut run = back;
 
-        for (cut, to) in glass::openings(self.room.reaches) {
-            out.push((face, 1.0, false, run, cut));
-            run = to;
-        }
-
-        out.push((face, 1.0, false, run, front));
+        out.push((face, 1.0, false, room::gallery_west(), front));
 
         out
     }
@@ -10783,6 +10782,15 @@ impl Game for Arcade {
             nook.x / carpet::BOARD_TILE,
             nook.z / carpet::BOARD_TILE,
         ))));
+        self.wing_boards = glass::under(self.room.reaches)
+            .iter()
+            .map(|slab| {
+                renderer.add_mesh(&room::tiled_plane(glam::vec2(
+                    slab.size().x / carpet::BOARD_TILE,
+                    slab.size().z / carpet::BOARD_TILE,
+                )))
+            })
+            .collect();
         self.rug_mesh = Some(renderer.add_mesh(&room::tiled_floor(carpet::RUG_TILES)));
         self.wall_grain =
             Some(renderer.add_texture(&carpet::mottled(carpet::WALL_SEED, [220, 220, 220], 34)));
@@ -12039,24 +12047,34 @@ impl Game for Arcade {
             }
         }
 
-        // and the storey under spec 0114's wing, which is the aisle's
-        // carpet carried on again.
+        // and the storey under spec 0114's wing, which is boards like the
+        // nook it is now open to.
         //
         // **A room with no floor drawn is a room standing on black**, which
         // is what the gallery's own note above records from its first
-        // build. This one had the same fault on its first build and it is
-        // the same answer: the wing is reached off the nook and its floor
-        // is the building's, until it is given a purpose of its own.
-        for slab in glass::under(self.room.reaches) {
-            let laid = Transform::at(vec3(slab.center().x, 0.0, slab.center().z)).with_scale(vec3(
-                slab.size().x,
-                1.0,
-                slab.size().z,
-            ));
+        // build, and this one had the same fault on its first build. It was
+        // answered with the aisle's carpet, the building's own, until the
+        // room was given a purpose of its own.
+        //
+        // **It has one now, which is that it is the nook.** `nook_south`
+        // took the wall between them out, so the arcade's confetti ran
+        // seven metres into a room whose other half is a study. Jake,
+        // standing in it: the flooring shouldn't be arcade style. The
+        // note above the nook's own boards says why it matters: the floor
+        // is the largest single thing in your view saying which room you
+        // are standing in, and this is now one room.
+        for (slab, mesh) in glass::under(self.room.reaches)
+            .iter()
+            .zip(self.wing_boards.iter())
+        {
+            // **Lifted like the nook's**, which is two coplanar faces
+            // avoided rather than risked: the slab's own top is at nought.
+            let laid = Transform::at(vec3(slab.center().x, 0.002, slab.center().z))
+                .with_scale(vec3(slab.size().x, 1.0, slab.size().z));
 
-            match self.carpet {
-                Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
-                None => scene.push_plain(floor, &laid, aim::FLOOR),
+            match self.boards {
+                Some(boards) => scene.push_textured(*mesh, boards, &laid, aim::BOARDS, aim::DULL),
+                None => scene.push_plain(*mesh, &laid, aim::FLOOR),
             }
         }
 
@@ -20396,6 +20414,36 @@ mod tests {
         let (at, looking_at) = rooms::pose(reaches(), "nook");
 
         looks_right("nook", at, looking_at);
+    }
+
+    /// Spec 0114: the storey under the wing, looking north into the nook.
+    ///
+    /// **The one view of this building nothing was holding.** The nook's
+    /// own picture stands a stride inside the south end looking the other
+    /// way, so the wall across that end, its two openings and the floor
+    /// on this side of it were in no reference at all. Taking the wall out
+    /// and laying boards here changed neither of the two pictures that
+    /// come nearest, which is how little either of them sees.
+    ///
+    /// Jake's own camera off his run, kept rather than framed, because it
+    /// is the one he read the fault off: both rooms, the stair in the
+    /// middle of the opening between them, and the floor running from one
+    /// into the other.
+    #[test]
+    fn the_storey_under_the_wing_is_drawn() {
+        let at = vec3(-11.53, 0.0, -15.44);
+        let (yaw, pitch) = (157.1_f32.to_radians(), (-10.4_f32).to_radians());
+        let eye = at + Vec3::Y * EYE;
+
+        looks_right(
+            "under-the-wing",
+            at,
+            eye + vec3(
+                yaw.sin() * pitch.cos(),
+                pitch.sin(),
+                -yaw.cos() * pitch.cos(),
+            ) * 10.0,
+        );
     }
 
     /// Spec 0061: the corridor of mirrors, square on to its west wall.

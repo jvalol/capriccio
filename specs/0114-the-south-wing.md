@@ -69,9 +69,27 @@ and 4.2 metres of going, as spec 0064 has always had, on the line x −7.7 that
 is the middle of both rooms. Its foot is at the opening in the nook's end
 wall, z −9.5, and its head is at z −13.7.
 
-**The opening is a doorway and not a stairwell.** The bottom tread is at floor
-level where the wall is, so what the wall needs is a way through 2.1 wide and
-2.1 high, centred on the flight.
+**The opening is the whole wall.** It was a doorway and not a stairwell,
+2.1 wide and 2.1 high on the flight's line, with a 1.2 door beside it
+because 2.1 less the flight's 1.8 leaves 0.15 either side against a body of
+0.9 and the storey below could not otherwise be got into. Standing in that
+storey and looking north you saw a brown wall with two slots in it. Jake,
+2026-11-26: *i wonder if this wall needs to be here, the room could feel
+more open*, and then *removing the entire brownish wall would feel more
+spacious*.
+
+So there is no wall west of the gallery. The nook and the storey under the
+wing are one room, open the 7 metres between them, and the flight climbs
+out of the middle of that opening. What is left of the hall's far end is
+the stretch with the gallery behind it, which divides two rooms and stays.
+The tight side is now east of the flight, where 1.3 is clear to the
+gallery's west wall.
+
+**And the floor follows the room.** The storey below was the aisle's own
+confetti carpet, carried in because a room with no floor drawn stands on
+black and it had no purpose of its own yet. It has one now, which is that
+it is the nook: Jake, *the flooring shouldn't be arcade style*. Boards, at
+the nook's own plank width.
 
 **What the stair leaves upstairs.** The well is the flight and a balustrade
 each side of it, z −9.5 to −13.7, at the north end of the room. The floor runs
@@ -106,9 +124,12 @@ round the building grown to hold it.
   — `glass::tests::the_sphere_has_length_behind_it_either_way`
 - The room stands over the wing and over nothing else.
   — `glass::tests::the_room_stands_over_the_wing`
-- The storey under it has a way in, which the stair's own opening is not:
-  that one leaves 0.15 beside the flight against a body of 0.9.
-  — `glass::tests::you_can_walk_past_the_stair_below`
+- The storey under it is open to the nook along its whole width, on both
+  sides of the flight, with the gallery's own wall still standing east of
+  it. — `glass::tests::the_storey_below_is_open_to_the_nook`
+- And that room is drawn: both halves of it, the stair in the middle of
+  the opening, and boards running from one into the
+  other. — `tests::the_storey_under_the_wing_is_drawn`
 - A body pushed at either side of the flight is stopped by that side's
   balustrade. — `glass::tests::you_cannot_walk_off_the_side_of_the_flight`
 - Every part of the nook's open floor has a lamp on it with the stairwell

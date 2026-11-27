@@ -332,6 +332,19 @@ pub fn gallery(reaches: f32) -> (Vec3, Vec3) {
     )
 }
 
+/// The outside of the gallery's west wall, which is where the hall's far
+/// end now starts.
+///
+/// **Because the wall only exists where the gallery is behind it.** West
+/// of here the nook and the storey under the glass room are one space, so
+/// there is nothing for a wall to divide. Named rather than written out,
+/// since a gallery that moves has to take this wall's end with it: the
+/// stretch of wall and the room behind it are one fact, not two that
+/// happen to agree.
+pub fn gallery_west() -> f32 {
+    -GALLERY_WIDE * 0.5 - THICK
+}
+
 /// The gap in what used to be the far wall, as the two x it runs between.
 pub fn gallery_way() -> (f32, f32) {
     let clear = WALL - CABINET.x * 0.5;
@@ -880,30 +893,28 @@ pub fn nook_floor(reaches: f32) -> (Vec3, Vec3) {
 /// this room moves. It ran a thickness into the nook's own span and the
 /// furniture was fitted around it.
 ///
-/// **Three pieces, because spec 0114's wing is through it.** The way up to
-/// the glass room starts on the nook's floor and climbs south out of this
-/// wall, so there is a doorway in it on the flight's own line with a lintel
-/// over it. `glass::way` is the only place that says where.
+/// **One piece, and only as far west as the gallery.** It used to run the
+/// nook's whole span with two openings cut in it, a 2.1 way on the stair's
+/// line and a 1.2 door into the storey under the wing beside it. Standing
+/// in that storey and looking north you saw a brown wall with a slot in
+/// it, and through the slot a room. Jake: i wonder if this wall needs to
+/// be here, the room could feel more open, and then, removing the entire
+/// brownish wall would feel more spacious.
+///
+/// So west of `gallery_west` there is no wall. The nook and the storey
+/// under the wing are one room, open the whole 7.5 between them, and the
+/// stair climbs out of the middle of that opening rather than through a
+/// hole. What is left of the wall is the stretch with the gallery behind
+/// it, which is a wall between two rooms and stays.
 pub fn nook_south(reaches: f32) -> Vec<Aabb> {
     let (at, size) = nook_floor(reaches);
-    let (west, east) = (at.x - size.x * 0.5 - THICK, at.x + size.x * 0.5 + THICK);
+    let east = at.x + size.x * 0.5 + THICK;
     let (near, far) = (-reaches, -reaches + THICK);
-    let openings = crate::glass::openings(reaches);
-    let mut out = Vec::new();
-    let mut from = west;
 
-    for (cut, to) in openings {
-        out.push(Aabb::new(vec3(from, 0.0, near), vec3(cut, TALL, far)));
-        out.push(Aabb::new(
-            vec3(cut, crate::glass::WAY_HIGH, near),
-            vec3(to, TALL, far),
-        ));
-        from = to;
-    }
-
-    out.push(Aabb::new(vec3(from, 0.0, near), vec3(east, TALL, far)));
-
-    out
+    vec![Aabb::new(
+        vec3(gallery_west(), 0.0, near),
+        vec3(east, TALL, far),
+    )]
 }
 
 /// How much bare floor shows round the rug.
@@ -1436,23 +1447,17 @@ impl Room {
         let mut walls = walls;
         walls.extend(nook_south(reaches));
 
-        // the hall's far end carried across the nook, cut for the way up to
-        // the glass room and for the door into the storey under it
+        // the hall's far end, which stops where the gallery does: west of
+        // that the nook and the storey under the wing are one room, per
+        // `nook_south`
         {
             let (left, _) = gallery_way();
             let (near, far) = (-reaches - thick * 0.5, -reaches + thick * 0.5);
-            let mut from = -side - NOOK_DEEP;
 
-            for (cut, to) in crate::glass::openings(reaches) {
-                walls.push(Aabb::new(vec3(from, 0.0, near), vec3(cut, TALL, far)));
-                walls.push(Aabb::new(
-                    vec3(cut, crate::glass::WAY_HIGH, near),
-                    vec3(to, TALL, far),
-                ));
-                from = to;
-            }
-
-            walls.push(Aabb::new(vec3(from, 0.0, near), vec3(left, TALL, far)));
+            walls.push(Aabb::new(
+                vec3(gallery_west(), 0.0, near),
+                vec3(left, TALL, far),
+            ));
         }
 
         let benches = benches(-reaches);
