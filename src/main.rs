@@ -8593,12 +8593,15 @@ impl Arcade {
         let middle = camera.position + ahead * tesseract::HELD_OUT + right * tesseract::HELD_RIGHT
             - up * tesseract::HELD_DOWN;
 
-        // still, and laid out in the frame of the person holding it, so the
-        // part of it on your left is the cell through the wall on your left.
-        // A map that turns on its own cannot line up with anything.
+        // laid out in the frame of the person holding it, so the part of it
+        // on your left is the cell through the wall on your left. It takes
+        // no spin of its own: a map that turns on its own cannot line up
+        // with anything. It does turn with your head, which is `corners_in`
+        // reading the two level ways off the camera, and the tilt below is
+        // then an offset on that rather than a fixed pose.
         let spun = glam::Quat::from_rotation_y(tesseract::HELD_TILT_Y)
             * glam::Quat::from_rotation_x(tesseract::HELD_TILT_X);
-        let corners = tesseract::corners_in(inside.frame);
+        let corners = tesseract::corners_in(inside.frame, ahead);
 
         // into the camera's own right, up and forward, because what comes
         // back from the tesseract is already in the holder's four ways
@@ -8664,8 +8667,8 @@ impl Arcade {
         // thing.** The squares stay flat on the window; which square is
         // which comes off where you are looking, so the wall in front of
         // you is the one on top whatever you do with the mouse. The shape
-        // above does not follow your head and keeps its tilt, which is what
-        // stops it reading as a flat outline at four headings out of four.
+        // above turns with your head too, and keeps its tilt, so the two
+        // of them say the same thing about which side a wall is on.
         let beside = middle + up * tesseract::ROOM_UP;
         let turn = glam::Quat::from_mat3(&glam::Mat3::from_cols(right, up, right.cross(up)));
 

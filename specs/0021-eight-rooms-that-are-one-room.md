@@ -72,8 +72,8 @@ four ways. `Face::Right` is the wall at the room's `+x`, which is where
 `Face::way` puts it and where `crossing` reads a body as having left by it.
 Facing `Face::Ahead`, which is `+z` and the way `go_inside` stands you,
 screen right is `-x`. So the wall the cross called right was a metre to your
-left and the whole of it was a mirror image. The shape beside it has the
-same mirror and keeps it for now, which is said again below.
+left and the whole of it was a mirror image. The shape beside it had the
+same mirror, and that is fixed below.
 
 And up was the frame's ahead rather than yours. `frame` changes only at the
 halfway mark of a crossing, so turning on the spot moved nothing at all: the
@@ -104,14 +104,34 @@ The arcade's own map in the corner reached the same two answers for the same
 reasons, and says so in `minimap`: a dot and a nose for where you are, and
 *the nose no longer turns, because the map does*.
 
-**The shape does not follow your head, and that is on purpose.** It carries
-`HELD_TILT_Y`, which is 35 degrees about its own up and exists so you are
-never looking down one of its axes: a tesseract seen square on reads as a
-flat outline. Turning it with your head would walk it through that view once
-a quadrant. So the shape stays still and the cross is the one that answers
-which wall is which. The shape's own mirror is not fixed here, because
-undoing it means either flipping `corners_in` or renaming which world wall
-`Step::Right` is, and the second changes which object stands in which room.
+**And the shape beside it, which had both faults too.** Jake, looking at the
+cross once it turned: *could it rotate as i move as well?* It could not.
+`corners_in` laid the sixteen corners out along `Frame`, and `Frame` names
+the room's own `+x` and `+z`, so it was mirrored at every heading and it
+held still at all of them.
+
+It goes the same way the cross's did, by asking `ground` where the head is
+pointing and reading the two level ways off that. The holder's right and
+ahead are the room's `+x` and `+z`, so a corner's place across the screen
+and into it are two dot products, and there is then one account of which
+side a wall is on that both halves of the map read. The mirror comes out of
+the same change, because the mirror was only ever the room's `+x` being
+taken for the screen's.
+
+This was first written down the other way, as a thing not to do. The reason
+given was that `HELD_TILT_Y` is 35 degrees about the shape's own up so that
+no heading looks square down one of its axes, and that turning the shape
+would walk it through that view once a quadrant. The first half is what the
+constant was for. The second half was a guess, written as a reason, and it
+is wrong: renders at eight headings show a three quarter view at the best of
+them and a near square one at the worst, and the worst is still a solid,
+because `HELD_TILT_X` pitches it by twenty degrees and no heading touches
+that. A tesseract also maps onto itself every quarter turn, so what a full
+turn of the head actually shows is four similar poses with the cells in
+different places, which is the behaviour a map wants.
+
+What that leaves `HELD_TILT_Y` doing is offsetting which heading is the flat
+one, not ruling it out.
 
 The four-cube goes in the cell you came in by, so finding the way out and
 finding the room with the four-cube in it are the same job. The trefoil knot
@@ -729,7 +749,12 @@ And the map:
 - It lines up with the room: the part of the shape on your left is the cell
   through the wall on your left, the cell you are standing in is the outer
   cube, and the one you cannot reach is inside it. Checked for all ninety six
-  ways of standing. — `tesseract::tests::the_held_map_lines_up_with_the_room`
+  ways of standing, at twelve headings each, and against where a wall lies
+  on the screen rather than against the shape's own axes.
+  — `tesseract::tests::the_held_map_lines_up_with_the_room`
+- And the shape turns with your head to do it, rigidly about its own up, so
+  the eight cells keep their shape and only their side of it changes.
+  — `tesseract::tests::the_shape_in_your_hand_turns_with_your_head`
 - The cross lays the four walls you can walk at out flat, up for the one in
   front of you, and the two nobody can walk at are not on it. The squares are
   square, they face the holder rather than each standing at its own angle,

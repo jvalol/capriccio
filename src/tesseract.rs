@@ -704,25 +704,62 @@ pub fn edges() -> Vec<(usize, usize)> {
 /// cube, is the cell they are standing in. The part of the shape on your
 /// left is the cell through the wall on your left.
 ///
+/// **And "your left" is your head's, not the frame's.** `Frame` names the
+/// room's own `+x` and `+z`, and taking those for the screen's across and
+/// into cost this the same two faults the cross beside it had, for the same
+/// reason: a frame only changes at the halfway mark of a crossing.
+///
+/// - The side was mirrored. Facing the room's `+z`, the screen's right is
+///   `-x`, so the cell through the wall on your right came out on the left
+///   of the shape, a metre of room away from where it was.
+/// - And it did not turn. Turn round in a cell and the shape held still,
+///   which is the one thing it had been rebuilt not to do.
+///
+/// Both go the same way the cross's did, by asking [`ground`] which way the
+/// head is pointing and reading the two level ways off that rather than off
+/// the frame. There is then one account of which side a wall is on and the
+/// shape and the cross cannot disagree.
+///
+/// What it costs is that the shape turns with the head, so the heading
+/// where it stands square to the eye is now reachable rather than ruled
+/// out by [`HELD_TILT_Y`]. That tilt is the offset of where that heading
+/// falls, not a guarantee against it, and the pitch is what keeps it a
+/// solid at that one heading.
+///
 /// [`corners_at`] is the same thing from the world's point of view and is
 /// what the object on the plinth is built from, where there is nobody
 /// standing inside it to have a point of view. It took no angle until spec
 /// 0089 and was called `corners`.
-pub fn corners_in(frame: Frame) -> Vec<Vec3> {
-    let along = [frame.right, frame.up, frame.ahead, frame.ana];
+pub fn corners_in(frame: Frame, looking: Vec3) -> Vec<Vec3> {
+    let (look, right) = ground(looking);
     let mut out = Vec::with_capacity(16);
 
     for n in 0..16usize {
-        // where this corner sits along each of the four ways the holder has
-        let mut mine = [0.0f32; 4];
-        for (slot, way) in along.iter().enumerate() {
+        // where this corner sits along one of the four ways the holder has
+        let along = |way: Way| {
             let at = if n >> way.axis.n() & 1 == 1 {
                 1.0
             } else {
                 -1.0
             };
-            mine[slot] = if way.up { at } else { -at };
-        }
+
+            if way.up {
+                at
+            } else {
+                -at
+            }
+        };
+
+        // the holder's two level ways are the room's `+x` and `+z`, so where
+        // this corner lands across the screen and into it is the question
+        // `cross_at` asks of a wall, asked of a corner
+        let level = vec3(along(frame.right), 0.0, along(frame.ahead));
+        let mine = [
+            level.dot(right),
+            along(frame.up),
+            level.dot(look),
+            along(frame.ana),
+        ];
 
         let near = 1.0 / (EYE - mine[3]);
         out.push(vec3(mine[0] * near, mine[1] * near, mine[2] * near));
@@ -959,9 +996,14 @@ pub const HELD_BAR: f32 = 0.00326;
 ///
 /// **It used to turn on its own, and that was the fault.** A spinning map
 /// cannot line up with the room, so nothing told you which part of it was
-/// the wall in front of you. It is still now and built in your own frame
-/// instead, and the tilt is the smallest that still reads as three
-/// dimensional.
+/// the wall in front of you. It has no spin of its own now and is built in
+/// your own frame instead, and the tilt is the smallest that still reads as
+/// three dimensional.
+///
+/// Since [`corners_in`] reads the head, the y of it is an offset on your
+/// own heading rather than a pose. It was there so that no heading looked
+/// down the shape's own ahead; that is now a heading you can stand at, and
+/// what keeps the shape a solid there is the x of it.
 pub const HELD_TILT_Y: f32 = 0.62;
 pub const HELD_TILT_X: f32 = -0.34;
 
@@ -2798,6 +2840,14 @@ mod tests {
     /// it is what the first version did not have: it was built in the world's
     /// axes and spun on its own, so nothing on it meant anything about the
     /// room.
+    ///
+    /// **Against the room's own ways and the head's, which is what it did
+    /// not do.** It read `Step::Right` off the shape's local `+x` and called
+    /// that lined up. Local `+x` is the screen's right and the room's right
+    /// wall is its `+x`, and facing the room's `+z` those are opposite
+    /// sides, so the one thing this was written to catch was the one thing
+    /// it asserted. The way a wall lies on the screen is the only account
+    /// worth comparing with, and it takes the head to work out.
     #[test]
     fn the_held_map_lines_up_with_the_room() {
         // every way of standing, not just the one you arrive in
@@ -2809,51 +2859,73 @@ mod tests {
         queue.push_back(Frame::new());
 
         while let Some(frame) = queue.pop_front() {
-            let corners = corners_in(frame);
-            let middle = |cell: Cell| {
-                let mine = corners_of(cell);
-                mine.iter().map(|n| corners[*n]).sum::<Vec3>() / mine.len() as f32
-            };
+            for turn in 0..12 {
+                let yaw = turn as f32 * std::f32::consts::TAU / 12.0;
+                let looking = vec3(yaw.sin(), 0.0, yaw.cos());
+                let (look, right) = ground(looking);
 
-            // the four walls, each where its own wall is
-            for (step, way) in [
-                (Step::Ahead, Vec3::Z),
-                (Step::Back, Vec3::NEG_Z),
-                (Step::Right, Vec3::X),
-                (Step::Left, Vec3::NEG_X),
-            ] {
-                let at = middle(frame.through(step));
+                let corners = corners_in(frame, looking);
+                let middle = |cell: Cell| {
+                    let mine = corners_of(cell);
+                    mine.iter().map(|n| corners[*n]).sum::<Vec3>() / mine.len() as f32
+                };
+
+                // the four walls, each where its own wall lies on the screen
+                for (step, way) in [
+                    (Step::Ahead, Vec3::Z),
+                    (Step::Back, Vec3::NEG_Z),
+                    (Step::Right, Vec3::X),
+                    (Step::Left, Vec3::NEG_X),
+                ] {
+                    let at = middle(frame.through(step));
+                    let want = vec3(way.dot(right), 0.0, way.dot(look));
+
+                    let along = at.x * want.x + at.z * want.z;
+                    let side = at.x * want.z - at.z * want.x;
+
+                    assert!(
+                        along > 1e-3,
+                        "at yaw {:.2} the {:?} wall lies {:?} and the shape puts it {:?}",
+                        yaw,
+                        step,
+                        want,
+                        at
+                    );
+                    assert!(
+                        side.abs() < along * 1e-3,
+                        "at yaw {:.2} the {:?} wall is {:?} and the shape puts it {:?}, \
+                         which is off its line by {:.4}",
+                        yaw,
+                        step,
+                        want,
+                        at,
+                        side
+                    );
+                }
+
+                // and the floor and the ceiling likewise, which no heading
+                // touches
+                assert!(middle(frame.beyond(Face::Up)).y > 1e-3);
+                assert!(middle(frame.beyond(Face::Down)).y < -1e-3);
+
+                // the cell you are standing in is the outer cube, and the one
+                // you cannot reach is inside it
+                let out = corners_of(frame.cell())
+                    .iter()
+                    .map(|n| corners[*n].length())
+                    .fold(f32::MAX, f32::min);
+                let inner = corners_of(opposite(frame.cell()))
+                    .iter()
+                    .map(|n| corners[*n].length())
+                    .fold(0.0f32, f32::max);
 
                 assert!(
-                    at.dot(way) > 1e-3,
-                    "{:?} sits at {:?}, which is not {:?} of the shape",
-                    step,
-                    at,
-                    way
+                    inner < out,
+                    "the cell you are in should be the outer cube: {:.3} against {:.3}",
+                    out,
+                    inner
                 );
             }
-
-            // and the floor and the ceiling likewise
-            assert!(middle(frame.beyond(Face::Up)).y > 1e-3);
-            assert!(middle(frame.beyond(Face::Down)).y < -1e-3);
-
-            // the cell you are standing in is the outer cube, and the one you
-            // cannot reach is inside it
-            let out = corners_of(frame.cell())
-                .iter()
-                .map(|n| corners[*n].length())
-                .fold(f32::MAX, f32::min);
-            let inner = corners_of(opposite(frame.cell()))
-                .iter()
-                .map(|n| corners[*n].length())
-                .fold(0.0f32, f32::max);
-
-            assert!(
-                inner < out,
-                "the cell you are in should be the outer cube: {:.3} against {:.3}",
-                out,
-                inner
-            );
 
             for step in Step::ALL {
                 let next = frame.step(step);
@@ -2864,6 +2936,62 @@ mod tests {
         }
 
         assert_eq!(seen.len(), 96, "every way of standing should be checked");
+    }
+
+    /// Spec 0021: the shape in your hand turns with your head, the way the
+    /// cross beside it does.
+    ///
+    /// Jake, looking at the cross once it turned: *could it rotate as i move
+    /// as well?* It could not, and the reason was the same one: it was laid
+    /// out in `Frame`, which only changes at the halfway mark of a crossing,
+    /// so turning on the spot left it exactly where it was.
+    ///
+    /// A rigid turn about its own up and nothing else, so the eight cells
+    /// keep their shape and only their side of the shape changes. The
+    /// companion to this is `the_held_map_lines_up_with_the_room`, which says
+    /// the turn lands in the right place; this one says it happens at all.
+    #[test]
+    fn the_shape_in_your_hand_turns_with_your_head() {
+        let frame = Frame::new();
+        let was = corners_in(frame, Face::Ahead.way());
+
+        // how far a corner stands from the shape's own up
+        let flat = |v: &Vec3| (v.x * v.x + v.z * v.z).sqrt();
+
+        let mut moved = 0;
+        for turn in 1..16 {
+            let yaw = turn as f32 * std::f32::consts::TAU / 16.0;
+            let now = corners_in(frame, vec3(yaw.sin(), 0.0, yaw.cos()));
+
+            // a rigid turn: every corner keeps its height and its distance
+            // from the shape's own up, and at least one has gone somewhere
+            for (one, other) in was.iter().zip(now.iter()) {
+                assert!(
+                    (one.y - other.y).abs() < 1e-4,
+                    "at yaw {:.2} a corner changed height, {:.4} to {:.4}",
+                    yaw,
+                    one.y,
+                    other.y
+                );
+                assert!(
+                    (flat(one) - flat(other)).abs() < 1e-4,
+                    "at yaw {:.2} a corner left its circle, {:.4} to {:.4}",
+                    yaw,
+                    flat(one),
+                    flat(other)
+                );
+
+                if (*one - *other).length() > 1e-3 {
+                    moved += 1;
+                }
+            }
+        }
+
+        assert!(
+            moved > 100,
+            "the shape barely moved: {} corners of 240",
+            moved
+        );
     }
 
     /// Spec 0021: the cross is the four walls you can walk at, laid out the
