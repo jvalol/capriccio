@@ -631,6 +631,39 @@ fn ground() -> Ground {
     )
 }
 
+/// Every band at the same time, each on its own core.
+///
+/// **And one after another in a browser, which has no second thread.** A
+/// browser's wasm is one thread and `std::thread::scope` panics there the
+/// moment it spawns, so the arcade died while it was building the moon:
+/// `failed to spawn thread: operation not supported on this platform`,
+/// before the first frame. The bands went in on 2026-11-15 and the first
+/// browser build carrying them went up on 2026-11-23, so the site handed
+/// out a black screen for four days. Nothing caught it: the gate builds the
+/// wasm and never loads it, `mandel::worked_out` had already answered the same
+/// question for the wall, and this copied the shape of that code without
+/// the half that made it run.
+///
+/// Written as one list of bands handed to one of two runners, rather than
+/// the loop written twice, so a change to what a band does cannot reach only
+/// the machine it is being read on.
+#[cfg(not(target_arch = "wasm32"))]
+fn at_once<'a, F: FnOnce() + Send + 'a>(bands: impl Iterator<Item = F>) {
+    std::thread::scope(|scope| {
+        for band in bands {
+            scope.spawn(band);
+        }
+    });
+}
+
+/// The same in a browser, which has one thread.
+#[cfg(target_arch = "wasm32")]
+fn at_once<F: FnOnce()>(bands: impl Iterator<Item = F>) {
+    for band in bands {
+        band();
+    }
+}
+
 /// The same, divided a given number of ways, which is what lets a test ask
 /// whether the division shows. Spec 0081.
 fn ground_in(bands: usize) -> Ground {
@@ -658,26 +691,26 @@ fn ground_in(bands: usize) -> Ground {
     let mut height = vec![0.0f32; PICTURE_WIDE * PICTURE_TALL];
     let rows = PICTURE_TALL.div_ceil(bands.clamp(1, PICTURE_TALL));
 
-    std::thread::scope(|scope| {
-        for (n, (albedo, height)) in albedo
+    at_once(
+        albedo
             .chunks_mut(rows * PICTURE_WIDE)
             .zip(height.chunks_mut(rows * PICTURE_WIDE))
             .enumerate()
-        {
-            let basins = &basins;
-            let fell = &fell;
+            .map(|(n, (albedo, height))| {
+                let basins = &basins;
+                let fell = &fell;
 
-            scope.spawn(move || {
-                let mut band = Band {
-                    from: n * rows,
-                    albedo,
-                    height,
-                };
+                move || {
+                    let mut band = Band {
+                        from: n * rows,
+                        albedo,
+                        height,
+                    };
 
-                laid(&mut band, fell, drowned, basins);
-            });
-        }
-    });
+                    laid(&mut band, fell, drowned, basins);
+                }
+            }),
+    );
 
     Ground { albedo, height }
 }

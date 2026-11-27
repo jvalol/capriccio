@@ -83,6 +83,33 @@ are worse than the loop they replaced.
 - **Nothing is built lazily.** The moon is still made before the first
   frame whether or not anybody looks up.
 
+## A browser has one thread, and this asked for eighteen
+
+2026-11-27. The bands went in without the half that `mandel::worked_out`
+already had: a version for a browser. `std::thread::scope` on
+wasm32-unknown-unknown panics the moment it spawns, with `failed to spawn
+thread: operation not supported on this platform`, and `moon::face` is
+called at setup, so the arcade on the site died before its first frame.
+Every load, for everybody, with a black screen and nothing said on it.
+
+**Four days of it.** The bands landed on 2026-11-15; the first browser
+build carrying them went up on 2026-11-23. Four days where the hall was
+on the front page and the page handed out nothing.
+
+**Nothing in the gate could see it.** `cargo test` runs natively, where
+threads work. `./build-web` builds the wasm and never loads it.
+`./check-fresh` compares the bytes on the site against the bytes here,
+which were the same wrong bytes. A build that compiles, publishes and
+matches is as far as any of it looks, and all three said yes.
+
+What found it was loading the page, which is now the first thing to do
+after a push that rebuilds the arcade.
+
+The fix is one list of bands handed to one of two runners, `at_once`,
+rather than the loop written twice: the native one spawns, the browser one
+calls each band in turn. One account of what a band does, so a change to
+it cannot reach only the machine it is being read on.
+
 ## Acceptance criteria
 
 - Dividing the picture between threads does not show in it, including a band count that leaves a ragged end. — `moon::tests::the_moon_is_the_same_however_it_is_divided`
@@ -93,3 +120,6 @@ are worse than the loop they replaced.
 
 - The picture is byte-for-byte the one that was there before. — the
   reference file did not move.
+- The arcade starts in a browser. — the same page off a local server: the
+  published build panicked at `thread/scoped.rs:206`, the rebuilt one drew
+  the hall.
