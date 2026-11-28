@@ -1814,6 +1814,17 @@ pub fn tip(seed: u32, v: f32) -> Vec2 {
 /// How fine a picture of granite is drawn.
 pub const GRAIN: u32 = 256;
 
+/// What its ground is mixed at: the shade, how far that wanders, and the
+/// warmth laid over it.
+///
+/// **Named because the bridge mixes the same stone.** Spec 0054's deck runs
+/// out of gravel at its foot and has to match the bank beside it, which is
+/// this granite under `aim::RUBBLE`. Written out there as well, the two
+/// would drift the first time either was touched.
+pub const STONE: f32 = 0.47;
+pub const STONE_GRAIN: f32 = 0.04;
+pub const STONE_TINT: [f32; 3] = [0.98, 0.97, 0.94];
+
 /// Granite, which is what a runestone is actually cut from.
 ///
 /// **Jake, 2026-11-05: the stone could have a stony texture, whatever kind
@@ -1846,9 +1857,9 @@ pub fn granite(seed: u32) -> blitzkit::texture::TextureData {
     let mut pixels = vec![0u8; (n * n * 4) as usize];
 
     for at in 0..(n * n) as usize {
-        let shade = 0.47 + roll(next()) * 0.04;
+        let shade = STONE + roll(next()) * STONE_GRAIN;
 
-        for (c, of) in [0.98f32, 0.97, 0.94].iter().enumerate() {
+        for (c, of) in STONE_TINT.iter().enumerate() {
             pixels[at * 4 + c] = (shade * of * 255.0) as u8;
         }
         pixels[at * 4 + 3] = 255;

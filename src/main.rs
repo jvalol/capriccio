@@ -1277,9 +1277,6 @@ struct Arcade {
     /// The box one piece of the bridge's deck is drawn on, and the rainbow
     /// laid across its width. Specs 0054 and 0055.
     deck: Option<MeshId>,
-    /// And the first ten metres of it, which are their own mesh because
-    /// they are the one see-through piece. See `bridge::fades_in`.
-    deck_foot: Option<MeshId>,
     soffit: Option<MeshId>,
     rainbow: Option<TextureId>,
     /// And what is cut into the stone at its foot: the carved face, the
@@ -1968,7 +1965,6 @@ impl Arcade {
             litter: Vec::new(),
             heads: Vec::new(),
             deck: None,
-            deck_foot: None,
             soffit: None,
             rainbow: None,
             runes: None,
@@ -4585,19 +4581,6 @@ impl Arcade {
             // tube.
             aim::VOID,
         );
-
-        // and its first ten metres, which come up out of the gravel rather
-        // than starting on a line across it. Jake, 2026-11-27. Its own draw
-        // because it is the one see-through piece: see `bridge::SOLID`.
-        if let Some(foot) = self.deck_foot {
-            scene.push_textured(
-                foot,
-                rainbow,
-                &Transform::at(Vec3::ZERO),
-                bridge::foot_glow(),
-                aim::VOID,
-            );
-        }
 
         // and the stone at the foot of it, which is the only thing out
         // here that says what any of this is. Spec 0006's rule applied to
@@ -10111,9 +10094,6 @@ impl Game for Arcade {
                 if let Some(deck) = self.deck {
                     renderer.update_mesh(deck, &bridge::deck_mesh(self.room.reaches, far));
                 }
-                if let Some(foot) = self.deck_foot {
-                    renderer.update_mesh(foot, &bridge::foot_mesh(self.room.reaches, far));
-                }
                 if let Some(soffit) = self.soffit {
                     renderer.update_mesh(soffit, &bridge::soffit_mesh(self.room.reaches, far));
                 }
@@ -10630,8 +10610,6 @@ impl Game for Arcade {
         // between the two would have been undone. Spec 0119.
         self.deck =
             Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches, self.deck_reaches)));
-        self.deck_foot =
-            Some(renderer.add_mesh(&bridge::foot_mesh(self.room.reaches, self.deck_reaches)));
         self.soffit =
             Some(renderer.add_mesh(&bridge::soffit_mesh(self.room.reaches, self.deck_reaches)));
         self.rainbow = Some(renderer.add_texture(&bridge::rainbow()));
