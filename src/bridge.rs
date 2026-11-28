@@ -2093,6 +2093,40 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
         vertex.uv[1] = 0.5;
     }
 
+    // **And an end on each end.** Jake, 2026-11-28: the railings don't have
+    // ends. They did not. Three swept faces are an open channel, so the bar
+    // stopped at a mouth you could see into at either end, and at the foot
+    // that mouth stands in the gravel at eye height. The section is a
+    // rectangle, so each end is one quad, and the order the section is
+    // listed in gives the near one its winding: away down the road at the
+    // top of the climb, back at the field at the foot.
+    //
+    // After the slots are written and not before, because a cap's `u` runs
+    // across the bar rather than along it and the loop above would read it
+    // as the first two spans.
+    for (at, from_z, to_z) in [
+        (0.0, section[3].0, section[0].0),
+        (reach, section[0].0, section[3].0),
+    ] {
+        let on = high(at);
+        let x = foot.x - at * RUN;
+        let under = -DEEP * 0.55;
+        let mut cap = blitzkit::mesh::MeshData::surface(1, 1, |u, v| {
+            vec3(
+                x,
+                on + under + (KERB_UP - under) * v,
+                from_z + (to_z - from_z) * u,
+            )
+        });
+        let span = (at * SPANS as f32).floor().min(SPANS as f32 - 1.0);
+
+        for vertex in &mut cap.vertices {
+            vertex.uv = [(span + 0.5) / SPANS as f32, 0.5];
+        }
+
+        mesh.extend(&cap);
+    }
+
     mesh
 }
 
@@ -3803,13 +3837,17 @@ pub mod tests {
                 WIDE * 0.5
             );
 
+            let middle_of_the_run = foot.x - RUN * 0.5;
+            let mut ends = 0;
+
             for one in &mesh.vertices {
                 let normal = Vec3::from(one.normal);
                 let across = normal.z.abs() > 0.9;
+                let along = normal.x.abs() > 0.9;
 
                 assert!(
-                    across || normal.y > 0.5,
-                    "a kerb vertex at side {} faces {:?}, which is neither out across the road nor up",
+                    across || along || normal.y > 0.5,
+                    "a kerb vertex at side {} faces {:?}, which is none of out across the road, along it, or up",
                     side,
                     normal
                 );
@@ -3826,7 +3864,25 @@ pub mod tests {
                         normal
                     );
                 }
+
+                if along {
+                    ends += 1;
+
+                    assert!(
+                        normal.x * (one.position[0] - middle_of_the_run) > 0.0,
+                        "a kerb end at side {} faces {:?}, which is back into the bar",
+                        side,
+                        normal
+                    );
+                }
             }
+
+            // **Both ends, and only the ends.** Two quads of four corners.
+            assert_eq!(
+                ends, 8,
+                "the kerb at side {} has {} vertices facing along the road, not the eight of two caps",
+                side, ends
+            );
         }
     }
 

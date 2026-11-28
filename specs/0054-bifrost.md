@@ -584,8 +584,17 @@ than one.
 **The test is the normals and not the corners.** The corner check passed
 through all of this, because four corners in the right places is exactly
 what a shell has. What it asserts now is that every normal on the bar is
-either across the road or up, never a blend of the two, and that the
-across ones point out of the bar rather than into it.
+across the road, along it or up, never a blend, that the across ones point
+out of the bar rather than into it, and that the along ones point out of
+its ends.
+
+**And then it had no ends.** Jake, straight after: the railings don't have
+ends. Three swept faces are an open channel whichever way they are wound,
+so the bar stopped at a mouth at either end, and at the foot that mouth
+stands in the gravel at eye height. The section is a rectangle, so each
+end is one quad, wound from the order the section is already listed in.
+They are added after the span slots are written, because a cap's `u` runs
+across the bar and the slot loop would read it as the first two spans.
 
 ## Acceptance criteria
 
