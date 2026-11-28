@@ -1984,10 +1984,11 @@ pub fn pitch(along: f32) -> f32 {
 /// call it so they aren't too thin to appear. He was right that it had
 /// none, and wrong about why, as was I: both of my goes at it moved these
 /// two numbers, first the width and then the height, and neither touched
-/// the thing that was wrong. The kerb had no top face and no inner face,
-/// for the reason written on the cut in `kerb_mesh`. Given its own four
-/// corners it is a bar at half a metre, and the deck keeps its five
-/// metres clear.
+/// the thing that was wrong. The kerb had no top face and no inner face
+/// at all, and then, once it had them, no normal that belonged to any of
+/// them. Both faults are written up on the section in `kerb_mesh`. Left
+/// alone, these two numbers are a bar at half a metre, and the deck keeps
+/// its five metres clear.
 ///
 /// Its pieces are ten treads long. Nothing stands on a kerb, so it
 /// does not need the fine tread the deck needs to be smooth, and at
@@ -2012,48 +2013,70 @@ pub const KERB_PROUD: f32 = 0.04;
 pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshData {
     let foot = foot(reaches);
     let middle = foot.z + side * (WIDE * 0.5 - KERB_THICK * 0.5);
-    let half = KERB_THICK * 0.5;
+    // **Proud on the side it stands on.** The half thickness and
+    // `KERB_PROUD` were both added to `middle` whichever kerb this was, so
+    // only the right one was pushed outward: the left one's faces came out
+    // the wrong way round, its outer face landing exactly in the plane of
+    // the deck's own edge, which is the coplanar fault this building has
+    // found eight times before. Signed, each kerb leans away from the road.
+    let outer = middle + side * (KERB_THICK * 0.5 + KERB_PROUD);
+    let inner = middle - side * KERB_THICK * 0.5;
     // **The verge stops where the deck does.** Spec 0117. It did not, and
     // the two kerbs ran the whole hundred metres out over a deck a sixth of
     // that: two thin arcs climbing out of the field and over, with nothing
     // under them, which is what a picture of an empty trail showed.
     let reach = reach.clamp(0.0, 1.0);
 
-    let mut mesh = blitzkit::mesh::MeshData::surface(PIECES as u32, 3, |u, v| {
-        let along = u * reach;
-        let on = high(along);
-        let x = foot.x - along * RUN;
-        // round the kerb's cross section: down the outer face, over the
-        // top, down the inner face
-        // **Clear of the deck's own faces.** Standing exactly on the
-        // deck's edge, the kerb's outer face shared a plane with it and
-        // its underside shared one with the deck's underside, and both
-        // came out speckled: the fault this building has found eight
-        // times. Nudged out and cut short, neither touches.
-        let out = middle + half + KERB_PROUD;
-        let under = on - DEEP * 0.55;
-        // **Cut between the samples and not on them.** `surface` asks for
-        // `v` at nought, a third, two thirds and one, which is the four
-        // corners this wants; thresholds at 0.34, 0.67 and 0.99 put the
-        // third into the first corner's bucket, so the kerb came out with
-        // its outer foot twice, no top face and no inner face at all: a
-        // wedge tapering to a line against the deck. It had been that from
-        // the day it was built, and what it looks like is nothing at all
-        // from any angle that sights along it. Jake, 2026-11-28: see that
-        // black strip in the middle lower center? That.
-        //
-        // Halfway between one sample and the next, so each corner takes
-        // the sample meant for it and a `v_steps` that changed would have
-        // to come through here.
-        let (z, y) = match v {
-            v if v < 1.0 / 6.0 => (out, under),
-            v if v < 0.5 => (out, on + KERB_UP),
-            v if v < 5.0 / 6.0 => (middle - half, on + KERB_UP),
-            _ => (middle - half, under),
-        };
-        vec3(x, y, z)
-    });
-    mesh.compute_normals();
+    // The bar's section, outer foot round the top to inner foot, as a
+    // height above the deck and a distance across it.
+    //
+    // **A strip a face, rather than one sheet folded three times.** Jake,
+    // 2026-11-28: the railings look hollow. They were. A `surface` shares
+    // the vertices either side of a fold, so every one of this bar's four
+    // corners was shared between two faces, and `compute_normals` handed
+    // each of them the average: not one vertex on the thing carried the
+    // normal of a face it was part of. The top's two corners came out
+    // pointing a little under the horizon, so the lit top of the bar was
+    // shaded as if it faced the ground, and the sides were wound inward, so
+    // what you saw from the field was the far wall of the bar through where
+    // the near one should have been. A shell lit from inside, which is what
+    // hollow looks like.
+    //
+    // Swept one face at a time there is no shared corner to average, every
+    // normal is the one `surface` works out for that face alone, and the
+    // winding follows the order of the section: reversed for the right-hand
+    // kerb, because `u` runs the same way down both and the cross product
+    // does not care which side of the road it is on.
+    let mut section = [
+        (outer, -DEEP * 0.55),
+        (outer, KERB_UP),
+        (inner, KERB_UP),
+        (inner, -DEEP * 0.55),
+    ];
+
+    if side > 0.0 {
+        section.reverse();
+    }
+
+    let mut mesh = blitzkit::mesh::MeshData::new(Vec::new(), Vec::new());
+
+    for pair in section.windows(2) {
+        let ((from_z, from_up), (to_z, to_up)) = (pair[0], pair[1]);
+
+        mesh.extend(&blitzkit::mesh::MeshData::surface(
+            PIECES as u32,
+            1,
+            |u, v| {
+                let along = u * reach;
+
+                vec3(
+                    foot.x - along * RUN,
+                    high(along) + from_up + (to_up - from_up) * v,
+                    from_z + (to_z - from_z) * v,
+                )
+            },
+        ));
+    }
 
     // **And its `u` says which span it is on, not where it is along.**
     // Spec 0118: the kerb over each span wears the colour of the room that
@@ -3720,44 +3743,90 @@ pub mod tests {
         }
     }
 
-    /// Spec 0054: the kerb is a bar with four corners, not a wedge.
+    /// Spec 0054: the kerb is a solid bar, and both of them face outward.
     ///
     /// **The one a picture could not catch.** It had three of its four
-    /// from the day it was built, because `surface` samples `v` at nought,
-    /// a third, two thirds and one and the cut between the corners was at
-    /// 0.34: the third landed back in the first corner, so the outer foot
-    /// was drawn twice and the inner top never. Every reference of the
+    /// corners from the day it was built, because `surface` samples `v` at
+    /// nought, a third, two thirds and one and the cut between the corners
+    /// was at 0.34: the third landed back in the first corner, so the outer
+    /// foot was drawn twice and the inner top never. Every reference of the
     /// bridge passed through it, and so did two goes at making the thing
     /// thicker, because a wedge scaled up is still a wedge.
+    ///
+    /// **And the second one a picture could only name.** Jake,
+    /// 2026-11-28: the railings look hollow. Four corners it had by then,
+    /// and all four shared between two faces, so `compute_normals` gave
+    /// every vertex on the bar the average of the two and not the normal of
+    /// either: the top shaded as though it faced under the horizon and both
+    /// sides wound inward. So the normals are tested, and not just the
+    /// corners, which is the difference between a bar and a picture of one.
     #[test]
-    fn the_kerb_is_a_bar_and_not_a_wedge() {
-        let mesh = kerb_mesh(REACHES, 1.0, 1.0);
-        let foot = foot(REACHES);
-        let middle = foot.z + WIDE * 0.5 - KERB_THICK * 0.5;
-        let half = KERB_THICK * 0.5;
-        // the first cross-section, which is the first `v_steps + 1` of them
-        let section: Vec<_> = mesh.vertices[..4]
-            .iter()
-            .map(|one| (one.position[1], one.position[2]))
-            .collect();
-        let near = |a: f32, b: f32| (a - b).abs() <= 1e-3;
-        let has = |y: f32, z: f32| section.iter().any(|one| near(one.0, y) && near(one.1, z));
-        let on = high(0.0);
-        let under = on - DEEP * 0.55;
-        let out = middle + half + KERB_PROUD;
-        let want = [
-            ("outer foot", under, out),
-            ("outer top", on + KERB_UP, out),
-            ("inner top", on + KERB_UP, middle - half),
-            ("inner foot", under, middle - half),
-        ];
+    fn the_kerb_is_a_solid_bar_and_not_a_shell() {
+        for side in [-1.0f32, 1.0] {
+            let mesh = kerb_mesh(REACHES, side, 1.0);
+            let foot = foot(REACHES);
+            let middle = foot.z + side * (WIDE * 0.5 - KERB_THICK * 0.5);
+            let outer = middle + side * (KERB_THICK * 0.5 + KERB_PROUD);
+            let inner = middle - side * KERB_THICK * 0.5;
+            let on = high(0.0);
+            let under = on - DEEP * 0.55;
+            let near = |a: f32, b: f32| (a - b).abs() <= 1e-3;
+            let has = |y: f32, z: f32| {
+                mesh.vertices
+                    .iter()
+                    .any(|one| near(one.position[1], y) && near(one.position[2], z))
+            };
 
-        for (name, y, z) in want {
+            for (name, y, z) in [
+                ("outer foot", under, outer),
+                ("outer top", on + KERB_UP, outer),
+                ("inner top", on + KERB_UP, inner),
+                ("inner foot", under, inner),
+            ] {
+                assert!(
+                    has(y, z),
+                    "the kerb at side {} has no {}, at {} {}",
+                    side,
+                    name,
+                    y,
+                    z
+                );
+            }
+
+            // **Proud of the deck on the side it is on**, which is the half
+            // the sign used to be missing from.
             assert!(
-                has(y, z),
-                "the kerb has no {name}, at {y} {z}: its section is {:?}",
-                section
+                (outer - foot.z).abs() > WIDE * 0.5,
+                "the kerb at side {} stands {} from the middle, inside the deck's {}",
+                side,
+                outer - foot.z,
+                WIDE * 0.5
             );
+
+            for one in &mesh.vertices {
+                let normal = Vec3::from(one.normal);
+                let across = normal.z.abs() > 0.9;
+
+                assert!(
+                    across || normal.y > 0.5,
+                    "a kerb vertex at side {} faces {:?}, which is neither out across the road nor up",
+                    side,
+                    normal
+                );
+
+                if across {
+                    let out = near(one.position[2], outer);
+                    let want = if out { side } else { -side };
+
+                    assert!(
+                        normal.z * want > 0.0,
+                        "the kerb's {} face at side {} faces {:?}, which is into the bar",
+                        if out { "outer" } else { "inner" },
+                        side,
+                        normal
+                    );
+                }
+            }
         }
     }
 

@@ -534,10 +534,58 @@ a metre, which is what they always said and, now, what they are.
 time with that sentence in a fortnight, after the engine's spec 0110. Every
 reference of the bridge was blessed through a wedge, because a wedge where
 a kerb should be still reads as a line down the side of a road.
-`bridge::tests::the_kerb_is_a_bar_and_not_a_wedge` reads the first
-cross-section out of the mesh and names the four corners it must have; put
-the old cuts back and it says the section is the outer foot, the outer
-foot again, the outer top and the inner foot.
+`bridge::tests::the_kerb_is_a_solid_bar_and_not_a_shell` names the four
+corners the section must have; put the old cuts back and it says the
+section is the outer foot, the outer foot again, the outer top and the
+inner foot.
+
+## And then it had four corners and no faces
+
+2026-11-28, an hour later. Jake, looking at the same view: the railings
+look hollow.
+
+They were. A `surface` is one sheet, so the vertices either side of a fold
+are the same vertices, and `compute_normals` gives each of them the
+average of the faces that meet there. This bar is three faces folded
+twice, and all four of its corners are folds, so not one vertex on it
+carried the normal of a face it belonged to. Printed, the first section
+reads:
+
+    row 0  normal [0, 0, -1]
+    row 1  normal [-0.27, -0.58, -0.77]
+    row 2  normal [-0.27, -0.58,  0.77]
+    row 3  normal [0, 0,  1]
+
+Two things are wrong in those four lines. The top's corners point a little
+*under* the horizon, so the one face of the bar the sun can reach was
+shaded as though it faced the ground. And the outer face, which stands at
+`foot.z + 3.04` and should face away from the road, faces back into it:
+the whole ribbon was wound inside out, so what you saw from the field was
+the far wall of the bar seen through where the near one should have been.
+A shell lit from inside is what hollow looks like, and the word was exact.
+
+**Swept a face at a time.** Three `surface` strips of one `v` step each,
+joined with `MeshData::extend`, which welds nothing. No corner is shared,
+so no normal is an average, and `compute_normals` is gone from here: the
+one `surface` works out for each face on its own is the right one. The
+section is listed outer foot, outer top, inner top, inner foot, and
+reversed for the right-hand kerb, because `u` runs the same way down both
+sides of the road and the cross product does not.
+
+**A second fault fell out of writing it down.** `KERB_PROUD` and the half
+thickness were both *added* to the section's middle whichever kerb it was,
+so only the right one was pushed clear of the deck. The left one was
+pushed inward: its outer face sat exactly in the plane of the deck's edge,
+which is the coplanar fault this building has found eight times, and its
+inner face stood a hand further into the road than its opposite number's.
+Both offsets carry `side` now, and the test runs over both kerbs rather
+than one.
+
+**The test is the normals and not the corners.** The corner check passed
+through all of this, because four corners in the right places is exactly
+what a shell has. What it asserts now is that every normal on the bar is
+either across the road or up, never a blend of the two, and that the
+across ones point out of the bar rather than into it.
 
 ## Acceptance criteria
 
@@ -561,7 +609,7 @@ foot again, the outer top and the inner foot.
 - It is walked up, run up and lurched up without going under it. — `tests::the_bridge_is_walked_up_rather_than_climbed`, `tests::the_bridge_is_run_up_without_falling_through_it`, `tests::a_long_frame_does_not_drop_you_through_the_deck`
 - And off the straight. — `tests::the_bridge_is_climbed_off_the_straight_without_falling_through`
 - The kerb keeps you on it. — `tests::the_kerb_keeps_you_on_the_bridge`
-- And it is a bar with four corners rather than a wedge with three. — `bridge::tests::the_kerb_is_a_bar_and_not_a_wedge`
+- And it is a solid bar rather than a wedge with three corners or a shell lit from inside. — `bridge::tests::the_kerb_is_a_solid_bar_and_not_a_shell`
 - And the camera stays over the deck at every refresh rate, not only sixty. — `tests::the_camera_stays_above_the_deck_however_fast_the_screen_is`
 - And it is climbed at the pace it was given, at every refresh rate. — `tests::the_bridge_is_climbed_at_the_pace_it_was_given`
 - And steering up it is not quicker than going straight. — `tests::steering_up_the_bridge_is_not_quicker_than_going_straight`
