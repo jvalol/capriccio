@@ -128,8 +128,48 @@ pub const RAINBOW_WIDE: u32 = 192;
 /// everything between them is new. Outside the first and last stop it holds
 /// the end colour rather than fading, because a rainbow's edges are where
 /// it stops being a rainbow and not where it stops being bright.
+/// How many texels the picture runs along the deck, and over how much of
+/// the run the rainbow comes up out of the gravel.
+///
+/// **A picture with a length, and it had none.** The strip was one texel
+/// tall, which is a rainbow that is the same all the way up, and the deck's
+/// `v` has always been its share of the run: the mapping to carry this was
+/// already there and nothing was in it.
+///
+/// **Because the gravel cut it off in a line.** Jake, 2026-11-27: the
+/// gravel gradually blending into the transparent rainbow would land
+/// better. The bed buries the deck's first 2.84 metres, and a buried
+/// surface meeting a bed of stone is an intersection, which draws as a
+/// straight edge straight across the rainbow. Fading the deck in instead
+/// means there is no edge to see: the colour arrives where the gravel
+/// thins, and neither of them is a line.
+///
+/// **As far as the gravel goes and not a number of its own.** Ten metres
+/// was the first go and the place it reached full strength was a line of
+/// its own: a rainbow seen along its own length puts its last two metres
+/// into a dozen pixels, so an eased fade ends in what looks like a step.
+/// [`bank_runs`] already says where the ground that carries the deck
+/// stops, and the deck has nothing under it past there, so the rainbow
+/// comes up over exactly the stretch it is banked along and the two ends
+/// are one end. Sixteen metres, at the numbers it is built at.
+pub const RAINBOW_TALL: u32 = 128;
+
+pub fn fades_in() -> f32 {
+    bank_runs().1
+}
+
+/// How far in the picture the rainbow has come, a share `along` the run.
+///
+/// Eased at both ends rather than straight, so neither the start of it nor
+/// the place it reaches full strength is a line you can pick out.
+pub fn fading(along: f32) -> f32 {
+    let at = (along / fades_in()).clamp(0.0, 1.0);
+
+    at * at * (3.0 - 2.0 * at)
+}
+
 pub fn rainbow() -> blitzkit::texture::TextureData {
-    let mut pixels = vec![0u8; (RAINBOW_WIDE * 4) as usize];
+    let mut pixels = vec![0u8; (RAINBOW_WIDE * RAINBOW_TALL * 4) as usize];
 
     for at in 0..RAINBOW_WIDE {
         // where this texel falls among the stops, which sit at the middles
@@ -140,15 +180,22 @@ pub fn rainbow() -> blitzkit::texture::TextureData {
         let share = (across - below as f32).clamp(0.0, 1.0);
 
         let colour = COLOURS[below] + (COLOURS[above] - COLOURS[below]) * share;
-        let at = (at * 4) as usize;
 
-        for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
-            pixels[at + n] = ((one / GLOW).clamp(0.0, 1.0) * 255.0).round() as u8;
+        for row in 0..RAINBOW_TALL {
+            // the deck's `v` is its share of the run, so a row is a place
+            // along the climb and the first of them are at the foot
+            let along = row as f32 / (RAINBOW_TALL - 1) as f32;
+            let here = ((at + row * RAINBOW_WIDE) * 4) as usize;
+
+            for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
+                pixels[here + n] = ((one / GLOW).clamp(0.0, 1.0) * 255.0).round() as u8;
+            }
+
+            pixels[here + 3] = (fading(along) * 255.0).round() as u8;
         }
-        pixels[at + 3] = 255;
     }
 
-    blitzkit::texture::TextureData::from_pixels(RAINBOW_WIDE, 1, pixels)
+    blitzkit::texture::TextureData::from_pixels(RAINBOW_WIDE, RAINBOW_TALL, pixels)
 }
 
 /// Whether the building has given up everything it asks.
@@ -2236,18 +2283,34 @@ pub fn treads(reaches: f32, reach: f32) -> Vec<Aabb> {
 /// whole piece it passed. `PIECES` is 48 over a hundred metres, so rounding
 /// to one would jump the end two metres at a time while a span winds in,
 /// which is a thing lurching rather than growing.
-pub fn stations(reaches: f32, reach: f32) -> Vec<Vec3> {
+/// **Over one stretch of the run**, which is what lets the foot be drawn
+/// apart from the rest of it. See [`fades_in`].
+///
+/// **The whole pieces inside the stretch, with both ends added.** The
+/// pieces are counted off the run and not off the stretch, so the deck is
+/// cut at the same places however it is divided and the two pieces meet on
+/// a station rather than near one.
+pub fn stations_in(reaches: f32, from: f32, to: f32) -> Vec<Vec3> {
     let foot = foot(reaches);
-    let reach = reach.clamp(0.0, 1.0);
+    let from = from.clamp(0.0, 1.0);
+    let to = to.clamp(from, 1.0);
     let at = |along: f32| vec3(foot.x - along * RUN, high(along), foot.z);
-    let last = (PIECES as f32 * reach).floor() as usize;
-    let mut out: Vec<Vec3> = (0..=last.min(PIECES))
-        .map(|n| at(n as f32 / PIECES as f32))
-        .collect();
-    let end = at(reach);
+    let near = |one: &Vec3, other: &Vec3| (one.x - other.x).abs() <= 1e-4;
+    let mut out = vec![at(from)];
 
-    // and the end itself, unless the last whole piece already landed on it
-    if !out.last().is_some_and(|one| (one.x - end.x).abs() <= 1e-4) {
+    for n in 0..=PIECES {
+        let along = n as f32 / PIECES as f32;
+
+        if along <= from || along >= to {
+            continue;
+        }
+
+        out.push(at(along));
+    }
+
+    let end = at(to);
+
+    if !out.last().is_some_and(|one| near(one, &end)) {
         out.push(end);
     }
 
@@ -2262,6 +2325,34 @@ pub fn stations(reaches: f32, reach: f32) -> Vec<Vec3> {
 pub fn glow() -> Vec4 {
     Vec4::new(GLOW, GLOW, GLOW, 1.0)
 }
+
+/// And what the fading stretch at the foot is multiplied by, which is the
+/// same thing a hair short of solid.
+pub fn foot_glow() -> Vec4 {
+    Vec4::new(GLOW, GLOW, GLOW, SOLID)
+}
+
+/// How solid the fading stretch is at its far end, which is as near full
+/// as a thing can be and still be drawn see-through.
+///
+/// **A hair short of one on purpose.** `Instance::is_translucent` is the
+/// alpha being short of full and nothing else, and an opaque draw does not
+/// blend at all: it reads the picture's alpha only to throw away whatever
+/// falls under `text::CUTOUT`. So with a solid deck the fade at the foot
+/// was not a fade. It was three and a half metres of deck quietly deleted,
+/// under gravel where nobody could see it had gone, and a rainbow that
+/// still began on a line.
+///
+/// At 0.97 it is three parts in a hundred of whatever is behind it, which
+/// is nothing to look at, and the picture's own alpha is free to carry the
+/// fade. See [`fading`].
+///
+/// **And only this stretch, which is the whole reason it is its own mesh.**
+/// A see-through draw writes no depth, by spec 0018, so the deck at 0.97
+/// along its whole length stopped hiding the sky behind it: the moon came
+/// through the rainbow. Here the deck lies on the ground with a field
+/// behind it and there is no sky to hide.
+pub const SOLID: f32 = 0.97;
 
 /// The whole deck as one ribbon, swept along the arc.
 ///
@@ -2286,7 +2377,19 @@ pub fn glow() -> Vec4 {
 /// shared across a corner: averaged round one, the top of a rainbow catches
 /// the same light as its edge and the whole thing reads as a hose.
 pub fn deck_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
-    ribbon(reaches, false, reach)
+    ribbon(reaches, false, fades_at(reach), reach)
+}
+
+/// The first stretch of that same ribbon, drawn apart from it because it
+/// is the one piece that is see-through. See [`FADES_IN`] and [`SOLID`].
+pub fn foot_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
+    ribbon(reaches, false, 0.0, fades_at(reach))
+}
+
+/// Where the fading stretch gives way to the solid deck, which is
+/// [`fades_in`] unless the deck has not come that far yet.
+pub fn fades_at(reach: f32) -> f32 {
+    fades_in().min(reach.clamp(0.0, 1.0))
 }
 
 /// How high the deck has to be before the earth beside it stops.
@@ -2897,15 +3000,15 @@ pub fn soffit_glow() -> Vec4 {
 /// The underside of that ribbon, which is drawn by itself so it can be
 /// dimmer than the top. See [`SOFFIT_LIT`].
 pub fn soffit_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
-    ribbon(reaches, true, reach)
+    ribbon(reaches, true, 0.0, reach)
 }
 
 /// The deck's strips: the underside when `soffit`, and the top and the two
 /// edges when not.
-fn ribbon(reaches: f32, soffit: bool, reach: f32) -> blitzkit::mesh::MeshData {
+fn ribbon(reaches: f32, soffit: bool, from: f32, to: f32) -> blitzkit::mesh::MeshData {
     use blitzkit::mesh::Vertex;
 
-    let along = stations(reaches, reach);
+    let along = stations_in(reaches, from, to);
     let half = WIDE * 0.5;
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -3203,22 +3306,84 @@ pub mod tests {
     /// end, drawn twice.
     #[test]
     fn the_four_strips_are_split_three_and_one() {
-        let deck = deck_mesh(REACHES, 1.0);
-        let belly = soffit_mesh(REACHES, 1.0);
+        // **Over each stretch and not over the whole run**, because the
+        // deck is now cut at `fades_in` as well as split from its belly,
+        // and its two pieces each carry three strips of their own.
+        for (from, to) in [(0.0, fades_in()), (fades_in(), 1.0)] {
+            let over = ribbon(REACHES, false, from, to);
+            let belly = ribbon(REACHES, true, from, to);
 
-        assert_eq!(
-            deck.indices.len(),
-            belly.indices.len() * 3,
-            "the deck has {} indices against the underside's {}",
-            deck.indices.len(),
-            belly.indices.len()
+            assert_eq!(
+                over.indices.len(),
+                belly.indices.len() * 3,
+                "from {from} to {to} the deck has {} indices against the underside's {}",
+                over.indices.len(),
+                belly.indices.len()
+            );
+            assert_eq!(
+                over.vertices.len(),
+                belly.vertices.len() * 3,
+                "from {from} to {to} the deck has {} vertices against the underside's {}",
+                over.vertices.len(),
+                belly.vertices.len()
+            );
+        }
+    }
+
+    /// The deck's two pieces meet: the fading one stops exactly where the
+    /// solid one starts, and the picture is already solid there.
+    ///
+    /// **Both halves, because either alone passes while it looks wrong.**
+    /// A gap leaves a slot of sky through the deck and a lap draws the two
+    /// in one plane, which is this building's oldest fault; and meeting
+    /// where the fade is still short of full is the step that ten metres
+    /// gave, which no count of vertices would have caught.
+    #[test]
+    fn the_fading_foot_meets_the_solid_deck() {
+        let foot = foot_mesh(REACHES, 1.0);
+        let deck = deck_mesh(REACHES, 1.0);
+        // where the two are cut, which is a station of the run and so a
+        // point both of them are built through
+        let join = *stations_in(REACHES, 0.0, fades_at(1.0))
+            .last()
+            .expect("the fading stretch has a far end");
+        let has_it = |mesh: &blitzkit::mesh::MeshData| {
+            mesh.vertices.iter().any(|one| {
+                (one.position[0] - join.x).abs() <= 1e-3
+                    && (one.position[1] - join.y).abs() <= 1e-3
+            })
+        };
+
+        assert!(
+            has_it(&foot),
+            "the fading foot does not reach the join at {:?}",
+            join
         );
-        assert_eq!(
-            deck.vertices.len(),
-            belly.vertices.len() * 3,
-            "the deck has {} vertices against the underside's {}",
-            deck.vertices.len(),
-            belly.vertices.len()
+        assert!(
+            has_it(&deck),
+            "the solid deck does not start at the join at {:?}",
+            join
+        );
+        assert!(
+            foot.vertices
+                .iter()
+                .all(|one| one.position[0] >= join.x - DEEP - 1e-3),
+            "the fading foot runs on past the join"
+        );
+        assert!(
+            deck.vertices.iter().all(|one| one.position[0] <= join.x),
+            "the solid deck runs back past the join"
+        );
+        assert!(
+            fading(fades_in()) >= 0.999,
+            "the picture is {} where the two meet, which draws as a step",
+            fading(fades_in())
+        );
+        assert_eq!(fading(0.0), 0.0, "the deck begins out of nothing");
+        assert!(
+            fading(fades_in() * 0.5) > 0.1 && fading(fades_in() * 0.5) < 0.9,
+            "half way along the fade it is {}, which is not a fade",
+            fading(fades_in() * 0.5)
         );
     }
 
@@ -3918,7 +4083,7 @@ pub mod tests {
             let far = reach(&trail);
             let foot = foot(REACHES);
             let ends = foot.x - far * RUN;
-            let drawn = stations(REACHES, far);
+            let drawn = stations_in(REACHES, 0.0, far);
             let stood = treads(REACHES, far);
 
             let past = drawn.iter().map(|at| at.x).fold(f32::MAX, f32::min);
@@ -4681,7 +4846,7 @@ pub mod tests {
     fn the_deck_you_see_is_the_deck_you_stand_on() {
         let foot = foot(REACHES);
 
-        for middle in stations(REACHES, 1.0) {
+        for middle in stations_in(REACHES, 0.0, 1.0) {
             let along = (foot.x - middle.x) / RUN;
 
             assert!(
@@ -4705,7 +4870,7 @@ pub mod tests {
             .map(|one| one.position[1])
             .fold(f32::MIN, f32::max)
             .min(
-                stations(REACHES, 1.0)
+                stations_in(REACHES, 0.0, 1.0)
                     .into_iter()
                     .map(|middle| middle.y)
                     .fold(f32::MAX, f32::min),
