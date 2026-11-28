@@ -588,6 +588,29 @@ across the road, along it or up, never a blend, that the across ones point
 out of the bar rather than into it, and that the along ones point out of
 its ends.
 
+**And the rainbow was two bands short and seven pastels.** Jake, the same
+morning: the colours stop a little short of the extremes, and the colours
+need read truly rainbow. Two faults, and both are arithmetic.
+
+The seven stops sat at the middles of seven equal bands, which puts the
+first at 0.0714 of the deck's width and the last at 0.9286. The kerbs'
+inner faces are at 0.0833 and 0.9167. Seven centimetres out: red and
+violet were drawn on the half metre of deck each kerb stands on, so the
+two ends of the rainbow were the two parts of it nobody could ever see.
+`stop_at` spreads the seven across the road between the kerbs instead, and
+`every_colour_of_the_rainbow_is_still_in_the_picture` now asserts each stop
+is somewhere a kerb is not.
+
+And the seven themselves were pastels. Each carried about four tenths in
+the two channels it is not about against a peak of two, which is a fifth of
+white stirred in. Measured off the crest at `-32.64 17.18` the red end came
+back (161, 49, 18), a rust, and the three warm bands differed from each
+other mostly by how much green was in them. They are taken off the spectrum
+now, at roughly 650, 605, 580, 530, 470, 445 and 420 nanometres, scaled so
+each band's own channel is the two it always was, with a floor of a tenth
+rather than nought because a flat primary is a paint chip and this is
+light.
+
 **And then it had no ends.** Jake, straight after: the railings don't have
 ends. Three swept faces are an open channel whichever way they are wound,
 so the bar stopped at a mouth at either end, and at the foot that mouth

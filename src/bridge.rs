@@ -89,14 +89,26 @@ pub const LEVELS_AT: f32 = 0.86;
 /// and anything over one glows with no light on it, which is what a rainbow
 /// is: light rather than paint. Neon in the cellar is 3.2 and this is
 /// quieter than that, because the field has a sky behind it and a sun on it.
+///
+/// **Saturated, because the seven have to read as the seven.** Jake,
+/// 2026-11-28: the colours need read truly rainbow. They did not. Every
+/// one of them carried about four tenths in the two channels it is not
+/// about, against a peak of two: a fifth of white stirred into each, which
+/// is a pastel. Measured off the crest, what the three warm bands actually
+/// differed by was how much green was in them, and red read as rust.
+///
+/// Taken off the spectrum instead, at roughly 650, 605, 580, 530, 470, 445
+/// and 420 nanometres, and scaled so the band's own channel is the two it
+/// always was. The floor is a tenth rather than nought, because a flat
+/// primary is a paint chip and this is light.
 pub const COLOURS: [Vec3; BANDS] = [
-    vec3(2.0, 0.42, 0.42),
-    vec3(2.0, 1.02, 0.36),
-    vec3(1.90, 1.74, 0.40),
-    vec3(0.46, 1.86, 0.62),
-    vec3(0.42, 1.10, 2.0),
-    vec3(0.52, 0.56, 1.95),
-    vec3(1.20, 0.52, 1.90),
+    vec3(2.00, 0.12, 0.10),
+    vec3(2.00, 0.86, 0.08),
+    vec3(1.92, 1.80, 0.12),
+    vec3(0.16, 1.88, 0.26),
+    vec3(0.10, 0.62, 2.00),
+    vec3(0.44, 0.20, 1.96),
+    vec3(1.10, 0.18, 1.86),
 ];
 
 /// What every piece of the deck is multiplied by, and so what the colours
@@ -120,22 +132,49 @@ pub const GLOW: f32 = 2.0;
 /// two of the seven.
 pub const RAINBOW_WIDE: u32 = 192;
 
+/// How much of the deck's width one kerb stands on, as a share of it.
+///
+/// **Named here because the rainbow has to know where the road it crosses
+/// actually is.** The deck is six metres and the kerbs take half a metre
+/// of it down either side, so what anybody ever sees of the picture is the
+/// five between them.
+pub const KERB_COVERS: f32 = KERB_THICK / WIDE;
+
+/// Where stop `n` of the seven sits across the deck.
+///
+/// **Inside the kerbs, and it used to be under them.** The stops sat at
+/// the middles of seven equal bands, which put the first at 0.0714 of the
+/// width and the last at 0.9286, and the kerbs' inner faces are at 0.0833
+/// and 0.9167. Seven centimetres out: red and violet were drawn on the
+/// strip of deck each kerb stands on, so the two ends of the rainbow were
+/// the two parts of it nobody could see. Jake, 2026-11-28: the rainbow
+/// looks like the colours stop a little short of the extremes. They did,
+/// by a band's eighth at each end.
+///
+/// Spread across the road instead, the seven are the seven and the first
+/// and last of them are the first and last thing you see of it.
+pub fn stop_at(n: usize) -> f32 {
+    KERB_COVERS + (1.0 - KERB_COVERS * 2.0) * n as f32 / (BANDS - 1) as f32
+}
+
 /// The rainbow across the deck, as a picture that blends.
 ///
-/// **The seven are stops and no longer bands.** Each sits at the middle of
-/// the width it used to fill and the picture runs between them, so the
-/// colours at those seven places are exactly what they always were and
-/// everything between them is new. Outside the first and last stop it holds
-/// the end colour rather than fading, because a rainbow's edges are where
-/// it stops being a rainbow and not where it stops being bright.
+/// **The seven are stops and no longer bands.** Each sits where `stop_at`
+/// puts it and the picture runs between them, so the colours at those
+/// seven places are exactly what they always were and everything between
+/// them is new. Outside the first and last stop it holds the end colour
+/// rather than fading, because a rainbow's edges are where it stops being
+/// a rainbow and not where it stops being bright.
 pub fn rainbow() -> blitzkit::texture::TextureData {
     let mut pixels = vec![0u8; (RAINBOW_WIDE * 4) as usize];
+    let (first, last) = (stop_at(0), stop_at(BANDS - 1));
 
     for at in 0..RAINBOW_WIDE {
-        // where this texel falls among the stops, which sit at the middles
-        // of the seven bands
-        let across = (at as f32 + 0.5) / RAINBOW_WIDE as f32 * BANDS as f32 - 0.5;
-        let below = across.floor().clamp(0.0, (BANDS - 1) as f32) as usize;
+        // where this texel falls among the stops
+        let across = (((at as f32 + 0.5) / RAINBOW_WIDE as f32 - first) / (last - first)
+            * (BANDS - 1) as f32)
+            .clamp(0.0, (BANDS - 1) as f32);
+        let below = across.floor() as usize;
         let above = (below + 1).min(BANDS - 1);
         let share = (across - below as f32).clamp(0.0, 1.0);
 
@@ -5306,14 +5345,30 @@ pub mod tests {
         let pixels = &made.levels[0].pixels;
 
         for (n, want) in COLOURS.iter().enumerate() {
-            let at = ((n as f32 + 0.5) / BANDS as f32 * RAINBOW_WIDE as f32) as usize;
+            // **And every one of them where somebody can see it.** The two
+            // ends used to sit on the strip of deck the kerbs stand on.
+            assert!(
+                stop_at(n) >= KERB_COVERS && stop_at(n) <= 1.0 - KERB_COVERS,
+                "band {} sits at {} across the deck, under a kerb that covers {}",
+                n,
+                stop_at(n),
+                KERB_COVERS
+            );
+
+            // the texel whose middle lies nearest the stop, which is up to
+            // half a texel off it
+            let at = (stop_at(n) * RAINBOW_WIDE as f32 - 0.5).round().max(0.0) as usize;
             let at = at.min(RAINBOW_WIDE as usize - 1) * 4;
 
             for (channel, one) in [want.x, want.y, want.z].iter().enumerate() {
                 let got = pixels[at + channel] as f32 / 255.0 * GLOW;
 
+                // **Half a texel's worth of the steepest step.** The
+                // nearest texel to a stop is up to half a texel off it,
+                // which at 192 across is a fiftieth of a band, and the
+                // sharpest neighbours here differ by 1.84 in a channel.
                 assert!(
-                    (got - one).abs() < 0.03,
+                    (got - one).abs() < 0.05,
                     "band {} channel {} came out {:.3} and is {:.3}",
                     n,
                     channel,
