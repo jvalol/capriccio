@@ -63,6 +63,41 @@ field: enough to see from the garden, not enough to read as a way anywhere.
 - `carries` carries you up the spans that exist and no further.
 - Nothing inside any room changes. The bridge is in the field.
 
+## Its edge was sampled once a wave
+
+2026-11-28. `bank_rim` wobbles the bank's edge with four sines, the
+quickest at 9.1 radians a metre, which is a wave 0.69 metres long.
+`BANK_ALONG` was forty steps over the bank's own stretch, so the surface
+read that edge every 0.48 metres: barely once a cycle. Neighbouring steps
+took their spread from opposite sides of the wave, the bank zigzagged in
+plan, and faceted normals off a zigzag swing hard. Against a low sun every
+other facet blew out and the bank wore pale plates laid up its slope.
+
+**Found by painting it.** Four guesses missed — the surface's own ripple,
+the section's resolution, the loose stones lying on it, the angle of the
+slope — and each cost a build and a look. Painting the bank bright red
+settled it in one: the plates went pale red, so they were the bank and not
+anything lying on it, and their boundaries were its along-steps.
+
+A hundred and twenty steps is 0.16 metres, four samples to the shortest
+wave, and it costs nothing: this is one mesh built twice a run.
+
+**It took a change that was reverted to make it visible.** The bank was
+briefly banked up against the deck's side, which turned its flank towards
+the sun; that is gone, per spec 0054, and at the height the bank actually
+stands these plates were not something Jake would have seen. The
+under-sampling was real either way.
+
+## The stones lie on the bank
+
+Turned about their own up alone, the loose stones kept a level top however
+steep the ground under them. On a flat bed that is right and on a slope it
+is not: a level face is the one that catches a low sun, and two hundred of
+them read as plates. Each is now tipped onto the bank it sits in, off
+`bank_up`, and spun on that. `bank_up` is worked off `bank_at` rather than
+written out, which is the only way it stays a normal to the thing it is a
+normal to.
+
 ## Acceptance criteria
 
 - With nothing given, the bridge is drawn and its deck stops a sixth of the

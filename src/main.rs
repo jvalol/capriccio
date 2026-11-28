@@ -4527,9 +4527,7 @@ impl Arcade {
                     Some(cut) => *cut,
                     None => cube,
                 };
-                let sat = Transform::at(where_)
-                    .with_rotation(glam::Quat::from_rotation_y(round))
-                    .with_scale(size);
+                let sat = Transform::at(where_).with_rotation(round).with_scale(size);
 
                 scene.push_textured(cut, granite, &sat, aim::RUBBLE, aim::MATTE);
             }

@@ -172,6 +172,14 @@ pub fn fades_in() -> f32 {
     bank_runs().1
 }
 
+/// How much of the fade the deck's edges hold the stone for after its
+/// middle has turned.
+///
+/// **A half, which is where the bank's own gravel gives out.** The two are
+/// the same question asked of the drawing and of the ground: the road is
+/// stone where there is gravel against it and rainbow where there is not.
+pub const EDGES_HOLD: f32 = 0.5;
+
 /// How far in the picture the rainbow has come, a share `along` the run.
 ///
 /// Eased at both ends rather than straight, so neither the start of it nor
@@ -200,6 +208,22 @@ pub fn rainbow() -> blitzkit::texture::TextureData {
         let come = fading(along);
 
         for at in 0..RAINBOW_WIDE {
+            // **And the sides hold the stone after the middle has turned.**
+            // The deck is `DEEP` thick, so its edge stands clear of the
+            // bank from the moment it leaves the ground, and a vertical
+            // face takes almost no light whatever colour it is: in rainbow
+            // it was a dark wall rising out of a lit mound, and Jake said
+            // the rainbow just kind of starts on top of the gravel out of
+            // nowhere. Banking the gravel up over the edge answers that
+            // and costs more than it is worth — it puts the bank's top in
+            // the deck's own plane, which is a line down the whole length
+            // of the road, and spec 0117's bank is built never to stand
+            // above the soffit. So the picture holds instead: the rainbow
+            // arrives up the middle of the road first and reaches the
+            // edges last, and what meets the gravel is stone.
+            let side = ((at as f32 + 0.5) / RAINBOW_WIDE as f32 - 0.5).abs() * 2.0;
+            let held = side * EDGES_HOLD;
+            let here = ((come - held) / (1.0 - held)).clamp(0.0, 1.0);
             // where this texel falls among the stops, which sit at the
             // middles of the seven bands
             let across = (at as f32 + 0.5) / RAINBOW_WIDE as f32 * BANDS as f32 - 0.5;
@@ -218,7 +242,7 @@ pub fn rainbow() -> blitzkit::texture::TextureData {
             let worn = crate::aim::RUBBLE;
             let stone = vec3(shade * r * worn.x, shade * g * worn.y, shade * b * worn.z);
             let colour = COLOURS[below] + (COLOURS[above] - COLOURS[below]) * share;
-            let colour = stone + (colour - stone) * come;
+            let colour = stone + (colour - stone) * here;
             let here = ((at + row * RAINBOW_WIDE) * 4) as usize;
 
             for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
@@ -2475,7 +2499,18 @@ pub const BANK_ACROSS: u32 = 16;
 /// while everything it drew was in the first ten, so the bank itself got
 /// five of those steps: a ten metre heap in five facets, which is why it
 /// read as poured rather than piled. Its own stretch, its own steps.
-pub const BANK_ALONG: u32 = 40;
+///
+/// **And enough of them to resolve its own edge.** At forty they were
+/// 0.48 metres apart and [`bank_rim`] wobbles at up to 9.1 radians a
+/// metre, which is a wavelength of 0.69: the edge was sampled barely once
+/// a cycle, so neighbouring steps took their spread from opposite sides of
+/// the wave and the surface zigzagged in plan. Faceted normals off a
+/// zigzag swing hard, and with the bank laid against the deck's side,
+/// facing a low sun, every other one of them blew out. Jake saw it as
+/// pale plates laid up the slope. A hundred and twenty is 0.16 metres a
+/// step, four samples to the shortest wave in the rim, and it costs
+/// nothing: this is one mesh built twice a run.
+pub const BANK_ALONG: u32 = 120;
 
 /// How long a collider box is along the climb, and how many bands wide the
 /// wedge is to either side.
@@ -2892,7 +2927,25 @@ pub fn banked(reaches: f32, at: Vec3) -> bool {
 /// round `rubble` is not, and for the opposite reason: there is no collar
 /// here to pack. This is spoil tipped against an abutment, so what rolls
 /// is what reaches the bottom.
-pub fn bank_stones(reaches: f32, reach: f32) -> Vec<(Vec3, Vec3, f32)> {
+/// Which way the bank's surface faces at a point on it.
+///
+/// **Worked off [`bank_at`] rather than written out**, which is the only
+/// way it stays the same shape as the thing it is a normal to: the surface
+/// is drawn from that function and the boxes that stop you are checked
+/// against it.
+pub fn bank_up(along: f32, across: f32) -> Vec3 {
+    // a hand's breadth either way, which is coarse enough to read the
+    // bank's shape and not its mottling
+    let step = 0.25;
+    let run = step / RUN;
+    let fall = bank_at(along + run, across) - bank_at(along - run, across);
+    let tilt = bank_at(along, across + step) - bank_at(along, across - step);
+
+    // the run goes west, so a rise with `along` is a fall in x
+    vec3(fall, 2.0 * step, -tilt).normalize_or_zero()
+}
+
+pub fn bank_stones(reaches: f32, reach: f32) -> Vec<(Vec3, Vec3, glam::Quat)> {
     let foot = foot(reaches);
     let reach = reach.clamp(0.0, 1.0);
     let (begins, ends) = bank_runs();
@@ -2940,7 +2993,15 @@ pub fn bank_stones(reaches: f32, reach: f32) -> Vec<(Vec3, Vec3, f32)> {
                 across * (0.45 + roll(next()) * 0.4),
                 across * (0.8 + roll(next()) * 0.6),
             ),
-            roll(next()) * std::f32::consts::TAU,
+            // **Laid on the bank and not on the world.** Turned about its
+            // own up alone, a flat stone keeps a level top however steep
+            // the ground under it: once the bank was banked against the
+            // deck's side rather than stopped under it, two hundred of
+            // them read as pale plates laid up a slope, because a level
+            // face is the one that catches a low sun. So each is tipped
+            // onto the bank it sits in first, and spun on that.
+            glam::Quat::from_rotation_arc(Vec3::Y, bank_up(along, out_by * side))
+                * glam::Quat::from_rotation_y(roll(next()) * std::f32::consts::TAU),
         ));
     }
 
@@ -3369,6 +3430,38 @@ pub mod tests {
             "at the top the width runs {:?} to {:?}, which is not a rainbow",
             red,
             violet
+        );
+
+        // and the sides hold the stone while the middle has turned, so
+        // what meets the gravel is stone. How far one column has come is
+        // read off its own two ends rather than guessed from its colour:
+        // every place across the width starts at a different stone and
+        // arrives at a different band.
+        let come_at = |along: f32, across: f32| {
+            let (stone, full, here) = (read(0.0, across), read(1.0, across), read(along, across));
+            let (mut most, mut share) = (0i32, 0.0);
+
+            for c in 0..3 {
+                let run = full[c] as i32 - stone[c] as i32;
+
+                if run.abs() > most {
+                    most = run.abs();
+                    share = (here[c] as i32 - stone[c] as i32) as f32 / run as f32;
+                }
+            }
+
+            share
+        };
+        // where the middle is a little over half way, which is where the
+        // two are furthest apart
+        let part = fades_in() * 0.55;
+
+        assert!(
+            come_at(part, 0.5) > come_at(part, 0.01) + 0.2,
+            "a share {part} along, the middle has come {:.2} and the rim \
+             {:.2}, so the rainbow reaches the edge with the gravel",
+            come_at(part, 0.5),
+            come_at(part, 0.01)
         );
 
         // all the way along, solid

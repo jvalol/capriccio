@@ -492,6 +492,26 @@ gravel from them under `aim::RUBBLE`, which is what the bank beside it is
 drawn with. Measured either side of the junction afterwards: 17.7, 20.5,
 29.6 against 16.8, 20.4, 28.8.
 
+**And the sides hold the stone after the middle has turned.** The deck is
+`DEEP` thick, so its edge stands clear of the bank from the moment it
+leaves the ground, and a vertical face takes almost no light whatever
+colour it is: in rainbow it was a dark wall rising out of a lit mound.
+Jake, from beside it: the rainbow doesn't quite blend with the gravel, it
+just kind of starts on top of it out of nowhere.
+
+Banking the gravel up over that edge answers it and costs too much. It
+puts the bank's top in the deck's own plane, which is a line down the
+whole length of the road — Jake saw that within the hour — and spec 0117's
+bank is built never to stand above the soffit, which
+`bridge::tests::the_bank_stops_under_the_deck` and
+`bridge::tests::nothing_stops_you_higher_than_the_bank_is_drawn` both said
+so while he was looking at it.
+
+So the picture holds instead. The rainbow arrives up the middle of the
+road first and reaches the edges last, and what meets the gravel is stone.
+`EDGES_HOLD` is a half, which is where the bank's own gravel gives out:
+the drawing and the ground answer the same question the same way.
+
 **As far as the gravel runs and not a number of its own.** Ten metres was
 the first go, and where it reached full strength was a line of its own: a
 rainbow seen along its own length puts its last two metres into a dozen
@@ -516,7 +536,7 @@ after looking.
   what is gated on the whole trail is the landing and what stands on it.
 - Every question the building asks is in the list the bridge reads. — `trail::tests::every_one_of_them_is_in_every`
 - It springs from the ground and ends level. — `bridge::tests::it_rises_out_of_the_field_and_levels_off`
-- The deck's picture runs out of gravel into rainbow along its own length, and is solid the whole way. — `bridge::tests::the_deck_runs_out_of_gravel_into_rainbow`
+- The deck's picture runs out of gravel into rainbow along its own length, holds the stone at its edges after the middle has turned, and is solid the whole way. — `bridge::tests::the_deck_runs_out_of_gravel_into_rainbow`
 - The rainbow is still in it, where it was, and still blends. — `bridge::tests::every_colour_of_the_rainbow_is_still_in_the_picture`, `bridge::tests::the_rainbow_blends_rather_than_steps`
 - It leaves the ground at an angle you can walk at. — `bridge::tests::it_leaves_the_ground_at_a_walkable_angle`
 - No tread rises more than `walk::STEP`. — `bridge::tests::no_tread_rises_more_than_a_step`
