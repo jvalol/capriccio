@@ -2762,6 +2762,160 @@ pub fn bank_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
     mesh
 }
 
+/// The stone the bank is made of: how many texels across one tile of it,
+/// how many stones are sown into that tile, how big the smallest and the
+/// biggest are across their own middle, and how far the biggest stands
+/// proud. Metres, all three of the last.
+///
+/// **Ballast and not road grit.** The village's path is chippings trodden
+/// into earth, 8 to 34 millimetres across and 9 proud; this is what a
+/// bridge is founded on, so the stones are the size of a fist and sit on
+/// each other rather than in anything. Across a tile of
+/// [`BANK_STONE`] metres, 1024 texels is a texel every 2.4 millimetres, so
+/// a seven centimetre stone is thirty texels and carries a shape.
+///
+/// **And enough of them to cover it.** The path wants the earth between
+/// its chips to show, because that is what makes it a track; a bed of
+/// ballast is stone on stone with no ground left between, so this sows
+/// until the gaps are the size of the stones and no bigger.
+pub const BANK_TEXELS: u32 = 1024;
+pub const BANK_STONES_SOWN: usize = 2600;
+pub const STONE_SMALL: f32 = 0.035;
+pub const STONE_BIG: f32 = 0.105;
+pub const STONE_PROUD: f32 = 0.028;
+
+/// A tile of ballast, as a field of heights and which stone owns each
+/// texel.
+///
+/// **Sown rather than asked of every texel**, which is `village::grit_field`
+/// one object along: the work is the area of the stones and not the area of
+/// the tile times their number. Sown across the border too, by taking the
+/// remainder, so a stone that runs off one edge arrives at the other and
+/// the tile repeats without a seam.
+fn stone_field() -> (Vec<f32>, Vec<f32>) {
+    let many = BANK_TEXELS as usize;
+    let per_metre = BANK_TEXELS as f32 / BANK_STONE;
+    let mut high = vec![0.0f32; many * many];
+    let mut whose = vec![0.0f32; many * many];
+    // the same cheap hash the village sows its chips with, kept small for
+    // the same reason: it is a sine of its arguments, and a float run out
+    // to twenty thousand has no decimals left to tell one stone from the
+    // next
+    let speckle = |a: f32, b: f32| {
+        let x = (a * 12.9898 + b * 78.233).sin() * 43758.547;
+
+        x - x.floor()
+    };
+
+    for stone in 0..BANK_STONES_SOWN {
+        let seed = stone as f32 * 0.097;
+        let dice = speckle(seed, 4.1);
+        // squared, so there are many small stones and few big ones: spread
+        // evenly, every stone is nearly the biggest and a bed of them reads
+        // as peas
+        let wide = STONE_SMALL + (STONE_BIG - STONE_SMALL) * dice * dice;
+        let proud = STONE_PROUD * (0.4 + 0.6 * wide / STONE_BIG);
+        let (at_x, at_y) = (speckle(seed, 2.3), speckle(seed, 8.7));
+        let own = speckle(seed, 6.9);
+        // **And not round.** A stone that is as long as it is wide reads as
+        // a pebble, and broken rock is nothing of the sort: each is given a
+        // length and a lie of its own, so the bed is a jumble of angles
+        // rather than a tray of eggs.
+        let long = 0.7 + speckle(seed, 3.3) * 0.9;
+        let turn = speckle(seed, 5.1) * std::f32::consts::TAU;
+        let (c, sn) = (turn.cos(), turn.sin());
+
+        let middle = |share: f32| (share * BANK_TEXELS as f32) as isize;
+        let (mid_x, mid_y) = (middle(at_x), middle(at_y));
+        let reach = (wide * long.max(1.0) * per_metre).ceil() as isize;
+
+        for down in -reach..=reach {
+            for along in -reach..=reach {
+                // turned into the stone's own frame, so `long` stretches it
+                // one way and not along the texture's axes
+                let (u, v) = (along as f32, down as f32);
+                let (a, b) = (u * c + v * sn, -u * sn + v * c);
+                let far = ((a / long).hypot(b)) / (wide * per_metre);
+
+                if far >= 1.0 {
+                    continue;
+                }
+
+                // **A dome flattened at the top, not a hemisphere.** A
+                // hemisphere's edge is a cliff, which the mips turn into a
+                // ring, and its middle is a highlight that slides about.
+                // This is `1 - far^2` the village found, shallower still
+                // because ballast is broken faces rather than rolled pebbles.
+                let stands = proud * (1.0 - far * far).powf(0.65);
+                let x = (mid_x + along).rem_euclid(many as isize) as usize;
+                let y = (mid_y + down).rem_euclid(many as isize) as usize;
+                let n = y * many + x;
+
+                if stands > high[n] {
+                    high[n] = stands;
+                    whose[n] = own;
+                }
+            }
+        }
+    }
+
+    (high, whose)
+}
+
+/// The bank's stone, as a picture: granite, with each stone in the bed its
+/// own shade of it.
+///
+/// **Off the same field as [`ballast_bumps`].** The colour and the shape
+/// are two readings of one sowing, so a stone that is lit as proud is the
+/// stone that is coloured, and `garden::granite`'s mottle stands in for
+/// the grain inside each one.
+pub fn ballast() -> blitzkit::texture::TextureData {
+    let (high, whose) = stone_field();
+    let many = BANK_TEXELS as usize;
+    let mut pixels = Vec::with_capacity(many * many * 4);
+    let [r, g, b] = crate::garden::STONE_TINT;
+
+    for n in 0..many * many {
+        // how high this texel stands in its own stone, which is what the
+        // light would do to it if the shape were cut rather than painted:
+        // a little of it in the colour as well stops a bed of one grey
+        // reading as a photograph of gravel laid flat
+        let up = (high[n] / STONE_PROUD).clamp(0.0, 1.0);
+        // each stone its own shade, the way a tipped load is never one
+        // colour, and the grain inside it on top of that
+        let own = 0.78 + whose[n] * 0.44;
+        let grain = (n as f32 * 0.6180339).fract() * crate::garden::STONE_GRAIN;
+        // the shadowed crack between two stones, which is where a bed of
+        // ballast gets its depth from
+        let deep = 0.55 + 0.45 * up;
+        let shade = (crate::garden::STONE * own + grain) * deep;
+
+        for one in [shade * r, shade * g, shade * b] {
+            pixels.push((one.clamp(0.0, 1.0) * 255.0).round() as u8);
+        }
+
+        pixels.push(255);
+    }
+
+    blitzkit::texture::TextureData::from_pixels(BANK_TEXELS, BANK_TEXELS, pixels)
+}
+
+/// And its shape, as a normal map in register with [`ballast`]. Spec 0110.
+///
+/// Wrapped, because this is a tile repeated down a bank rather than a face
+/// laid on it once.
+pub fn ballast_bumps() -> blitzkit::texture::TextureData {
+    let (high, _) = stone_field();
+    let many = BANK_TEXELS as usize;
+    let per = BANK_STONE / BANK_TEXELS as f32;
+
+    blitzkit::texture::TextureData::from_pixels(
+        BANK_TEXELS,
+        BANK_TEXELS,
+        blitzkit::texture::normals_of(many, many, &high, per, per, true),
+    )
+}
+
 /// How many metres of bank one granite picture covers.
 ///
 /// Two and a half, which is near enough what the runestone's footing does

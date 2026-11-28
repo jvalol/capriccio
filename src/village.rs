@@ -1251,71 +1251,9 @@ pub fn bumps(reaches: f32) -> blitzkit::texture::TextureData {
     let (per_u, per_v) = (size.x / FACE_WIDE as f32, size.z / FACE_TALL as f32);
     // laid once on the one street, so its edge is the kerb and not another
     // copy of itself
-    let pixels = normals_of(wide, tall, &high, per_u, per_v, false);
+    let pixels = blitzkit::texture::normals_of(wide, tall, &high, per_u, per_v, false);
 
     blitzkit::texture::TextureData::from_pixels(FACE_WIDE, FACE_TALL, pixels)
-}
-
-/// A field of heights turned into the bytes of a normal map.
-///
-/// **Raw bytes and not [`encoded`].** The bump binding reads the upload
-/// through `texture::DATA`, which is the same bytes as numbers rather than
-/// as a colour. Put the sRGB curve on a direction and it is not that
-/// direction: a half encodes to 188, so a surface meant to lean a little
-/// leans a long way.
-///
-/// `per_u` and `per_v` are how much world a texel is worth each way, which
-/// is what turns a difference in height into a slope rather than into a
-/// number of texels.
-///
-/// **`wrapped` is a question about what the texture is for.** The street's
-/// face is laid on the street once and its edges are its kerbs, so a slope
-/// read there is read from the edge inward. A tile of grit is repeated down
-/// a path, so its left neighbour is its own right edge and that is where the
-/// slope at its border comes from.
-///
-/// It is a correctness worth having and not a fault anybody would see: a
-/// clamped border reads its own height twice over half the span, which on a
-/// field as smooth as this one comes out within a byte of the right answer.
-/// What actually keeps the tile seamless is that `grit_field` sows its chips
-/// across the border, and that is what the test guards.
-fn normals_of(
-    wide: usize,
-    tall: usize,
-    high: &[f32],
-    per_u: f32,
-    per_v: f32,
-    wrapped: bool,
-) -> Vec<u8> {
-    let step = |n: usize, by: isize, many: usize| {
-        if wrapped {
-            (n as isize + by).rem_euclid(many as isize) as usize
-        } else if by < 0 {
-            n.saturating_sub(1)
-        } else {
-            (n + 1).min(many - 1)
-        }
-    };
-    // how many texels apart the two samples are, which is two everywhere
-    // but at a clamped edge, where one of them is the texel itself
-    let apart = |a: usize, b: usize| if wrapped { 2.0 } else { (b - a) as f32 };
-    let byte = |n: f32| ((n * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u8;
-    let mut pixels = Vec::with_capacity(wide * tall * 4);
-
-    for y in 0..tall {
-        for x in 0..wide {
-            let (left, right) = (step(x, -1, wide), step(x, 1, wide));
-            let (near, far) = (step(y, -1, tall), step(y, 1, tall));
-            let du =
-                (high[y * wide + right] - high[y * wide + left]) / (apart(left, right) * per_u);
-            let dv = (high[far * wide + x] - high[near * wide + x]) / (apart(near, far) * per_v);
-            let out = vec3(-du, -dv, 1.0).normalize();
-
-            pixels.extend_from_slice(&[byte(out.x), byte(out.y), byte(out.z), 255]);
-        }
-    }
-
-    pixels
 }
 
 /// How many texels across one tile of grit, how many chips are scattered
@@ -1474,8 +1412,8 @@ pub fn grit() -> blitzkit::texture::TextureData {
 /// And its shape, as a normal map in register with [`grit`]. Spec 0126, on
 /// the engine's spec 0110.
 ///
-/// Wrapped, which [`normals_of`] says the most about: this one is repeated
-/// and the street's is not.
+/// Wrapped, which `blitzkit::texture::normals_of` says the most about:
+/// this one is repeated and the street's is not.
 pub fn grit_bumps() -> blitzkit::texture::TextureData {
     let (high, _) = grit_field();
     let many = GRIT_TEXELS as usize;
@@ -1484,7 +1422,7 @@ pub fn grit_bumps() -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(
         GRIT_TEXELS,
         GRIT_TEXELS,
-        normals_of(many, many, &high, per, per, true),
+        blitzkit::texture::normals_of(many, many, &high, per, per, true),
     )
 }
 

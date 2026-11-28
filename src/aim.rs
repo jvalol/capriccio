@@ -1375,6 +1375,15 @@ pub const RUNESTONE: Vec4 = vec4(0.86, 0.855, 0.84, 1.0);
 /// stone's own value competes with it, and the thing the eye is meant to
 /// land on is the carving.
 pub const RUBBLE: Vec4 = vec4(0.70, 0.695, 0.68, 1.0);
+/// And the bed of ballast the bridge is founded on, which carries its own
+/// shades in its picture and so wants no tint on it at all.
+///
+/// **White, and `RUBBLE` is not.** That one is a tint on `garden::granite`,
+/// which is one grey; `bridge::ballast` gives every stone in the bed a
+/// shade of its own and darkens the cracks between them, so anything but
+/// white here would be a second opinion laid over a picture that has
+/// already answered the question.
+pub const BALLAST: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
 /// **Alight, because Jake asked for the runes to glow.** Past one is a
 /// thing that burns with nothing on it in this engine, which is what the
 /// rainbow and the cellar's neon are, and it is the only way a carving

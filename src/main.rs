@@ -1292,6 +1292,10 @@ struct Arcade {
     /// The pot over the village's cook fire, per spec 0068.
     cook_pot: Option<MeshId>,
     granite: Option<TextureId>,
+    /// And the bed of ballast the bridge is founded on: its picture and
+    /// its shape, per spec 0110. See `bridge::ballast`.
+    ballast: Option<TextureId>,
+    ballast_bump: Option<TextureId>,
     standing_stone: Option<MeshId>,
     rubble_mound: Option<MeshId>,
     carved_face: Option<MeshId>,
@@ -1974,6 +1978,8 @@ impl Arcade {
             hearth_flame: None,
             cook_pot: None,
             granite: None,
+            ballast: None,
+            ballast_bump: None,
             standing_stone: None,
             rubble_mound: None,
             carved_face: None,
@@ -4506,13 +4512,28 @@ impl Arcade {
         // on. Jake, 2026-11-18, looking at the turf one: sand and gravel,
         // rocks, those would make sense as abutments.
         if let (Some(bank), Some(granite)) = (self.bank, self.granite) {
-            scene.push_textured(
-                bank,
-                granite,
-                &Transform::at(Vec3::ZERO),
-                aim::RUBBLE,
-                aim::MATTE,
-            );
+            // **Bumped, which is what makes a bed of stone a bed of
+            // stone.** Spec 0110. The surface under it is a smooth sheet
+            // whatever it is cut into, so what says there are stones here
+            // is the light moving over them, and that comes off the normal
+            // map rather than off the mesh.
+            match (self.ballast, self.ballast_bump) {
+                (Some(stone), Some(bump)) => scene.push_bumped(
+                    bank,
+                    stone,
+                    bump,
+                    &Transform::at(Vec3::ZERO),
+                    aim::BALLAST,
+                    aim::MATTE,
+                ),
+                _ => scene.push_textured(
+                    bank,
+                    granite,
+                    &Transform::at(Vec3::ZERO),
+                    aim::RUBBLE,
+                    aim::MATTE,
+                ),
+            }
 
             // **And loose stone lying on it**, which is what makes it
             // gravel rather than a grey surface, exactly as `rubble` does
@@ -10634,6 +10655,8 @@ impl Game for Arcade {
         self.hearth_flame = Some(renderer.add_mesh(&valhalla::flame_mesh()));
         self.cook_pot = Some(renderer.add_mesh(&village::pot_mesh()));
         self.granite = Some(renderer.add_texture(&garden::granite(bridge::STONE_SEED)));
+        self.ballast = Some(renderer.add_texture(&bridge::ballast()));
+        self.ballast_bump = Some(renderer.add_texture(&bridge::ballast_bumps()));
         // out of round, like the garden's set stones, and squashed thin by
         // the transform so the carved face is near enough flat to cut
         self.standing_stone = Some(renderer.add_mesh(&bridge::stone_mesh(bridge::STONE_SEED)));

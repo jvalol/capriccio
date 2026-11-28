@@ -98,6 +98,37 @@ them read as plates. Each is now tipped onto the bank it sits in, off
 written out, which is the only way it stays a normal to the thing it is a
 normal to.
 
+## The bed is stone and not a picture of stone
+
+2026-11-28. Jake, looking at the bank close up: the quads for the rock are
+large, they could be much more refined to give a much more realistic
+texture, and if we succeed it could be applicable in a lot of places.
+
+The quads were not the thing to refine. The bank was `garden::granite`, one
+grey mottled fine, laid on a surface whose normals are the mesh's: a flat
+sheet with noise painted on it, and no amount of cutting it finer puts a
+stone in it. What makes stone read is the light moving over it, which is
+the engine's spec 0110, built for the village's street and used by nothing
+else.
+
+So the bank has a bed of its own. `stone_field` sows 2600 stones into a
+tile of `BANK_STONE` metres at 1024 texels, each one 35 to 105 millimetres
+across, given a length and a turn so the bed is a jumble of angles rather
+than a tray of eggs, and sown across the border by taking the remainder so
+the tile repeats without a seam. `ballast` reads that field as colour and
+`ballast_bumps` reads it as shape, so the stone that is lit as proud is the
+stone that is coloured.
+
+**Darkened where it is low, as well as bent.** A normal map alone lights a
+bed of one grey and the eye reads a grey sheet with lighting on it. The
+cracks between the stones carry their own shade in the picture, and each
+stone has a tone of its own, which is what a tipped load looks like.
+
+**It reads up close and flattens with the mips**, which spec 0110 says to
+expect: the far end of the bed is lit as the surface it is. The albedo
+keeps the stones there, so what is lost is the part that moves when the sun
+does.
+
 ## Acceptance criteria
 
 - With nothing given, the bridge is drawn and its deck stops a sixth of the
