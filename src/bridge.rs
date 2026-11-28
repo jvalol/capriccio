@@ -157,6 +157,24 @@ pub fn stop_at(n: usize) -> f32 {
     KERB_COVERS + (1.0 - KERB_COVERS * 2.0) * n as f32 / (BANDS - 1) as f32
 }
 
+/// The colour a share of the way along the spectrum, nought being red and
+/// one violet.
+///
+/// **One spectrum in this building and two things made of it.** The deck
+/// lays it across the road and the kerb hands a stop of it to each room,
+/// and those are the same rainbow rather than two that happen to agree:
+/// change `COLOURS` and both move. Past the ends it holds the end colour,
+/// because a rainbow's edge is where it stops being a rainbow and not
+/// where it stops being bright.
+pub fn spectrum(share: f32) -> Vec3 {
+    let across = (share * (BANDS - 1) as f32).clamp(0.0, (BANDS - 1) as f32);
+    let below = across.floor() as usize;
+    let above = (below + 1).min(BANDS - 1);
+    let between = (across - below as f32).clamp(0.0, 1.0);
+
+    COLOURS[below] + (COLOURS[above] - COLOURS[below]) * between
+}
+
 /// The rainbow across the deck, as a picture that blends.
 ///
 /// **The seven are stops and no longer bands.** Each sits where `stop_at`
@@ -170,15 +188,9 @@ pub fn rainbow() -> blitzkit::texture::TextureData {
     let (first, last) = (stop_at(0), stop_at(BANDS - 1));
 
     for at in 0..RAINBOW_WIDE {
-        // where this texel falls among the stops
-        let across = (((at as f32 + 0.5) / RAINBOW_WIDE as f32 - first) / (last - first)
-            * (BANDS - 1) as f32)
-            .clamp(0.0, (BANDS - 1) as f32);
-        let below = across.floor() as usize;
-        let above = (below + 1).min(BANDS - 1);
-        let share = (across - below as f32).clamp(0.0, 1.0);
-
-        let colour = COLOURS[below] + (COLOURS[above] - COLOURS[below]) * share;
+        // where this texel falls between the first stop and the last
+        let share = ((at as f32 + 0.5) / RAINBOW_WIDE as f32 - first) / (last - first);
+        let colour = spectrum(share);
         let at = (at * 4) as usize;
 
         for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
@@ -2280,28 +2292,35 @@ pub fn span_colours(trail: &Trail) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(SPANS as u32, 1, pixels)
 }
 
-/// What colour a room wears on the bridge.
+/// What colour a room wears on the bridge: its own stop on the spectrum.
 ///
-/// **Taken from the room's own material wherever it has one**, so nothing
-/// here is a second opinion about what a room looks like: the cellar wears
-/// its bookcase, the nook its benches, the gallery its plinths, the baths
-/// their water, the field its leaves. Two have no one material to take:
-/// the space behind the wall is a room spec 0011 gives no voice and keeps
-/// dark, and the sun is a light rather than a surface, so those two take
-/// the nearest thing the building already names.
+/// **Not the room's own material, which is what this was.** Each station
+/// took the colour of the thing you did it to, the cellar its bookcase,
+/// the nook its benches, the gallery its plinths, the baths their water,
+/// the field its leaves, so that nothing here was a second opinion about
+/// what a room looks like. What that rule produces is four warm browns and
+/// a teal, because four of these five rooms are furnished in wood, stone
+/// and sunlight: lifted to one brightness they came out (0.78, 0.46,
+/// 0.27), (0.78, 0.56, 0.41), (0.78, 0.77, 0.72) and (0.78, 0.69, 0.56),
+/// which is one pale warm said four ways. Jake, 2026-11-28, looking up the
+/// finished climb: they can be independent of the room, just colours of
+/// the rainbow, the extremes of the visible spectrum and everything
+/// between.
+///
+/// So the five are five stops of [`spectrum`], spread end to end, and what
+/// a span says is which room rather than what that room is made of. The
+/// record spec 0118 is about survives whole, because which colour stands
+/// where up the bridge is still the order you answered in.
 ///
 /// **A match and not a table**, so a station added to `trail::Asked` stops
 /// this compiling rather than quietly wearing the kerb's own grey.
 ///
-/// **Lifted to one brightness, so what tells them apart is hue.** Taken
-/// straight, the kerb ran from (10, 10, 25) to (26, 31, 42) out of 255
-/// down its whole length: the hues were right and nothing was legible,
-/// because these colours were chosen for walls and benches seen across a
-/// room and this is a hand's width of edge seen from a hundred metres.
-/// Lifting them keeps each room's own hue and takes away the part of the
-/// colour that was about being indoors.
+/// **Lifted to one brightness**, because `COLOURS` is past one on purpose
+/// and a kerb does not glow. Taken straight, the kerb ran from (10, 10,
+/// 25) to (26, 31, 42) out of 255 down its whole length: the hues were
+/// right and nothing was legible.
 pub fn room_colour(what: crate::trail::Asked) -> glam::Vec4 {
-    let own = room_colour_own(what);
+    let own = spectrum(stands_at(what) as f32 / (STATIONS - 1) as f32);
     let most = own.x.max(own.y).max(own.z).max(1e-4);
     let lift = KERB_LIT / most;
 
@@ -2312,24 +2331,28 @@ pub fn room_colour(what: crate::trail::Asked) -> glam::Vec4 {
 /// indoors.
 pub const KERB_LIT: f32 = 0.78;
 
-/// And the room's colour as the room itself wears it.
-fn room_colour_own(what: crate::trail::Asked) -> glam::Vec4 {
+/// How many stations the trail has, which is how many stops of the
+/// spectrum the kerb hands out.
+///
+/// **A number and not `Asked::every().len()`** for the reason [`SPANS`]
+/// is one, and held honest the same way, by
+/// `tests::there_is_a_slot_for_every_span`.
+pub const STATIONS: usize = SPANS - 1;
+
+/// Which stop of the spectrum a station takes, red first and violet last.
+///
+/// **Its place in `Asked::every()` and not the order you answered in.** A
+/// station's colour is the station's; where that colour falls up the
+/// bridge is your own walk.
+fn stands_at(what: crate::trail::Asked) -> usize {
     use crate::trail::Asked;
 
     match what {
-        Asked::OpenedTheCase => crate::aim::SHELF,
-        Asked::WadedInThePool => {
-            let water = crate::aim::WATER;
-
-            glam::vec4(water.x, water.y, water.z, 1.0)
-        }
-        Asked::SolvedTheCube => crate::aim::BENCH,
-        Asked::GotBehindTheWall => crate::aim::EDGE_STONE,
-        Asked::ReachedTheSun => {
-            let sun = crate::aim::SUN;
-
-            glam::vec4(sun.x, sun.y, sun.z, 1.0)
-        }
+        Asked::OpenedTheCase => 0,
+        Asked::WadedInThePool => 1,
+        Asked::SolvedTheCube => 2,
+        Asked::GotBehindTheWall => 3,
+        Asked::ReachedTheSun => 4,
     }
 }
 
@@ -5110,6 +5133,54 @@ pub mod tests {
         }
     }
 
+    /// Spec 0118, and Jake on 2026-11-28: no two stations wear the same
+    /// colour.
+    ///
+    /// **The one the old rule failed.** Taking each station's colour from
+    /// its room's own material gave four warm browns and a teal, three of
+    /// them within a tenth of each other in every channel, so the kerb
+    /// read as one colour that wobbled. Off the spectrum the five are a
+    /// quarter of it apart by construction, and the two ends of the trail
+    /// are the two ends of the spectrum.
+    #[test]
+    fn no_two_stations_wear_the_same_colour() {
+        let every = Asked::every();
+        let worn: Vec<glam::Vec4> = every.iter().map(|one| room_colour(*one)).collect();
+
+        for (n, one) in worn.iter().enumerate() {
+            for (m, other) in worn.iter().enumerate().skip(n + 1) {
+                let apart =
+                    (one.x - other.x).abs() + (one.y - other.y).abs() + (one.z - other.z).abs();
+
+                assert!(
+                    apart > 0.35,
+                    "{:?} and {:?} are {:.3} apart, wearing {:?} and {:?}",
+                    every[n],
+                    every[m],
+                    apart,
+                    one,
+                    other
+                );
+            }
+        }
+
+        // and the trail's first and last stand at the spectrum's own ends
+        for (at, want) in [(0usize, COLOURS[0]), (STATIONS - 1, COLOURS[BANDS - 1])] {
+            let got = room_colour(every[at]);
+            let lift = KERB_LIT / want.x.max(want.y).max(want.z);
+
+            for (channel, one) in [want.x, want.y, want.z].iter().enumerate() {
+                assert!(
+                    (got[channel] - one * lift).abs() < 1e-3,
+                    "station {} wears {:?} and the end of the spectrum is {:?}",
+                    at,
+                    got,
+                    want
+                );
+            }
+        }
+    }
+
     /// And the first span is nobody's: it was there before anything was
     /// asked, per spec 0117, so it keeps the kerb's own colour.
     #[test]
@@ -5158,6 +5229,14 @@ pub mod tests {
     #[test]
     fn there_is_a_slot_for_every_span() {
         let grows_in = Asked::every().len() + 1;
+
+        assert_eq!(
+            STATIONS,
+            Asked::every().len(),
+            "the spectrum is handed out in {} stops and the trail has {} stations",
+            STATIONS,
+            Asked::every().len()
+        );
 
         assert_eq!(
             SPANS, grows_in,

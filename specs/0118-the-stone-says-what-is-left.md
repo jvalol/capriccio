@@ -98,6 +98,42 @@ to count. So `JOINT` is a metre of the bar's own colour at every boundary,
 which is the colour the span at the foot wears, so the joints and that first
 span are one thing and the bar reads as a bar with colours laid along it.
 
+### A stop of the spectrum each, and not the room's own material
+
+Same morning, after the joints. Jake: I don't think a colour from each
+room reads as intended, they can be independent of the room, just colours
+of the rainbow, the extremes of the visible spectrum and everything
+between.
+
+The rule above was that a station wears the colour of the thing you did it
+to, so that nothing on the bridge is a second opinion about what a room
+looks like. What that produces is four warm browns and a teal, because
+four of these five rooms are furnished in wood, stone and sunlight. Lifted
+to one brightness they came out (0.78, 0.46, 0.27), (0.78, 0.56, 0.41),
+(0.78, 0.77, 0.72) and (0.78, 0.69, 0.56): one pale warm said four ways,
+and no joint can rescue a count of five that has three of the same colour
+in it.
+
+The five are five stops of `bridge::spectrum` now, spread end to end, red
+for the first station in `Asked::every()` and violet for the last. What a
+span says is which room and no longer what that room is made of.
+
+**The record survives whole**, which is the thing this change had to not
+break. A station's colour is the station's; which colour stands where up
+the bridge is still the order you walked in, so
+`the_kerbs_are_a_record_of_your_own_walk` holds unchanged.
+
+**One spectrum in this building.** `spectrum` came out of `rainbow`, so
+the deck lays the same seven across the road that the kerb hands five of
+to the rooms. They are one rainbow rather than two that happen to agree:
+change `COLOURS` and both move.
+
+**And the test is what the old rule failed.** Three of the five were
+within a tenth of each other in every channel and every test passed.
+`no_two_stations_wear_the_same_colour` asserts the five are a third apart
+in sum, and that the trail's first and last stand at the spectrum's own
+ends.
+
 **And the gradient this spec said it did not have.** "Whole slots, never a
 gradient" was the requirement and one sweep with the slot written into each
 vertex is not that: the quad between the last vertex of one span and the
@@ -124,6 +160,8 @@ so the change is where the change is.
 - The spans are counted: no triangle of the kerb runs from one slot to
   another, and a joint of the bar's own colour stands at every boundary. —
   `bridge::tests::the_spans_are_counted_and_not_blended`
+- No two stations wear the same colour, and the trail's two ends wear the
+  spectrum's. — `bridge::tests::no_two_stations_wear_the_same_colour`
 - Two runs that answer the same rooms in different orders paint the kerbs
   differently. — `bridge::tests::the_kerbs_are_a_record_of_your_own_walk`
 - There is a slot in the strip for every span the deck grows in. —
