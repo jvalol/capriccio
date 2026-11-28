@@ -1977,6 +1977,18 @@ pub fn pitch(along: f32) -> f32 {
 /// metres clear, which is wider than anything else you walk along in
 /// this building.
 ///
+/// **Half a metre each way, which is what it always said, and for the
+/// first time what it is.** Jake, 2026-11-28, looking along it from the
+/// field: the railings or sides can vanish to nothing from a perspective
+/// like this, they should have width, or depth, or whatever you want to
+/// call it so they aren't too thin to appear. He was right that it had
+/// none, and wrong about why, as was I: both of my goes at it moved these
+/// two numbers, first the width and then the height, and neither touched
+/// the thing that was wrong. The kerb had no top face and no inner face,
+/// for the reason written on the cut in `kerb_mesh`. Given its own four
+/// corners it is a bar at half a metre, and the deck keeps its five
+/// metres clear.
+///
 /// Its pieces are ten treads long. Nothing stands on a kerb, so it
 /// does not need the fine tread the deck needs to be smooth, and at
 /// `TREAD` it would have been seventeen hundred boxes for a thing
@@ -2020,10 +2032,23 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
         // times. Nudged out and cut short, neither touches.
         let out = middle + half + KERB_PROUD;
         let under = on - DEEP * 0.55;
+        // **Cut between the samples and not on them.** `surface` asks for
+        // `v` at nought, a third, two thirds and one, which is the four
+        // corners this wants; thresholds at 0.34, 0.67 and 0.99 put the
+        // third into the first corner's bucket, so the kerb came out with
+        // its outer foot twice, no top face and no inner face at all: a
+        // wedge tapering to a line against the deck. It had been that from
+        // the day it was built, and what it looks like is nothing at all
+        // from any angle that sights along it. Jake, 2026-11-28: see that
+        // black strip in the middle lower center? That.
+        //
+        // Halfway between one sample and the next, so each corner takes
+        // the sample meant for it and a `v_steps` that changed would have
+        // to come through here.
         let (z, y) = match v {
-            v if v < 0.34 => (out, under),
-            v if v < 0.67 => (out, on + KERB_UP),
-            v if v < 0.99 => (middle - half, on + KERB_UP),
+            v if v < 1.0 / 6.0 => (out, under),
+            v if v < 0.5 => (out, on + KERB_UP),
+            v if v < 5.0 / 6.0 => (middle - half, on + KERB_UP),
             _ => (middle - half, under),
         };
         vec3(x, y, z)
@@ -3692,6 +3717,47 @@ pub mod tests {
                     along
                 );
             }
+        }
+    }
+
+    /// Spec 0054: the kerb is a bar with four corners, not a wedge.
+    ///
+    /// **The one a picture could not catch.** It had three of its four
+    /// from the day it was built, because `surface` samples `v` at nought,
+    /// a third, two thirds and one and the cut between the corners was at
+    /// 0.34: the third landed back in the first corner, so the outer foot
+    /// was drawn twice and the inner top never. Every reference of the
+    /// bridge passed through it, and so did two goes at making the thing
+    /// thicker, because a wedge scaled up is still a wedge.
+    #[test]
+    fn the_kerb_is_a_bar_and_not_a_wedge() {
+        let mesh = kerb_mesh(REACHES, 1.0, 1.0);
+        let foot = foot(REACHES);
+        let middle = foot.z + WIDE * 0.5 - KERB_THICK * 0.5;
+        let half = KERB_THICK * 0.5;
+        // the first cross-section, which is the first `v_steps + 1` of them
+        let section: Vec<_> = mesh.vertices[..4]
+            .iter()
+            .map(|one| (one.position[1], one.position[2]))
+            .collect();
+        let near = |a: f32, b: f32| (a - b).abs() <= 1e-3;
+        let has = |y: f32, z: f32| section.iter().any(|one| near(one.0, y) && near(one.1, z));
+        let on = high(0.0);
+        let under = on - DEEP * 0.55;
+        let out = middle + half + KERB_PROUD;
+        let want = [
+            ("outer foot", under, out),
+            ("outer top", on + KERB_UP, out),
+            ("inner top", on + KERB_UP, middle - half),
+            ("inner foot", under, middle - half),
+        ];
+
+        for (name, y, z) in want {
+            assert!(
+                has(y, z),
+                "the kerb has no {name}, at {y} {z}: its section is {:?}",
+                section
+            );
         }
     }
 

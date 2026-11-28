@@ -504,6 +504,41 @@ no line to hide, because the rainbow does not change along its length.
 look west down the field and catch the bridge's foot through a gap.
 Re-blessed after looking, three times over the two days.
 
+## The kerb had three corners of its four
+
+2026-11-28. Jake, from the field beside the bridge: the railings or sides
+can vanish to nothing from a perspective like this, they should have
+width, or depth, or whatever you want to call it so they aren't too thin
+to appear. Then, when neither of my two goes at it worked: see that black
+strip in the middle lower center? That's what I'm trying to address.
+
+`MeshData::surface` samples `v` at nought, a third, two thirds and one,
+which is exactly the four corners the kerb's section wants. It cut between
+them at 0.34, 0.67 and 0.99, so the sample at a third landed back in the
+first corner's bucket: the outer foot was drawn twice and the inner top
+never. What that builds is a wedge, a vertical outer face falling away to
+a line against the deck, with no top and no inner face. Sighted along, it
+is a knife, and the thin black strip is it.
+
+It had been that since the day the kerb was built. The cuts are at the
+midpoints now, so each corner takes the sample meant for it.
+
+**Two goes at it that were not it.** First the width went from half a
+metre to one, because looked along from the deck that is the dimension you
+see; then the height went to 0.85, because looked at from the field it is
+the other one. Both are true about kerbs and neither was true about this
+one, and a wedge scaled up is still a wedge. Both numbers are back at half
+a metre, which is what they always said and, now, what they are.
+
+**Nothing watching could have caught it**, which is this building's second
+time with that sentence in a fortnight, after the engine's spec 0110. Every
+reference of the bridge was blessed through a wedge, because a wedge where
+a kerb should be still reads as a line down the side of a road.
+`bridge::tests::the_kerb_is_a_bar_and_not_a_wedge` reads the first
+cross-section out of the mesh and names the four corners it must have; put
+the old cuts back and it says the section is the outer foot, the outer
+foot again, the outer top and the inner foot.
+
 ## Acceptance criteria
 
 - It is finished only once every `Asked` has been given. — `bridge::tests::it_is_there_once_every_room_has_answered`
@@ -526,6 +561,7 @@ Re-blessed after looking, three times over the two days.
 - It is walked up, run up and lurched up without going under it. — `tests::the_bridge_is_walked_up_rather_than_climbed`, `tests::the_bridge_is_run_up_without_falling_through_it`, `tests::a_long_frame_does_not_drop_you_through_the_deck`
 - And off the straight. — `tests::the_bridge_is_climbed_off_the_straight_without_falling_through`
 - The kerb keeps you on it. — `tests::the_kerb_keeps_you_on_the_bridge`
+- And it is a bar with four corners rather than a wedge with three. — `bridge::tests::the_kerb_is_a_bar_and_not_a_wedge`
 - And the camera stays over the deck at every refresh rate, not only sixty. — `tests::the_camera_stays_above_the_deck_however_fast_the_screen_is`
 - And it is climbed at the pace it was given, at every refresh rate. — `tests::the_bridge_is_climbed_at_the_pace_it_was_given`
 - And steering up it is not quicker than going straight. — `tests::steering_up_the_bridge_is_not_quicker_than_going_straight`
