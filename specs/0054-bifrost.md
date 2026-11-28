@@ -611,6 +611,27 @@ each band's own channel is the two it always was, with a floor of a tenth
 rather than nought because a flat primary is a paint chip and this is
 light.
 
+**And the deck leaked out under it.** Jake, 2026-11-28, from the gravel
+beside the climb: the floor leaks under the rails. The skirt stopped at
+0.55 of `DEEP`, which left sixteen centimetres of the deck's own side face
+standing in the open below each kerb. That face is mapped at nought or one
+across the rainbow, and since the seven were spread between the kerbs an
+hour before, the picture holds the end colour out there: a strip of pure
+violet down one side of the bridge and pure red down the other, both in
+the picture he sent. Saturating the seven is what made it a line you
+cannot miss rather than a line nobody noticed.
+
+The skirt runs to 1.2 of `DEEP` now, and the bar's section closes
+underneath, three faces having been an open channel that only sat out of
+sight while it stopped short. A fifth over `DEEP` rather than `DEEP`
+because the deck's cross-section stands square to its own slope: the
+underside is `DEEP` along the normal, which is less than `DEEP` straight
+down, and the two agree only where the deck is level. What holds it is a
+walk down the whole climb comparing the skirt against the soffit at that
+pitch, inside
+`bridge::tests::the_kerb_is_a_solid_bar_and_not_a_shell`; put 0.55 back
+and it names the two heights at the foot.
+
 **And then it had no ends.** Jake, straight after: the railings don't have
 ends. Three swept faces are an open channel whichever way they are wound,
 so the bar stopped at a mouth at either end, and at the foot that mouth

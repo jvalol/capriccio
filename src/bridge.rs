@@ -2052,6 +2052,25 @@ pub const KERB_LONG: f32 = TREAD * 10.0;
 /// only so that no face of it lies in a plane the deck already has.
 pub const KERB_PROUD: f32 = 0.04;
 
+/// How far below the deck's top the kerb's skirt runs.
+///
+/// **Past the deck's underside, because the deck leaked out below it.**
+/// Jake, 2026-11-28: the floor leaks under the rails. The skirt stopped at
+/// 0.55 of `DEEP`, which left sixteen centimetres of the deck's own side
+/// face standing in the open under each kerb, and that face is mapped at
+/// nought or one across the rainbow: since the seven were spread between
+/// the kerbs it holds the end colour there, so what showed was a strip of
+/// pure violet down one side of the bridge and pure red down the other.
+/// Both were in the picture he sent, one each side.
+///
+/// 1.2 of `DEEP` and not `DEEP`, because the deck's cross-section stands
+/// square to its own slope: its underside is `DEEP` along the normal,
+/// which is less than `DEEP` straight down, and the two are the same only
+/// where the deck is level. A fifth over clears it at every pitch the
+/// climb has and hangs seven centimetres under the soffit where it is
+/// flat, which is a fascia and reads as one.
+pub const KERB_SKIRT: f32 = DEEP * 1.2;
+
 /// How wide the dark break between one span's colour and the next is.
 ///
 /// **Because five bands with nothing between them are one colour that
@@ -2157,15 +2176,21 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
     // kerb, because `u` runs the same way down both and the cross product
     // does not care which side of the road it is on.
     let mut section = [
-        (outer, -DEEP * 0.55),
+        (outer, -KERB_SKIRT),
         (outer, KERB_UP),
         (inner, KERB_UP),
-        (inner, -DEEP * 0.55),
+        (inner, -KERB_SKIRT),
     ];
 
     if side > 0.0 {
         section.reverse();
     }
+
+    // **And the loop closes under the bar.** Three faces were an open
+    // channel sitting on the deck, which was out of sight while the skirt
+    // stopped short of the deck's underside. Hung past it, the open side
+    // is the side you see from under the bridge.
+    let round: [(f32, f32); 5] = [section[0], section[1], section[2], section[3], section[0]];
 
     // **Swept a run at a time, a run being a span or a joint between two.**
     // Spec 0118 asked for whole slots and never a gradient, and one sweep
@@ -2182,7 +2207,7 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
         let steps = (((to - from) * PIECES as f32).ceil() as u32).max(1);
         let mut run = blitzkit::mesh::MeshData::new(Vec::new(), Vec::new());
 
-        for pair in section.windows(2) {
+        for pair in round.windows(2) {
             let ((from_z, from_up), (to_z, to_up)) = (pair[0], pair[1]);
 
             run.extend(&blitzkit::mesh::MeshData::surface(steps, 1, |u, v| {
@@ -2224,7 +2249,7 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
     ] {
         let on = high(at);
         let x = foot.x - at * RUN;
-        let under = -DEEP * 0.55;
+        let under = -KERB_SKIRT;
         let mut cap = blitzkit::mesh::MeshData::surface(1, 1, |u, v| {
             vec3(
                 x,
@@ -3926,7 +3951,7 @@ pub mod tests {
             let outer = middle + side * (KERB_THICK * 0.5 + KERB_PROUD);
             let inner = middle - side * KERB_THICK * 0.5;
             let on = high(0.0);
-            let under = on - DEEP * 0.55;
+            let under = on - KERB_SKIRT;
             let near = |a: f32, b: f32| (a - b).abs() <= 1e-3;
             let has = |y: f32, z: f32| {
                 mesh.vertices
@@ -3969,11 +3994,25 @@ pub mod tests {
                 let along = normal.x.abs() > 0.9;
 
                 assert!(
-                    across || along || normal.y > 0.5,
-                    "a kerb vertex at side {} faces {:?}, which is none of out across the road, along it, or up",
+                    across || along || normal.y.abs() > 0.5,
+                    "a kerb vertex at side {} faces {:?}, which is none of out across the road, along it, up or down",
                     side,
                     normal
                 );
+
+                // **And what faces down is the skirt's own foot**, the
+                // face that closes the bar where it hangs under the deck.
+                if normal.y < -0.5 {
+                    let along = (foot.x - one.position[0]) / RUN;
+
+                    assert!(
+                        (one.position[1] - (high(along) + -KERB_SKIRT)).abs() < 1e-3,
+                        "a kerb face at side {} looks down from {:?}, which is not its foot at {}",
+                        side,
+                        one.position,
+                        high(along) - KERB_SKIRT
+                    );
+                }
 
                 if across {
                     let out = near(one.position[2], outer);
@@ -3998,6 +4037,25 @@ pub mod tests {
                         normal
                     );
                 }
+            }
+
+            // **And the skirt hangs under the deck's own underside, the
+            // whole way up.** This is the leak: the deck's cross-section
+            // stands square to its slope, so its underside is `DEEP`
+            // along the normal and less than that straight down, and a
+            // skirt stopping short of it leaves the deck's side face on
+            // show below the bar, mapped at the end of the rainbow.
+            for n in 0..=PIECES {
+                let along = n as f32 / PIECES as f32;
+                let soffit = high(along) - DEEP / (1.0 + pitch(along).powi(2)).sqrt();
+
+                assert!(
+                    high(along) - KERB_SKIRT < soffit,
+                    "the skirt reaches {} at {} along and the deck's underside is {}",
+                    high(along) - KERB_SKIRT,
+                    along,
+                    soffit
+                );
             }
 
             // **Both ends, and only the ends.** Two quads of four corners.
