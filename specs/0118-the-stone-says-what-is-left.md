@@ -84,6 +84,29 @@ ever read that order. The bridge's kerbs do now: the piece of kerb over span
 Between them the two halves answer the question without a checklist: the gap
 says how many are left and the stone says which one is next.
 
+### And a joint between one span and the next
+
+2026-11-28. Jake, looking up the finished bridge: switching from orange to
+blue and back as you go up seems arbitrary. Asked what the bands were, he
+had it straight away: countable because they represent each step of the
+trail. They do, five answers and the dark one at the foot that was there
+before any of them, and a count wants edges.
+
+Walked mid-trail the bands have edges for free, since the end of the colour
+is the end of the bridge. Finished, five mid-tones abut and there is nothing
+to count. So `JOINT` is a metre of the bar's own colour at every boundary,
+which is the colour the span at the foot wears, so the joints and that first
+span are one thing and the bar reads as a bar with colours laid along it.
+
+**And the gradient this spec said it did not have.** "Whole slots, never a
+gradient" was the requirement and one sweep with the slot written into each
+vertex is not that: the quad between the last vertex of one span and the
+first of the next has its `u` running from one slot's middle to the other's,
+which walks the strip through whatever lies between. Two metres of fade at
+every boundary, five times up the climb. The kerb is swept a run at a time
+now, a run being a span or a joint, and nothing is shared across a boundary,
+so the change is where the change is.
+
 ## Acceptance criteria
 
 - The stone and its footing are there before anything has been answered. —
@@ -98,6 +121,9 @@ says how many are left and the stone says which one is next.
 - A kerb piece takes the colour of the room that gave that span, in the order
   given. — `bridge::tests::a_span_wears_the_room_that_paid_for_it`
 - The first span wears nobody's colour. — `bridge::tests::the_first_span_is_nobodys`
+- The spans are counted: no triangle of the kerb runs from one slot to
+  another, and a joint of the bar's own colour stands at every boundary. —
+  `bridge::tests::the_spans_are_counted_and_not_blended`
 - Two runs that answer the same rooms in different orders paint the kerbs
   differently. — `bridge::tests::the_kerbs_are_a_record_of_your_own_walk`
 - There is a slot in the strip for every span the deck grows in. —

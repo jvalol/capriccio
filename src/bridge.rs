@@ -2001,6 +2001,64 @@ pub const KERB_LONG: f32 = TREAD * 10.0;
 /// only so that no face of it lies in a plane the deck already has.
 pub const KERB_PROUD: f32 = 0.04;
 
+/// How wide the dark break between one span's colour and the next is.
+///
+/// **Because five bands with nothing between them are one colour that
+/// wobbles.** Jake, 2026-11-28, looking up the finished bridge: switching
+/// from orange to blue and back as you go up seems arbitrary. Spec 0118
+/// wanted the spans countable, one band for each thing you answered and a
+/// dark one at the foot for the span that was there before you answered
+/// anything, and a count wants edges. Walked mid-trail they had edges for
+/// free, the end of the colour being the end of the bridge; finished, five
+/// mid-tones abut and there is nothing to count.
+///
+/// A metre, on a bar half a metre thick, which reads as a slab joint from
+/// the deck and as a tick from the field.
+pub const JOINT: f32 = 1.0;
+
+/// Where in the colour strip slot `n` is read.
+fn slot_at(n: usize) -> f32 {
+    (n as f32 + 0.5) / SPANS as f32
+}
+
+/// The runs the kerb is swept in: a span, the joint after it, the next
+/// span, down to `reach`.
+///
+/// **The joints wear slot nought**, which is the colour the kerb is
+/// anyway, so a joint and the span at the foot are the same thing and the
+/// bar reads as one bar with colours laid along it.
+///
+/// Nothing is swept past `reach`, and a run cut to nothing by it is
+/// dropped rather than left as a seam of no length.
+fn kerb_runs(reach: f32) -> Vec<(f32, f32, usize)> {
+    let step = 1.0 / SPANS as f32;
+    let half = JOINT * 0.5 / RUN;
+    let mut runs = Vec::with_capacity(SPANS * 2 - 1);
+
+    for span in 0..SPANS {
+        let from = span as f32 * step;
+        let to = from + step;
+
+        runs.push((
+            if span == 0 { 0.0 } else { from + half },
+            if span + 1 == SPANS { 1.0 } else { to - half },
+            span,
+        ));
+
+        if span + 1 < SPANS {
+            runs.push((to - half, to + half, 0));
+        }
+    }
+
+    runs.into_iter()
+        .filter_map(|(from, to, slot)| {
+            let to = to.min(reach);
+
+            (to > from).then_some((from, to, slot))
+        })
+        .collect()
+}
+
 /// The kerb as one swept ribbon per side, for looking at.
 ///
 /// **Drawn as a sweep and collided as boxes.** `kerbs` is a row of
@@ -2058,39 +2116,40 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
         section.reverse();
     }
 
+    // **Swept a run at a time, a run being a span or a joint between two.**
+    // Spec 0118 asked for whole slots and never a gradient, and one sweep
+    // with the slot written into each vertex is not that: two neighbouring
+    // vertices in different spans put a quad between them whose `u` walks
+    // the whole strip, so every boundary was a two metre fade through
+    // whatever colours lay between. Swept a run at a time nothing is
+    // shared across a boundary, so the change is where the change is.
+    let runs = kerb_runs(reach);
     let mut mesh = blitzkit::mesh::MeshData::new(Vec::new(), Vec::new());
 
-    for pair in section.windows(2) {
-        let ((from_z, from_up), (to_z, to_up)) = (pair[0], pair[1]);
+    for (from, to, slot) in &runs {
+        let (from, to, slot) = (*from, *to, *slot);
+        let steps = (((to - from) * PIECES as f32).ceil() as u32).max(1);
+        let mut run = blitzkit::mesh::MeshData::new(Vec::new(), Vec::new());
 
-        mesh.extend(&blitzkit::mesh::MeshData::surface(
-            PIECES as u32,
-            1,
-            |u, v| {
-                let along = u * reach;
+        for pair in section.windows(2) {
+            let ((from_z, from_up), (to_z, to_up)) = (pair[0], pair[1]);
+
+            run.extend(&blitzkit::mesh::MeshData::surface(steps, 1, |u, v| {
+                let along = from + (to - from) * u;
 
                 vec3(
                     foot.x - along * RUN,
                     high(along) + from_up + (to_up - from_up) * v,
                     from_z + (to_z - from_z) * v,
                 )
-            },
-        ));
-    }
+            }));
+        }
 
-    // **And its `u` says which span it is on, not where it is along.**
-    // Spec 0118: the kerb over each span wears the colour of the room that
-    // paid for that span, and `spans` is the strip of those colours. A
-    // surface's own `u` runs nought to one down the whole ribbon, so it is
-    // replaced with the middle of the span's own slot: whole slots, never
-    // a gradient, because a kerb that fades from one room into the next is
-    // a progress bar and the colours are meant to be countable.
-    for vertex in &mut mesh.vertices {
-        let along = vertex.uv[0] * reach;
-        let span = (along * SPANS as f32).floor().min(SPANS as f32 - 1.0);
+        for vertex in &mut run.vertices {
+            vertex.uv = [slot_at(slot), 0.5];
+        }
 
-        vertex.uv[0] = (span + 0.5) / SPANS as f32;
-        vertex.uv[1] = 0.5;
+        mesh.extend(&run);
     }
 
     // **And an end on each end.** Jake, 2026-11-28: the railings don't have
@@ -2101,12 +2160,16 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
     // listed in gives the near one its winding: away down the road at the
     // top of the climb, back at the field at the foot.
     //
-    // After the slots are written and not before, because a cap's `u` runs
-    // across the bar rather than along it and the loop above would read it
-    // as the first two spans.
-    for (at, from_z, to_z) in [
-        (0.0, section[3].0, section[0].0),
-        (reach, section[0].0, section[3].0),
+    // A cap wears its run's slot, written straight in: a cap's `u` runs
+    // across the bar rather than along it, so nothing can be read off it.
+    for (at, from_z, to_z, slot) in [
+        (0.0, section[3].0, section[0].0, 0),
+        (
+            reach,
+            section[0].0,
+            section[3].0,
+            runs.last().map(|one| one.2).unwrap_or(0),
+        ),
     ] {
         let on = high(at);
         let x = foot.x - at * RUN;
@@ -2118,10 +2181,8 @@ pub fn kerb_mesh(reaches: f32, side: f32, reach: f32) -> blitzkit::mesh::MeshDat
                 from_z + (to_z - from_z) * u,
             )
         });
-        let span = (at * SPANS as f32).floor().min(SPANS as f32 - 1.0);
-
         for vertex in &mut cap.vertices {
-            vertex.uv = [(span + 0.5) / SPANS as f32, 0.5];
+            vertex.uv = [slot_at(slot), 0.5];
         }
 
         mesh.extend(&cap);
@@ -3882,6 +3943,59 @@ pub mod tests {
                 ends, 8,
                 "the kerb at side {} has {} vertices facing along the road, not the eight of two caps",
                 side, ends
+            );
+        }
+    }
+
+    /// Spec 0118: the spans are counted, which wants edges.
+    ///
+    /// **The gradient nobody asked for.** The spec said whole slots and
+    /// never a gradient, and one sweep with the slot written into each
+    /// vertex is not that: the quad between the last vertex of one span
+    /// and the first of the next has its `u` running from one slot's
+    /// middle to the other's, which walks the strip through whatever lies
+    /// between. Two metres of fade at every boundary, five times up the
+    /// climb, is what "orange to blue and back" was looking at.
+    #[test]
+    fn the_spans_are_counted_and_not_blended() {
+        let mesh = kerb_mesh(REACHES, 1.0, 1.0);
+        let foot = foot(REACHES);
+
+        for triangle in mesh.indices.chunks(3) {
+            let slots: Vec<f32> = triangle
+                .iter()
+                .map(|n| mesh.vertices[*n as usize].uv[0])
+                .collect();
+
+            assert!(
+                slots.iter().all(|one| (one - slots[0]).abs() < 1e-6),
+                "a kerb triangle runs from slot {} to slot {}",
+                slots[0],
+                slots[2]
+            );
+        }
+
+        // and a joint wearing the bar's own slot stands at every boundary
+        // between one span and the next
+        for boundary in 1..SPANS {
+            let at = boundary as f32 / SPANS as f32;
+            let joint: Vec<f32> = mesh
+                .vertices
+                .iter()
+                .filter(|one| (one.uv[0] - slot_at(0)).abs() < 1e-6)
+                .map(|one| (foot.x - one.position[0]) / RUN)
+                .filter(|along| (along - at).abs() <= JOINT / RUN)
+                .collect();
+            let (from, to) = joint.iter().fold((f32::MAX, f32::MIN), |(from, to), one| {
+                (from.min(*one), to.max(*one))
+            });
+
+            assert!(
+                !joint.is_empty() && ((to - from) * RUN - JOINT).abs() < 0.05,
+                "the joint {} of the way up is {} wide, not {}",
+                at,
+                (to - from) * RUN,
+                JOINT
             );
         }
     }
