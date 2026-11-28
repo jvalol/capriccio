@@ -128,132 +128,28 @@ pub const RAINBOW_WIDE: u32 = 192;
 /// everything between them is new. Outside the first and last stop it holds
 /// the end colour rather than fading, because a rainbow's edges are where
 /// it stops being a rainbow and not where it stops being bright.
-/// How many texels the picture runs along the deck, and what colour it is
-/// where the gravel has it.
-///
-/// **A picture with a length, and it had none.** The strip was one texel
-/// tall, which is a rainbow that is the same all the way up, and the deck's
-/// `v` has always been its share of the run: the mapping to carry this was
-/// already there and nothing was in it.
-///
-/// **Because the gravel cut it off in a line.** Jake, 2026-11-27: the
-/// gravel gradually blending into the transparent rainbow would land
-/// better. The bed buries the deck's first 2.84 metres, and a buried
-/// surface meeting a bed of stone is an intersection, which draws as a
-/// straight edge straight across the rainbow.
-///
-/// **In the colour and not in the alpha, which was the first go and does
-/// not work here.** Fading the deck's own alpha means making it
-/// see-through, and `Instance::is_translucent` is a property of the whole
-/// draw: a see-through stretch abutting a solid one is two passes meeting
-/// in the middle of one surface, and the join drew as a hard line
-/// wherever the deck was in frame. Jake saw it from the deck: close, but
-/// there's a sharp transition. Making the whole deck see-through takes the
-/// line away and costs more than it saves, because the see-through runs
-/// draw both faces: the top then shows through its own belly and spec
-/// 0054's `SOFFIT_LIT`, which Jake picked off four pairs, is gone.
-///
-/// So the deck stays solid from end to end, one mesh in one pass, and what
-/// changes along it is what the picture says: gravel at the foot, running
-/// into the rainbow. That is the thing asked for anyway. A road that is
-/// gravel where it leaves the ground and a rainbow where it climbs.
-///
-/// **As far as the gravel goes and not a number of its own.** Ten metres
-/// was the first go and the place it reached full strength was a line of
-/// its own: a rainbow seen along its own length puts its last two metres
-/// into a dozen pixels, so an eased fade ends in what looks like a step.
-/// [`bank_runs`] already says where the ground that carries the deck
-/// stops, and the deck has nothing under it past there, so the rainbow
-/// comes up over exactly the stretch it is banked along and the two ends
-/// are one end. Sixteen metres, at the numbers it is built at.
-pub const RAINBOW_TALL: u32 = 128;
-
-pub fn fades_in() -> f32 {
-    bank_runs().1
-}
-
-/// How much of the fade the deck's edges hold the stone for after its
-/// middle has turned.
-///
-/// **A half, which is where the bank's own gravel gives out.** The two are
-/// the same question asked of the drawing and of the ground: the road is
-/// stone where there is gravel against it and rainbow where there is not.
-pub const EDGES_HOLD: f32 = 0.5;
-
-/// How far in the picture the rainbow has come, a share `along` the run.
-///
-/// Eased at both ends rather than straight, so neither the start of it nor
-/// the place it reaches full strength is a line you can pick out.
-pub fn fading(along: f32) -> f32 {
-    let at = (along / fades_in()).clamp(0.0, 1.0);
-
-    at * at * (3.0 - 2.0 * at)
-}
-
 pub fn rainbow() -> blitzkit::texture::TextureData {
-    let mut pixels = vec![0u8; (RAINBOW_WIDE * RAINBOW_TALL * 4) as usize];
+    let mut pixels = vec![0u8; (RAINBOW_WIDE * 4) as usize];
 
-    let mut grain = 0x9E37u32;
-    let mut next = move || {
-        grain ^= grain << 13;
-        grain ^= grain >> 17;
-        grain ^= grain << 5;
-        (grain % 10_000) as f32 / 10_000.0
-    };
+    for at in 0..RAINBOW_WIDE {
+        // where this texel falls among the stops, which sit at the middles
+        // of the seven bands
+        let across = (at as f32 + 0.5) / RAINBOW_WIDE as f32 * BANDS as f32 - 0.5;
+        let below = across.floor().clamp(0.0, (BANDS - 1) as f32) as usize;
+        let above = (below + 1).min(BANDS - 1);
+        let share = (across - below as f32).clamp(0.0, 1.0);
 
-    for row in 0..RAINBOW_TALL {
-        // the deck's `v` is its share of the run, so a row is a place along
-        // the climb and the first of them are at the foot
-        let along = row as f32 / (RAINBOW_TALL - 1) as f32;
-        let come = fading(along);
+        let colour = COLOURS[below] + (COLOURS[above] - COLOURS[below]) * share;
+        let at = (at * 4) as usize;
 
-        for at in 0..RAINBOW_WIDE {
-            // **And the sides hold the stone after the middle has turned.**
-            // The deck is `DEEP` thick, so its edge stands clear of the
-            // bank from the moment it leaves the ground, and a vertical
-            // face takes almost no light whatever colour it is: in rainbow
-            // it was a dark wall rising out of a lit mound, and Jake said
-            // the rainbow just kind of starts on top of the gravel out of
-            // nowhere. Banking the gravel up over the edge answers that
-            // and costs more than it is worth — it puts the bank's top in
-            // the deck's own plane, which is a line down the whole length
-            // of the road, and spec 0117's bank is built never to stand
-            // above the soffit. So the picture holds instead: the rainbow
-            // arrives up the middle of the road first and reaches the
-            // edges last, and what meets the gravel is stone.
-            let side = ((at as f32 + 0.5) / RAINBOW_WIDE as f32 - 0.5).abs() * 2.0;
-            let held = side * EDGES_HOLD;
-            let here = ((come - held) / (1.0 - held)).clamp(0.0, 1.0);
-            // where this texel falls among the stops, which sit at the
-            // middles of the seven bands
-            let across = (at as f32 + 0.5) / RAINBOW_WIDE as f32 * BANDS as f32 - 0.5;
-            let below = across.floor().clamp(0.0, (BANDS - 1) as f32) as usize;
-            let above = (below + 1).min(BANDS - 1);
-            let share = (across - below as f32).clamp(0.0, 1.0);
-
-            // the gravel each texel starts as: `garden::granite`'s own
-            // ground under `aim::RUBBLE`, which is what the bank beside the
-            // deck is drawn with, mottled the same way so the foot is not a
-            // flat grey panel laid in a bed of stone. The picture is
-            // written divided by `GLOW` and the deck multiplied by it
-            // again, so what is asked for here is what is drawn.
-            let shade = crate::garden::STONE + next() * crate::garden::STONE_GRAIN;
-            let [r, g, b] = crate::garden::STONE_TINT;
-            let worn = crate::aim::RUBBLE;
-            let stone = vec3(shade * r * worn.x, shade * g * worn.y, shade * b * worn.z);
-            let colour = COLOURS[below] + (COLOURS[above] - COLOURS[below]) * share;
-            let colour = stone + (colour - stone) * here;
-            let here = ((at + row * RAINBOW_WIDE) * 4) as usize;
-
-            for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
-                pixels[here + n] = ((one / GLOW).clamp(0.0, 1.0) * 255.0).round() as u8;
-            }
-
-            pixels[here + 3] = 255;
+        for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
+            pixels[at + n] = ((one / GLOW).clamp(0.0, 1.0) * 255.0).round() as u8;
         }
+
+        pixels[at + 3] = 255;
     }
 
-    blitzkit::texture::TextureData::from_pixels(RAINBOW_WIDE, RAINBOW_TALL, pixels)
+    blitzkit::texture::TextureData::from_pixels(RAINBOW_WIDE, 1, pixels)
 }
 
 /// Whether the building has given up everything it asks.
@@ -2341,17 +2237,9 @@ pub fn treads(reaches: f32, reach: f32) -> Vec<Aabb> {
 /// whole piece it passed. `PIECES` is 48 over a hundred metres, so rounding
 /// to one would jump the end two metres at a time while a span winds in,
 /// which is a thing lurching rather than growing.
-/// **Over one stretch of the run**, which is what lets the foot be drawn
-/// apart from the rest of it. See [`fades_in`].
-///
-/// **The whole pieces inside the stretch, with both ends added.** The
-/// pieces are counted off the run and not off the stretch, so the deck is
-/// cut at the same places however it is divided and the two pieces meet on
-/// a station rather than near one.
-pub fn stations_in(reaches: f32, from: f32, to: f32) -> Vec<Vec3> {
+pub fn stations(reaches: f32, reach: f32) -> Vec<Vec3> {
     let foot = foot(reaches);
-    let from = from.clamp(0.0, 1.0);
-    let to = to.clamp(from, 1.0);
+    let (from, to) = (0.0, reach.clamp(0.0, 1.0));
     let at = |along: f32| vec3(foot.x - along * RUN, high(along), foot.z);
     let near = |one: &Vec3, other: &Vec3| (one.x - other.x).abs() <= 1e-4;
     let mut out = vec![at(from)];
@@ -2407,7 +2295,7 @@ pub fn glow() -> Vec4 {
 /// shared across a corner: averaged round one, the top of a rainbow catches
 /// the same light as its edge and the whole thing reads as a hose.
 pub fn deck_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
-    ribbon(reaches, false, 0.0, reach)
+    ribbon(reaches, false, reach)
 }
 
 /// How high the deck has to be before the earth beside it stops.
@@ -2471,7 +2359,15 @@ pub const BANK_LEAST: f32 = 0.07;
 /// alone the apron would be five centimetres wide where the bank is a
 /// hand deep, which is a kerb and not a bed of gravel. This is the width
 /// it has before any of the slope's own spread is added.
-pub const BANK_APRON: f32 = 0.6;
+///
+/// **Three and a quarter, and it was six tenths.** Jake, 2026-11-28, after
+/// three goes at fading the rainbow into the stone: make the rock bed much
+/// wider so it's more obvious the rainbow starts on a pile of stone. At six
+/// tenths the bed was a verge, so the deck read as a rainbow laid on grass
+/// with a line of chippings either side; at this it is half as wide again
+/// as the deck and the thing the road comes out of is plainly a heap of
+/// stone somebody put there.
+pub const BANK_APRON: f32 = 3.25;
 
 /// And how far in front of the foot it runs, so the ramp comes out of
 /// gravel rather than beginning in the middle of a field.
@@ -3055,15 +2951,15 @@ pub fn soffit_glow() -> Vec4 {
 /// The underside of that ribbon, which is drawn by itself so it can be
 /// dimmer than the top. See [`SOFFIT_LIT`].
 pub fn soffit_mesh(reaches: f32, reach: f32) -> blitzkit::mesh::MeshData {
-    ribbon(reaches, true, 0.0, reach)
+    ribbon(reaches, true, reach)
 }
 
 /// The deck's strips: the underside when `soffit`, and the top and the two
 /// edges when not.
-fn ribbon(reaches: f32, soffit: bool, from: f32, to: f32) -> blitzkit::mesh::MeshData {
+fn ribbon(reaches: f32, soffit: bool, to: f32) -> blitzkit::mesh::MeshData {
     use blitzkit::mesh::Vertex;
 
-    let along = stations_in(reaches, from, to);
+    let along = stations(reaches, to);
     let half = WIDE * 0.5;
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -3380,102 +3276,6 @@ pub mod tests {
         );
     }
 
-    /// The picture runs out of gravel into rainbow along its own length,
-    /// and is solid the whole way.
-    ///
-    /// **The alpha as well as the colour, because the alpha is the version
-    /// of this that does not work.** Fading the deck's own alpha makes the
-    /// draw see-through, and a see-through stretch meeting a solid one
-    /// drew as a hard line across the deck. Anything here short of full
-    /// would be that again.
-    #[test]
-    fn the_deck_runs_out_of_gravel_into_rainbow() {
-        let picture = rainbow();
-        let top = picture.levels.first().expect("the picture itself");
-        let read = |along: f32, across: f32| {
-            let row = ((top.height - 1) as f32 * along).round() as u32;
-            let at = ((row * top.width + ((top.width - 1) as f32 * across) as u32) * 4) as usize;
-
-            [
-                top.pixels[at],
-                top.pixels[at + 1],
-                top.pixels[at + 2],
-                top.pixels[at + 3],
-            ]
-        };
-        let spread = |one: [u8; 4]| {
-            let high = one[0].max(one[1]).max(one[2]) as i32;
-
-            high - one[0].min(one[1]).min(one[2]) as i32
-        };
-
-        // at the foot every texel across is one stone colour, so the
-        // spread between its channels is the warmth granite has and no more
-        for across in [0.05, 0.3, 0.5, 0.95] {
-            let foot = read(0.0, across);
-
-            assert!(
-                spread(foot) <= 12,
-                "at the foot, {across} across, the picture is {:?}, which is not stone",
-                foot
-            );
-        }
-
-        // and past the gravel it is the rainbow, which is the two ends of
-        // the width being different colours
-        let (red, violet) = (read(1.0, 0.02), read(1.0, 0.98));
-
-        assert!(
-            (red[0] as i32 - violet[0] as i32).abs() > 40,
-            "at the top the width runs {:?} to {:?}, which is not a rainbow",
-            red,
-            violet
-        );
-
-        // and the sides hold the stone while the middle has turned, so
-        // what meets the gravel is stone. How far one column has come is
-        // read off its own two ends rather than guessed from its colour:
-        // every place across the width starts at a different stone and
-        // arrives at a different band.
-        let come_at = |along: f32, across: f32| {
-            let (stone, full, here) = (read(0.0, across), read(1.0, across), read(along, across));
-            let (mut most, mut share) = (0i32, 0.0);
-
-            for c in 0..3 {
-                let run = full[c] as i32 - stone[c] as i32;
-
-                if run.abs() > most {
-                    most = run.abs();
-                    share = (here[c] as i32 - stone[c] as i32) as f32 / run as f32;
-                }
-            }
-
-            share
-        };
-        // where the middle is a little over half way, which is where the
-        // two are furthest apart
-        let part = fades_in() * 0.55;
-
-        assert!(
-            come_at(part, 0.5) > come_at(part, 0.01) + 0.2,
-            "a share {part} along, the middle has come {:.2} and the rim \
-             {:.2}, so the rainbow reaches the edge with the gravel",
-            come_at(part, 0.5),
-            come_at(part, 0.01)
-        );
-
-        // all the way along, solid
-        for along in [0.0, 0.02, 0.08, fades_in(), 0.5, 1.0] {
-            assert_eq!(
-                read(along, 0.5)[3],
-                255,
-                "the picture is see-through {along} along, which draws as a line"
-            );
-        }
-
-        assert_eq!(glow().w, 1.0, "the deck is drawn see-through");
-    }
-
     /// One question short of done, which is what the bridge must not show
     /// for.
     fn nearly() -> Trail {
@@ -3741,19 +3541,23 @@ pub mod tests {
         }
     }
 
-    /// Spec 0117, and Jake on 2026-11-18: narrow it and break its line.
+    /// Spec 0117, and Jake twice, in opposite directions.
     ///
-    /// **Narrow** is the gravel against the bridge: the two cheeks together
-    /// come to less than half the deck's own width. "Narrower than the
-    /// deck" was the first assertion here and it was worth nothing, since a
-    /// cheek was 1.83 at the old spread and the deck's half is 3: the
-    /// control put `BANK_SLOPE` back to 1.5 and the test still passed.
+    /// **Wide** is 2026-11-28: make the rock bed much wider so it's more
+    /// obvious the rainbow starts on a pile of stone. It held the opposite
+    /// bound until then, from 2026-11-18, when the bank was a bed of
+    /// chippings down either side of the deck and he read it off the
+    /// picture as a gravel road. What changed between the two is what the
+    /// bed is for: it was a verge, and it is the thing the road comes out
+    /// of. The far end of that argument is in spec 0054.
     ///
-    /// **Broken** is the edge not running straight. Tested as bounds and a
-    /// spread of values rather than as a shape, since the thing wanted is
-    /// an edge with no shape at all.
+    /// Bounded both ways, because "wider" with no ceiling is a car park.
+    ///
+    /// **Broken** is the edge not running straight, which both readings
+    /// want. Tested as bounds and a spread of values rather than as a
+    /// shape, since the thing wanted is an edge with no shape at all.
     #[test]
-    fn the_bank_is_narrower_than_the_deck_and_its_edge_wanders() {
+    fn the_bank_is_wider_than_the_deck_and_its_edge_wanders() {
         let (begins, ends) = bank_runs();
         let mut least = f32::MAX;
         let mut most = f32::MIN;
@@ -3768,8 +3572,17 @@ pub mod tests {
             let spread = BANK_APRON + bank_high(along) * BANK_SLOPE;
 
             assert!(
-                spread * 2.0 <= WIDE * 0.5,
-                "the bank puts {} of gravel beside {} of bridge",
+                spread * 2.0 >= WIDE * 0.8,
+                "the bank puts only {} of gravel beside {} of bridge, which \
+                 is a verge and not a pile",
+                spread * 2.0,
+                WIDE
+            );
+
+            assert!(
+                spread * 2.0 <= WIDE * 2.0,
+                "the bank puts {} of gravel beside {} of bridge, which is a \
+                 yard it is parked in",
                 spread * 2.0,
                 WIDE
             );
@@ -4172,7 +3985,7 @@ pub mod tests {
             let far = reach(&trail);
             let foot = foot(REACHES);
             let ends = foot.x - far * RUN;
-            let drawn = stations_in(REACHES, 0.0, far);
+            let drawn = stations(REACHES, far);
             let stood = treads(REACHES, far);
 
             let past = drawn.iter().map(|at| at.x).fold(f32::MAX, f32::min);
@@ -4805,7 +4618,6 @@ pub mod tests {
     fn the_first_span_is_nobodys() {
         for trail in [Trail::new(), done()] {
             let strip = span_colours(&trail);
-
             for c in 0..3 {
                 assert!(
                     (strip.levels[0].pixels[c] as f32 / 255.0 - crate::aim::KERB[c]).abs()
@@ -4935,7 +4747,7 @@ pub mod tests {
     fn the_deck_you_see_is_the_deck_you_stand_on() {
         let foot = foot(REACHES);
 
-        for middle in stations_in(REACHES, 0.0, 1.0) {
+        for middle in stations(REACHES, 1.0) {
             let along = (foot.x - middle.x) / RUN;
 
             assert!(
@@ -4959,7 +4771,7 @@ pub mod tests {
             .map(|one| one.position[1])
             .fold(f32::MIN, f32::max)
             .min(
-                stations_in(REACHES, 0.0, 1.0)
+                stations(REACHES, 1.0)
                     .into_iter()
                     .map(|middle| middle.y)
                     .fold(f32::MAX, f32::min),
@@ -4982,21 +4794,17 @@ pub mod tests {
     /// Neighbouring texels have to be close, which is the blend, *and* the
     /// picture has to go somewhere over its width, which is what says
     /// there is still a rainbow in it.
-    /// **Read along the run and not at its start.** The picture has a
-    /// length now: its first rows are the gravel the deck comes out of, and
-    /// the rainbow itself is what it arrives at. See [`fading`].
     #[test]
     fn the_rainbow_blends_rather_than_steps() {
         let made = rainbow();
         let pixels = &made.levels[0].pixels;
-        let row = ((RAINBOW_TALL - 1) * RAINBOW_WIDE) as usize;
         let mut biggest = 0i32;
         let mut over_all = 0i32;
 
         for at in 1..RAINBOW_WIDE as usize {
             for channel in 0..3 {
-                let one = pixels[(row + at) * 4 + channel] as i32;
-                let last = pixels[(row + at - 1) * 4 + channel] as i32;
+                let one = pixels[at * 4 + channel] as i32;
+                let last = pixels[(at - 1) * 4 + channel] as i32;
 
                 biggest = biggest.max((one - last).abs());
             }
@@ -5006,7 +4814,7 @@ pub mod tests {
             let (mut low, mut high) = (255i32, 0i32);
 
             for at in 0..RAINBOW_WIDE as usize {
-                let one = pixels[(row + at) * 4 + channel] as i32;
+                let one = pixels[at * 4 + channel] as i32;
                 low = low.min(one);
                 high = high.max(one);
             }
@@ -5033,18 +4841,14 @@ pub mod tests {
     /// The stops sit at the middles of the bands they used to fill, so the
     /// colour at those seven places is what it always was and only what is
     /// between them is new.
-    /// **Read along the run and not at its start.** The picture has a
-    /// length now: its first rows are the gravel the deck comes out of, and
-    /// the rainbow itself is what it arrives at. See [`fading`].
     #[test]
     fn every_colour_of_the_rainbow_is_still_in_the_picture() {
         let made = rainbow();
         let pixels = &made.levels[0].pixels;
-        let row = ((RAINBOW_TALL - 1) * RAINBOW_WIDE) as usize;
 
         for (n, want) in COLOURS.iter().enumerate() {
             let at = ((n as f32 + 0.5) / BANDS as f32 * RAINBOW_WIDE as f32) as usize;
-            let at = (row + at.min(RAINBOW_WIDE as usize - 1)) * 4;
+            let at = at.min(RAINBOW_WIDE as usize - 1) * 4;
 
             for (channel, one) in [want.x, want.y, want.z].iter().enumerate() {
                 let got = pixels[at + channel] as f32 / 255.0 * GLOW;

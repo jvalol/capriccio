@@ -450,79 +450,59 @@ deck is lower than a tree and no further: a six metre avenue running the
 whole hundred is a lane pointing at the thing spec 0036 says nobody should
 be able to tell is there.
 
-## It comes up out of the gravel
+## The rainbow starts on a pile of stone
 
-2026-11-27. The bed of gravel at the foot buries the deck's first 2.84
-metres, and a buried surface meeting a bed of stone is an intersection: it
-drew as a straight line straight across the rainbow, with gravel on one
-side of it and full colour on the other. Jake, standing on it: the gravel
+2026-11-27 and 2026-11-28. The bed of gravel at the foot buries the deck's
+first 2.84 metres, and a buried surface meeting a bed of stone is an
+intersection: it drew as a straight line across the rainbow, with gravel on
+one side and full colour on the other. Jake, standing on it: the gravel
 gradually blending into the transparent rainbow would land better.
 
-**The picture had no length and the mapping did.** `rainbow` was one texel
-tall, so the deck was the same all the way up, while the ribbon's `v` has
-been its share of the run since it was built. Nothing was in the one thing
-already there to carry this.
+**Four goes at a blend, and he called it off.** They are written down
+because each one failed for a reason worth keeping.
 
-**The alpha is the version of this that does not work**, and it was built
-first. Fading the deck's own alpha means making it see-through, and
-`Instance::is_translucent` is the colour's alpha being short of full and
-nothing else: it is a property of the whole draw. An opaque draw does not
-blend at all, so the first ramp deleted three and a half metres of deck
-under the gravel rather than fading it. Drawing the foot as its own
-see-through mesh did fade, and put a hard line where the two met instead:
-a see-through stretch abutting a solid one is two passes meeting in the
-middle of one surface. Jake, from the deck: close, but there's a sharp
-transition.
+- **In the alpha.** `Instance::is_translucent` is the colour's alpha being
+  short of full and nothing else, and it is a property of the whole draw.
+  An opaque draw does not blend: it reads the picture's alpha only to throw
+  away whatever falls under `text::CUTOUT`, so the first ramp deleted three
+  and a half metres of deck under the gravel rather than fading it.
+- **As its own see-through mesh.** That faded, and put a hard line where
+  the two pieces met: two passes meeting in the middle of one surface. And
+  making the whole deck see-through takes the line away but costs
+  `SOFFIT_LIT`, because the see-through runs draw both faces and the top
+  then shows through its own belly.
+- **In the colour.** The deck stayed solid and its picture ran from
+  `garden::granite`'s stone into the rainbow. That worked, and showed the
+  next thing: the deck is `DEEP` thick, so its edge stands clear of the
+  bank from the moment it leaves the ground, and a vertical face takes
+  almost no light whatever colour it is. Banking the gravel up over that
+  edge put the bank's top in the deck's own plane, which is a line down the
+  whole length of the road, and tripped `bridge::tests::the_bank_stops_under_the_deck`
+  at the same time.
+- **How far it should run.** Ten metres left a line where it filled in. The
+  bank's sixteen was worse in a way no picture of the texture shows:
+  standing at the foot, the deck's top passes above your eye at 13.4
+  metres, so everything past half the fade is a thin band at the top of the
+  road. Measured from where Jake stood, the road read as stone out to 6.3
+  metres and the whole visible change happened between there and 7.5.
+  Finishing by `along_at(DEEP)`, where the underside leaves the field, put
+  the whole slope in the near part of the road.
 
-**And making the whole deck see-through costs more than it saves.** It does
-take the line away, and the see-through runs draw both faces, so the top
-then shows through its own belly: `SOFFIT_LIT` and `SOFFIT_SEE`, which Jake
-picked off four pairs, stop meaning anything.
+Jake, on that: the blending i was going for isn't working. Maybe it would
+be better to just line the entire surface with the rainbow, and make the
+rock bed much wider so it's more obvious the rainbow starts on a pile of
+stone.
 
-So the deck is solid from end to end, one mesh in one pass, and what runs
-along it is the picture's own colour: `garden::granite`'s stone at the
-foot, running into the rainbow over the stretch the bank carries it. No
-alpha anywhere. The deck is not emissive — a colour past one is an
-unclamped multiplier against the light, per spec 0105 — so gravel written
-into the picture draws as gravel.
-
-**The stone is named once.** `garden::STONE`, `STONE_GRAIN` and
-`STONE_TINT` were numbers written inside `granite`; the deck mixes its own
-gravel from them under `aim::RUBBLE`, which is what the bank beside it is
-drawn with. Measured either side of the junction afterwards: 17.7, 20.5,
-29.6 against 16.8, 20.4, 28.8.
-
-**And the sides hold the stone after the middle has turned.** The deck is
-`DEEP` thick, so its edge stands clear of the bank from the moment it
-leaves the ground, and a vertical face takes almost no light whatever
-colour it is: in rainbow it was a dark wall rising out of a lit mound.
-Jake, from beside it: the rainbow doesn't quite blend with the gravel, it
-just kind of starts on top of it out of nowhere.
-
-Banking the gravel up over that edge answers it and costs too much. It
-puts the bank's top in the deck's own plane, which is a line down the
-whole length of the road — Jake saw that within the hour — and spec 0117's
-bank is built never to stand above the soffit, which
-`bridge::tests::the_bank_stops_under_the_deck` and
-`bridge::tests::nothing_stops_you_higher_than_the_bank_is_drawn` both said
-so while he was looking at it.
-
-So the picture holds instead. The rainbow arrives up the middle of the
-road first and reaches the edges last, and what meets the gravel is stone.
-`EDGES_HOLD` is a half, which is where the bank's own gravel gives out:
-the drawing and the ground answer the same question the same way.
-
-**As far as the gravel runs and not a number of its own.** Ten metres was
-the first go, and where it reached full strength was a line of its own: a
-rainbow seen along its own length puts its last two metres into a dozen
-pixels, so an eased fade ends in what looks like a step. `bank_runs`
-already says where the ground that carries the deck stops, and there is
-nothing under the deck past there, so the two ends are one end.
+**So the deck is a rainbow end to end and the bed is a pile.** The picture
+is one row again, the kerbs' strip is one row again, and `BANK_APRON` is
+3.25 against six tenths: half as wide again as the deck, so what the road
+comes out of is plainly a heap of stone somebody put there rather than a
+verge of chippings. Nothing is faded, nothing is see-through, and there is
+no line to hide, because the rainbow does not change along its length.
 
 **What it changed that was not the foot.** All four of `the_skies_are_drawn`
-look west down the field and catch the bridge's foot through a gap, which
-is gravel running into colour now rather than a lavender smear. Re-blessed
-after looking.
+look west down the field and catch the bridge's foot through a gap.
+Re-blessed after looking, three times over the two days.
 
 ## Acceptance criteria
 
@@ -536,8 +516,7 @@ after looking.
   what is gated on the whole trail is the landing and what stands on it.
 - Every question the building asks is in the list the bridge reads. — `trail::tests::every_one_of_them_is_in_every`
 - It springs from the ground and ends level. — `bridge::tests::it_rises_out_of_the_field_and_levels_off`
-- The deck's picture runs out of gravel into rainbow along its own length, holds the stone at its edges after the middle has turned, and is solid the whole way. — `bridge::tests::the_deck_runs_out_of_gravel_into_rainbow`
-- The rainbow is still in it, where it was, and still blends. — `bridge::tests::every_colour_of_the_rainbow_is_still_in_the_picture`, `bridge::tests::the_rainbow_blends_rather_than_steps`
+- The rainbow is in the picture, where it was, and still blends. — `bridge::tests::every_colour_of_the_rainbow_is_still_in_the_picture`, `bridge::tests::the_rainbow_blends_rather_than_steps`
 - It leaves the ground at an angle you can walk at. — `bridge::tests::it_leaves_the_ground_at_a_walkable_angle`
 - No tread rises more than `walk::STEP`. — `bridge::tests::no_tread_rises_more_than_a_step`
 - And a coarser tread would not, so that check can fail. — `bridge::tests::a_coarse_tread_would_not_be_walkable`
